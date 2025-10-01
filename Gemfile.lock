@@ -2,12 +2,27 @@ PATH
   remote: .
   specs:
     mysigner (0.1.0)
+      faraday (~> 2.14)
+      faraday-retry (~> 2.2)
+      thor (~> 1.4)
 
 GEM
   remote: https://rubygems.org/
   specs:
     diff-lcs (1.6.2)
-    rake (10.5.0)
+    faraday (2.14.0)
+      faraday-net_http (>= 2.0, < 3.5)
+      json
+      logger
+    faraday-net_http (3.4.1)
+      net-http (>= 0.5.0)
+    faraday-retry (2.3.2)
+      faraday (~> 2.0)
+    json (2.15.0)
+    logger (1.7.0)
+    net-http (0.6.0)
+      uri
+    rake (13.3.0)
     rspec (3.13.1)
       rspec-core (~> 3.13.0)
       rspec-expectations (~> 3.13.0)
@@ -21,15 +36,18 @@ GEM
       diff-lcs (>= 1.2.0, < 2.0)
       rspec-support (~> 3.13.0)
     rspec-support (3.13.6)
+    thor (1.4.0)
+    uri (1.0.3)
 
 PLATFORMS
+  arm64-darwin-24
   ruby
 
 DEPENDENCIES
-  bundler (~> 1.17)
+  bundler (~> 2.5)
   mysigner!
-  rake (~> 10.0)
+  rake (~> 13.0)
   rspec (~> 3.0)
 
 BUNDLED WITH
-   1.17.2
+   2.7.2

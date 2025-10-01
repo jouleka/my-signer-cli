@@ -9,9 +9,12 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Jurgen Leka"]
   spec.email         = ["lekacoding@gmail.com"]
 
-  spec.summary       = %q{MySigner CLI tool}
-  spec.description   = %q{A CLI tool for signing operations}
+  spec.summary       = %q{CLI tool for iOS code signing automation via My Signer API}
+  spec.description   = %q{Command-line interface for managing iOS certificates, devices, and provisioning profiles. Eliminates provisioning profile hell with simple commands like 'mysigner device add' and 'mysigner profile download'.}
   spec.homepage      = "https://github.com/jurgenleka/my-signer-cli"
+  spec.license       = "Apache-2.0"
+
+  spec.required_ruby_version = ">= 3.2.0"
 
   # Prevent pushing this gem to RubyGems.org. To allow pushes either set the 'allowed_push_host'
   # to allow pushing to a single host or delete this section to allow pushing to any host.
@@ -35,7 +38,13 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_development_dependency "bundler", "~> 1.17"
-  spec.add_development_dependency "rake", "~> 10.0"
+  # Runtime dependencies
+  spec.add_runtime_dependency "thor", "~> 1.4"
+  spec.add_runtime_dependency "faraday", "~> 2.14"
+  spec.add_runtime_dependency "faraday-retry", "~> 2.2"
+
+  # Development dependencies
+  spec.add_development_dependency "bundler", "~> 2.5"
+  spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "rspec", "~> 3.0"
 end
