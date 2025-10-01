@@ -3,7 +3,8 @@ RSpec.describe Mysigner do
     expect(Mysigner::VERSION).not_to be nil
   end
 
-  it "does something useful" do
-    expect(false).to eq(true)
+  it "loads required modules" do
+    expect(defined?(Mysigner::Config)).to eq('constant')
+    expect(defined?(Mysigner::Client)).to eq('constant')
   end
 end
