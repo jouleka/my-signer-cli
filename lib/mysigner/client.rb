@@ -60,8 +60,7 @@ module Mysigner
       raise ConnectionError, "Failed to connect: #{e.message}"
     end
 
-    private
-
+    # Expose connection for direct access (e.g., binary downloads)
     def connection
       @connection ||= Faraday.new(url: @api_url) do |f|
         # Request middleware
@@ -86,6 +85,8 @@ module Mysigner
         f.adapter Faraday.default_adapter
       end
     end
+
+    private
 
     def handle_response(response)
       case response.status

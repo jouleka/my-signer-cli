@@ -1,3 +1,5 @@
 #!/usr/bin/env ruby
 
 require "mysigner"
+
+Mysigner::CLI.start(ARGV)

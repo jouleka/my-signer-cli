@@ -179,18 +179,29 @@ mysigner config set KEY VAL # Update configuration value
 
 ## Development Status
 
-**Current Version**: 0.1.0 (Alpha)
+**Current Version**: 0.1.0 (Alpha - Functional)
 
-🚧 **In Development**:
-- ✅ Gem structure and dependencies
-- ⏳ Config management
-- ⏳ API client
-- ⏳ Core commands (login, logout, status)
-- ⏳ Resource commands (devices, profiles, certificates)
+✅ **Complete**:
+- ✅ Gem structure and dependencies (Thor, Faraday, Reline, Base64)
+- ✅ Config management (`~/.mysigner/config.yml`)
+- ✅ API client (Faraday with retry & error handling)
+- ✅ Core commands (login, logout, config, status, orgs, switch)
+- ✅ Resource commands (devices, profiles, certificates)
+- ✅ 90 RSpec tests (100% passing)
+- ✅ Interactive prompts and confirmations
+- ✅ Binary file downloads
 
-📅 **Coming Soon**:
-- Build & sign automation
-- TestFlight upload
+📅 **Next Up**:
+- v0.1.0 Polish & Release
+- OR Phase 6: Build & Ship
+  - `mysigner build` - Xcode build wrapper
+  - `mysigner upload testflight` - TestFlight upload
+  - `mysigner ship` - One-command deploy
+
+📅 **Future**:
+- Pretty tables (TTY::Table)
+- Progress spinners (TTY::Spinner)
+- `--json` flag for scripting
 - Xcode project detection
 - Interactive wizards
 - CI/CD templates
