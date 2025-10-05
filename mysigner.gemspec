@@ -45,6 +45,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency "reline", "~> 0.5"
   spec.add_runtime_dependency "base64", "~> 0.2"
   spec.add_runtime_dependency "xcodeproj", "~> 1.27"
+  spec.add_runtime_dependency "plist", "~> 3.7"
 
   # Development dependencies
   spec.add_development_dependency "bundler", "~> 2.5"
