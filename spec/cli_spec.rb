@@ -1076,6 +1076,232 @@ RSpec.describe Mysigner::CLI do
     end
   end
 
+  describe "#build" do
+    let(:temp_project_dir) { Dir.mktmpdir }
+    let(:project_path) { File.join(temp_project_dir, "App.xcodeproj") }
+    let(:mock_detector) { class_double(Mysigner::Build::Detector) }
+    let(:mock_parser) { instance_double(Mysigner::Build::Parser) }
+    let(:mock_configurator) { instance_double(Mysigner::Build::Configurator) }
+    let(:mock_executor) { instance_double(Mysigner::Build::Executor) }
+    
+    before do
+      # Set up config
+      config = Mysigner::Config.new
+      config.api_url = "http://localhost:3000"
+      config.api_token = "test_token_12345"
+      config.organization_id = 5
+      config.save
+      
+      # Create fake project structure
+      FileUtils.mkdir_p(project_path)
+      
+      # Stub build modules
+      allow(Mysigner::Build::Detector).to receive(:detect).and_return({
+        type: :project,
+        path: project_path
+      })
+      allow(Mysigner::Build::Parser).to receive(:new).and_return(mock_parser)
+      allow(Mysigner::Build::Configurator).to receive(:new).and_return(mock_configurator)
+      allow(Mysigner::Build::Executor).to receive(:new).and_return(mock_executor)
+      
+      # Default parser stubs
+      mock_target = double('target', name: 'App')
+      allow(mock_parser).to receive(:targets).and_return(['App'])
+      allow(mock_parser).to receive(:main_target).and_return(mock_target)
+      allow(mock_parser).to receive(:bundle_id).and_return('com.example.app')
+      allow(mock_parser).to receive(:team_id).and_return('ABCD123456')
+      allow(mock_parser).to receive(:code_sign_style).and_return('Automatic')
+      allow(mock_parser).to receive(:signing_configured?).and_return(false)
+      
+      # Default executor stub
+      allow(mock_executor).to receive(:build!).and_return('build/App-20251003-182320.xcarchive')
+    end
+    
+    after do
+      FileUtils.rm_rf(temp_project_dir)
+    end
+    
+    context "when not logged in" do
+      before do
+        FileUtils.rm_rf(test_config_dir)
+      end
+      
+      it "shows error message" do
+        expect {
+          Dir.chdir(temp_project_dir) do
+            capture_output { Mysigner::CLI.start(['build']) }
+          end
+        }.to raise_error(SystemExit)
+      end
+    end
+    
+    context "when logged in" do
+      context "with automatic signing" do
+        it "builds successfully with -allowProvisioningUpdates" do
+          expect(mock_executor).to receive(:build!).with(
+            'App',
+            'Release',
+            hash_including(signing_style: 'Automatic')
+          )
+          
+          Dir.chdir(temp_project_dir) do
+            output = capture_output { Mysigner::CLI.start(['build']) }
+            expect(output).to include("Using Automatic signing")
+            expect(output).to include("✓ Build succeeded!")
+          end
+        end
+      end
+      
+      context "with manual signing already configured" do
+        before do
+          allow(mock_parser).to receive(:code_sign_style).and_return('Manual')
+          allow(mock_parser).to receive(:signing_configured?).and_return(true)
+        end
+        
+        it "uses existing manual configuration" do
+          expect(mock_configurator).not_to receive(:configure!)
+          expect(mock_executor).to receive(:build!).with(
+            'App',
+            'Release',
+            hash_including(signing_style: 'Manual')
+          )
+          
+          Dir.chdir(temp_project_dir) do
+            output = capture_output { Mysigner::CLI.start(['build']) }
+            expect(output).to include("Manual signing already configured")
+            expect(output).to include("✓ Build succeeded!")
+          end
+        end
+      end
+      
+      context "with manual signing not configured" do
+        before do
+          allow(mock_parser).to receive(:code_sign_style).and_return('Manual')
+          allow(mock_parser).to receive(:signing_configured?).and_return(false)
+          
+          stub_request(:get, "http://localhost:3000/api/v1/organizations/5/profiles")
+            .with(query: hash_including(bundle_id: 'com.example.app', type: 'IOS_APP_STORE'))
+            .to_return(
+              status: 200,
+              body: {
+                data: [{
+                  id: 1,
+                  name: 'App Store Profile',
+                  profile_type: 'IOS_APP_STORE',
+                  bundle_id: 'com.example.app'
+                }]
+              }.to_json,
+              headers: { 'Content-Type' => 'application/json' }
+            )
+        end
+        
+        it "configures manual signing via API" do
+          expect(mock_configurator).to receive(:configure!).and_return({
+            'id' => 1,
+            'name' => 'App Store Profile'
+          })
+          
+          Dir.chdir(temp_project_dir) do
+            output = capture_output { Mysigner::CLI.start(['build']) }
+            expect(output).to include("Configuring manual signing")
+            expect(output).to include("✓ Configured with profile: App Store Profile")
+          end
+        end
+      end
+      
+      context "with custom options" do
+        it "supports --configuration flag" do
+          expect(mock_executor).to receive(:build!).with(
+            'App',
+            'Debug',
+            anything
+          )
+          
+          Dir.chdir(temp_project_dir) do
+            capture_output { Mysigner::CLI.start(['build', '--configuration', 'Debug']) }
+          end
+        end
+        
+        it "supports --scheme flag" do
+          expect(mock_executor).to receive(:build!).with(
+            anything,
+            anything,
+            hash_including(scheme: 'MyScheme')
+          )
+          
+          Dir.chdir(temp_project_dir) do
+            capture_output { Mysigner::CLI.start(['build', '--scheme', 'MyScheme']) }
+          end
+        end
+        
+        it "supports --type flag" do
+          allow(mock_parser).to receive(:code_sign_style).and_return('Manual')
+          allow(mock_parser).to receive(:signing_configured?).and_return(false)
+          
+          expect(mock_configurator).to receive(:configure!).with(
+            anything,
+            anything,
+            hash_including(build_type: :adhoc)
+          )
+          
+          Dir.chdir(temp_project_dir) do
+            capture_output { Mysigner::CLI.start(['build', '--type', 'adhoc']) }
+          end
+        end
+      end
+      
+      context "with multiple targets" do
+        before do
+          allow(mock_parser).to receive(:targets).and_return(['App', 'AppTests', 'AppUITests'])
+        end
+        
+        it "supports --target flag to specify target" do
+          expect(mock_executor).to receive(:build!).with(
+            'AppTests',
+            anything,
+            anything
+          )
+          
+          Dir.chdir(temp_project_dir) do
+            capture_output { Mysigner::CLI.start(['build', '--target', 'AppTests']) }
+          end
+        end
+      end
+      
+      context "when no project found" do
+        before do
+          allow(Mysigner::Build::Detector).to receive(:detect).and_raise(
+            Mysigner::Build::Detector::NoProjectError.new("No Xcode project found")
+          )
+        end
+        
+        it "shows error message" do
+          expect {
+            Dir.chdir(temp_project_dir) do
+              capture_output { Mysigner::CLI.start(['build']) }
+            end
+          }.to raise_error(Mysigner::Build::Detector::NoProjectError, /No Xcode project found/)
+        end
+      end
+      
+      context "when build fails" do
+        before do
+          allow(mock_executor).to receive(:build!).and_raise(
+            Mysigner::Error.new("xcodebuild failed with exit code 1")
+          )
+        end
+        
+        it "shows error message" do
+          expect {
+            Dir.chdir(temp_project_dir) do
+              capture_output { Mysigner::CLI.start(['build']) }
+            end
+          }.to raise_error(Mysigner::Error, /xcodebuild failed/)
+        end
+      end
+    end
+  end
+
   # Helper method to capture stdout
   def capture_output
     original_stdout = $stdout
