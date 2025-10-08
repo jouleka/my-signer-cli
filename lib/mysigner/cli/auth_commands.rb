@@ -3,9 +3,16 @@ module Mysigner
     module AuthCommands
       def self.included(base)
         base.class_eval do
-          desc "version", "Show version"
+          desc "version", "Show version information"
           def version
-            puts "My Signer CLI v#{Mysigner::VERSION}"
+            say "My Signer CLI v#{Mysigner::VERSION}", :cyan
+            say ""
+            say "Ruby:        #{RUBY_VERSION} (#{RUBY_PLATFORM})", :white
+            say "Install:     #{File.expand_path('../../../..', __FILE__)}", :white
+            say "Config:      #{Config::CONFIG_FILE}", :white
+            say ""
+            say "Repository:  https://github.com/yourusername/my-signer-cli", :white
+            say "Issues:      https://github.com/yourusername/my-signer-cli/issues", :white
           end
 
           desc "login", "Authenticate with My Signer API"
