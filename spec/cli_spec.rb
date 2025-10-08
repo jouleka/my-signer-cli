@@ -1113,6 +1113,13 @@ RSpec.describe Mysigner::CLI do
       allow(mock_parser).to receive(:code_sign_style).and_return('Automatic')
       allow(mock_parser).to receive(:signing_configured?).and_return(false)
       
+      # New advanced features stubs
+      allow(mock_parser).to receive(:product_type).and_return(:app)
+      allow(mock_parser).to receive(:target_platform).and_return(:ios)
+      allow(mock_parser).to receive(:has_extensions?).and_return(false)
+      allow(mock_parser).to receive(:has_multiple_apps?).and_return(false)
+      allow(mock_parser).to receive(:app_targets).and_return([mock_target])
+      
       # Default executor stub
       allow(mock_executor).to receive(:build!).and_return('build/App-20251003-182320.xcarchive')
     end

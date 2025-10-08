@@ -12,10 +12,12 @@ module Mysigner
       # Returns: path to .xcarchive
       # Options:
       #   - signing_style: 'Automatic', 'Manual', or nil (default: use project setting)
-      def build!(target_name = nil, configuration = 'Release', scheme: nil, signing_style: nil)
+      #   - team_id: Development team ID to override project setting
+      def build!(target_name = nil, configuration = 'Release', scheme: nil, signing_style: nil, team_id: nil)
         target = target_name || @parser.main_target.name
         scheme_name = scheme || target
         @signing_style = signing_style
+        @team_id = team_id
 
         # Create build directory
         build_dir = File.join(@project_info[:directory], 'build')
@@ -62,6 +64,25 @@ module Mysigner
           '-configuration', configuration,
           '-archivePath', archive_path
         ]
+
+        # SDK selection based on platform
+        platform = @parser.target_platform(scheme)
+        sdk = case platform
+        when :macos
+          'macosx'
+        when :tvos
+          'appletvos'
+        when :watchos
+          'watchos'
+        else
+          'iphoneos'  # default to iOS
+        end
+        cmd += ['-sdk', sdk]
+
+        # Override team ID if provided
+        if @team_id
+          cmd += ["DEVELOPMENT_TEAM=#{@team_id}"]
+        end
 
         # Handle signing based on style
         case @signing_style

@@ -15,14 +15,70 @@ module Mysigner
         @project.targets.map(&:name)
       end
 
-      # Get main app target (exclude test targets, extensions, etc.)
-      def main_target
-        app_targets = @project.targets.select do |target|
+      # Get all application targets (main apps only, no extensions)
+      def app_targets
+        @project.targets.select do |target|
           target.product_type == 'com.apple.product-type.application'
         end
+      end
 
+      # Get main app target (exclude test targets, extensions, etc.)
+      def main_target
         # Return first app target, or first target if no app targets found
         app_targets.first || @project.targets.first
+      end
+
+      # Get all extension targets (widgets, share extensions, etc.)
+      def extension_targets
+        @project.targets.select do |target|
+          target.product_type&.include?('app-extension') ||
+          target.product_type&.include?('widget-extension') ||
+          target.product_type == 'com.apple.product-type.watchkit2-extension'
+        end
+      end
+
+      # Get all app + extension targets (everything that needs signing)
+      def all_app_targets
+        app_targets + extension_targets
+      end
+
+      # Check if project has extensions
+      def has_extensions?
+        extension_targets.any?
+      end
+
+      # Check if project has multiple apps
+      def has_multiple_apps?
+        app_targets.count > 1
+      end
+
+      # Detect target platform (iOS, macOS, tvOS, watchOS)
+      def target_platform(target_name = nil)
+        target = find_target(target_name)
+        sdk = target.sdk
+        
+        return :macos if sdk&.include?('macosx')
+        return :tvos if sdk&.include?('appletvos')
+        return :watchos if sdk&.include?('watchos')
+        :ios  # default
+      end
+
+      # Detect product type (app, framework, library)
+      def product_type(target_name = nil)
+        target = find_target(target_name)
+        
+        case target.product_type
+        when 'com.apple.product-type.application'
+          :app
+        when /framework/
+          :framework
+        when /library/
+          :library
+        when /app-extension/
+          :extension
+        else
+          :unknown
+        end
       end
 
       # Get schemes (simplified - assume scheme name matches target name)

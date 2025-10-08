@@ -19,6 +19,7 @@ RSpec.describe Mysigner::Build::Executor do
   
   before do
     allow(parser).to receive(:bundle_id).and_return("com.example.app")
+    allow(parser).to receive(:target_platform).and_return(:ios)
   end
   
   describe "#build!" do

@@ -7,6 +7,7 @@ module Mysigner
           method_option :configuration, aliases: '-c', default: 'Release', desc: 'Build configuration'
           method_option :scheme, aliases: '-s', desc: 'Scheme to build (auto-detect if not specified)'
           method_option :wait, type: :boolean, default: false, desc: 'Wait for processing to complete'
+          method_option :team, desc: 'Development team ID (overrides project setting)'
           def ship(target)
             unless target == 'testflight'
               error "Only 'testflight' target is supported currently"
@@ -67,12 +68,41 @@ module Mysigner
               say "⏱️  Estimated: 2-5 minutes", :yellow
               say ""
               
+              # Auto-fetch team ID from API if not provided and project missing it
+              team_id_to_use = options[:team]
+              project_team_id = parser.team_id(target_name, options[:configuration])
+              
+              if !team_id_to_use && (project_team_id.nil? || project_team_id.empty?)
+                say "🔍 No team set in project, fetching from My Signer...", :yellow
+                
+                begin
+                  org_response = client.get("/api/v1/organizations/#{config.organization_id}")
+                  api_team_id = org_response['app_store_connect_team_id']
+                  
+                  if api_team_id && !api_team_id.empty?
+                    team_id_to_use = api_team_id
+                    say "✓ Using team from My Signer: #{api_team_id}", :green
+                  else
+                    say "⚠️  No team ID configured in My Signer", :yellow
+                  end
+                rescue => e
+                  say "⚠️  Failed to fetch team from API: #{e.message}", :yellow
+                end
+              end
+              say ""
+              
+              # Pre-build validation
+              say "🔍 Validating signing setup...", :cyan
+              validator = Signing::Validator.new(parser, target_name, options[:configuration], team_id: team_id_to_use)
+              validator.validate!
+              
               executor = Build::Executor.new(project_info, parser)
               archive_path = executor.build!(
                 target_name, 
                 options[:configuration], 
                 scheme: options[:scheme],
-                signing_style: parser.code_sign_style(target_name, options[:configuration])
+                signing_style: parser.code_sign_style(target_name, options[:configuration]),
+                team_id: team_id_to_use
               )
 
               timings[:build] = Time.now - build_start
@@ -221,6 +251,7 @@ module Mysigner
           method_option :target, aliases: '-t', desc: 'Target to build (auto-detect if not specified)'
           method_option :scheme, aliases: '-s', desc: 'Scheme to build (defaults to target name)'
           method_option :type, default: 'appstore', desc: 'Build type: development, adhoc, appstore, enterprise'
+          method_option :team, desc: 'Development team ID (overrides project setting)'
           def build
             config = load_config
             client = create_client(config)
@@ -244,9 +275,47 @@ module Mysigner
 
               # Parse project
               parser = Build::Parser.new(project_info)
-              target_name = options[:target] || parser.main_target.name
+              
+              # Check if this is a buildable app (not framework/library)
+              main_product_type = parser.product_type
+              unless [:app, :unknown].include?(main_product_type)
+                error "Cannot build #{main_product_type} projects for TestFlight"
+                say ""
+                say "My Signer builds iOS/macOS/tvOS apps for distribution.", :yellow
+                say "This project builds a #{main_product_type}, not an app.", :yellow
+                say ""
+                exit 1
+              end
+              
+              # Check for multiple apps and prompt user if needed
+              if parser.has_multiple_apps? && !options[:target]
+                app_targets = parser.app_targets
+                say "Multiple apps found in project:", :yellow
+                app_targets.each_with_index do |target, i|
+                  say "  #{i + 1}. #{target.name}", :cyan
+                end
+                say ""
+                
+                choice = ask("Select app to build (1-#{app_targets.count}):", limited_to: (1..app_targets.count).map(&:to_s))
+                target_name = app_targets[choice.to_i - 1].name
+              else
+                target_name = options[:target] || parser.main_target.name
+              end
               
               say "🎯 Target: #{target_name}", :cyan
+              
+              # Show platform if not iOS
+              platform = parser.target_platform(target_name)
+              unless platform == :ios
+                platform_label = platform.to_s.upcase
+                say "📱 Platform: #{platform_label}", :cyan
+              end
+              
+              # Show extensions if any
+              if parser.has_extensions?
+                ext_count = parser.extension_targets.count
+                say "🧩 Extensions: #{ext_count} (will be included in build)", :cyan
+              end
               
               bundle_id = parser.bundle_id(target_name, options[:configuration])
               say "📦 Bundle ID: #{bundle_id}", :cyan
@@ -255,6 +324,29 @@ module Mysigner
               # Check signing style
               sign_style = parser.code_sign_style(target_name, options[:configuration])
               say "🔐 Signing: #{sign_style || 'Not Set'}", :cyan
+              
+              # Auto-fetch team ID from API if not provided and project missing it
+              team_id_to_use = options[:team]
+              project_team_id = parser.team_id(target_name, options[:configuration])
+              
+              if !team_id_to_use && (project_team_id.nil? || project_team_id.empty?)
+                say "🔍 No team set in project, fetching from My Signer...", :yellow
+                
+                begin
+                  org_response = client.get("/api/v1/organizations/#{config.organization_id}")
+                  api_team_id = org_response['app_store_connect_team_id']
+                  
+                  if api_team_id && !api_team_id.empty?
+                    team_id_to_use = api_team_id
+                    say "✓ Using team from My Signer: #{api_team_id}", :green
+                  else
+                    say "⚠️  No team ID configured in My Signer", :yellow
+                  end
+                rescue => e
+                  say "⚠️  Failed to fetch team from API: #{e.message}", :yellow
+                end
+              end
+              
               say ""
 
               # Handle signing based on style
@@ -291,13 +383,19 @@ module Mysigner
                 say ""
               end
 
+              # Pre-build validation
+              say "🔍 Validating signing setup...", :cyan
+              validator = Signing::Validator.new(parser, target_name, options[:configuration], team_id: team_id_to_use)
+              validator.validate!
+
               # Build
               executor = Build::Executor.new(project_info, parser)
               archive_path = executor.build!(
                 target_name, 
                 options[:configuration], 
                 scheme: options[:scheme],
-                signing_style: sign_style
+                signing_style: sign_style,
+                team_id: team_id_to_use
               )
 
               say ""

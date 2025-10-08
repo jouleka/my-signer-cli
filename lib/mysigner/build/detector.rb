@@ -12,7 +12,27 @@ module Mysigner
           return detect_capacitor(directory)
         end
 
-        # 2. Check for React Native
+        # 2. Check for Expo (managed workflow)
+        if (File.exist?("#{directory}/app.json") || File.exist?("#{directory}/app.config.js")) &&
+           File.exist?("#{directory}/package.json")
+          content = File.read("#{directory}/package.json")
+          if content.include?('expo') && !Dir.exist?("#{directory}/ios")
+            raise NoProjectError, <<~ERROR
+              Expo managed workflow detected.
+              
+              My Signer requires a native Xcode project to build locally.
+              
+              Options:
+              1. Convert to bare workflow: expo prebuild
+              2. Use EAS Build (Expo's cloud service)
+              3. Use React Native bare or Capacitor instead
+              
+              Learn more: https://docs.expo.dev/bare/overview/
+            ERROR
+          end
+        end
+
+        # 3. Check for React Native
         if File.exist?("#{directory}/package.json") && Dir.exist?("#{directory}/ios")
           content = File.read("#{directory}/package.json")
           if content.include?('react-native')
