@@ -4,11 +4,12 @@ require 'json'
 
 module Mysigner
   class Client
-    attr_reader :api_url, :api_token
+    attr_reader :api_url, :api_token, :user_email
 
-    def initialize(api_url:, api_token:)
+    def initialize(api_url:, api_token:, user_email: nil)
       @api_url = api_url
       @api_token = api_token
+      @user_email = user_email
     end
 
     # GET request
@@ -66,6 +67,11 @@ module Mysigner
         # Request middleware
         f.request :authorization, 'Bearer', @api_token
         f.request :json
+
+        # Add X-User-Email header if email is present
+        if @user_email
+          f.headers['X-User-Email'] = @user_email
+        end
 
         # Retry failed requests
         f.request :retry, {
