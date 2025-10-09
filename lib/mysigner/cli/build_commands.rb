@@ -8,6 +8,7 @@ module Mysigner
           method_option :scheme, aliases: '-s', desc: 'Scheme to build (auto-detect if not specified)'
           method_option :wait, type: :boolean, default: false, desc: 'Wait for processing to complete'
           method_option :team, desc: 'Development team ID (overrides project setting)'
+          method_option :bundle_id, aliases: '-b', desc: 'Bundle ID (overrides project setting)'
           def ship(target)
             unless target == 'testflight'
               error "Only 'testflight' target is supported currently"
@@ -61,10 +62,22 @@ module Mysigner
               # Parse and build
               parser = Build::Parser.new(project_info)
               target_name = options[:target] || parser.main_target.name
-              bundle_id = parser.bundle_id(target_name, options[:configuration])
+              bundle_id = options[:bundle_id] || parser.bundle_id(target_name, options[:configuration])
+              
+              # Validate bundle ID format if overridden
+              if options[:bundle_id]
+                if bundle_id =~ /\$\(|\$\{/
+                  error "Bundle ID cannot contain variables: #{bundle_id}"
+                  exit 1
+                elsif bundle_id !~ /^[a-zA-Z0-9.-]+$/
+                  error "Invalid bundle ID format: #{bundle_id}"
+                  say "Bundle IDs must contain only letters, numbers, hyphens, and periods", :yellow
+                  exit 1
+                end
+              end
               
               say "🎯 Target: #{target_name}", :cyan
-              say "📦 Bundle ID: #{bundle_id}", :cyan
+              say "📦 Bundle ID: #{bundle_id}#{options[:bundle_id] ? ' (overridden)' : ''}", :cyan
               say "⏱️  Estimated: 2-5 minutes", :yellow
               say ""
               
@@ -252,6 +265,7 @@ module Mysigner
           method_option :scheme, aliases: '-s', desc: 'Scheme to build (defaults to target name)'
           method_option :type, default: 'appstore', desc: 'Build type: development, adhoc, appstore, enterprise'
           method_option :team, desc: 'Development team ID (overrides project setting)'
+          method_option :bundle_id, aliases: '-b', desc: 'Bundle ID (overrides project setting)'
           def build
             config = load_config
             client = create_client(config)
@@ -317,8 +331,21 @@ module Mysigner
                 say "🧩 Extensions: #{ext_count} (will be included in build)", :cyan
               end
               
-              bundle_id = parser.bundle_id(target_name, options[:configuration])
-              say "📦 Bundle ID: #{bundle_id}", :cyan
+              bundle_id = options[:bundle_id] || parser.bundle_id(target_name, options[:configuration])
+              
+              # Validate bundle ID format if overridden
+              if options[:bundle_id]
+                if bundle_id =~ /\$\(|\$\{/
+                  error "Bundle ID cannot contain variables: #{bundle_id}"
+                  exit 1
+                elsif bundle_id !~ /^[a-zA-Z0-9.-]+$/
+                  error "Invalid bundle ID format: #{bundle_id}"
+                  say "Bundle IDs must contain only letters, numbers, hyphens, and periods", :yellow
+                  exit 1
+                end
+              end
+              
+              say "📦 Bundle ID: #{bundle_id}#{options[:bundle_id] ? ' (overridden)' : ''}", :cyan
               say "⚙️  Configuration: #{options[:configuration]}", :cyan
               
               # Check signing style
@@ -395,7 +422,8 @@ module Mysigner
                 options[:configuration], 
                 scheme: options[:scheme],
                 signing_style: sign_style,
-                team_id: team_id_to_use
+                team_id: team_id_to_use,
+                bundle_id: options[:bundle_id]
               )
 
               say ""
@@ -584,6 +612,57 @@ module Mysigner
             rescue StandardError => e
               say ""
               say "✗ Unexpected error: #{e.message}", :red
+              say e.backtrace.first(5).join("\n"), :red if ENV['DEBUG']
+              exit 1
+            end
+          end
+          
+          desc "signing setup", "Interactive wizard to configure manual signing"
+          long_desc <<~DESC
+            Guides you through setting up manual code signing for your project:
+            
+            1. Detects your project and targets
+            2. Shows current signing configuration
+            3. Helps you select team ID and provisioning profile
+            4. Applies configuration to your Xcode project
+            5. Validates the setup
+            
+            This is useful when automatic signing doesn't work or you need specific profiles.
+          DESC
+          def signing(action)
+            unless action == 'setup'
+              error "Unknown action: #{action}"
+              say "Usage: mysigner signing setup", :yellow
+              exit 1
+            end
+            
+            config = load_config
+            
+            unless config.api_token
+              error "Not logged in. Please run 'mysigner login' or 'mysigner setup' first."
+              exit 1
+            end
+            
+            client = create_client(config)
+            
+            begin
+              # Detect project
+              project_info = Build::Detector.detect
+              parser = Build::Parser.new(project_info)
+              
+              # Run wizard
+              require_relative '../signing/wizard'
+              wizard = Signing::Wizard.new(parser, client, config.organization_id)
+              wizard.run!
+              
+            rescue Build::Detector::NoProjectError => e
+              error e.message
+              exit 1
+            rescue Signing::Wizard::WizardError => e
+              error "Wizard failed: #{e.message}"
+              exit 1
+            rescue StandardError => e
+              error "Unexpected error: #{e.message}"
               say e.backtrace.first(5).join("\n"), :red if ENV['DEBUG']
               exit 1
             end

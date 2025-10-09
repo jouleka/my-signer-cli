@@ -424,13 +424,118 @@ module Mysigner
             end
           end
 
-          desc "certificate download ID", "Download a signing certificate"
+          desc "certificate ACTION", "Manage signing certificates (check, download)"
+          long_desc <<~DESC
+            Actions:
+              check              - Check certificates installed in your Mac's Keychain (not API)
+              download ID        - Download a certificate from My Signer API
+            
+            Note: 'check' scans your LOCAL Keychain, not certificates in My Signer API.
+                  Use 'mysigner certificates' to see API certificates.
+          DESC
           method_option :output, type: :string, aliases: '-o', desc: 'Output file path (default: certificate name)'
           def certificate(action, *args)
             config = load_config
             client = create_client(config)
 
             case action
+            when 'check'
+              require_relative '../signing/certificate_checker'
+              
+              say "🔍 Checking local certificates...", :cyan
+              say ""
+              
+              checker = Signing::CertificateChecker.new
+              
+              begin
+                certificates = checker.check!
+                
+                if certificates.empty?
+                  say "No code signing certificates found in local Keychain", :yellow
+                  say ""
+                  say "⚠️  Important:", :yellow
+                  say "  This command checks certificates INSTALLED ON YOUR MAC.", :white
+                  say "  Certificates in My Signer API are not automatically installed locally.", :white
+                  say ""
+                  say "To install certificates:", :cyan
+                  say "  1. List certificates in My Signer: mysigner certificates", :white
+                  say "  2. Download one: mysigner certificate download <ID>", :white
+                  say "  3. Double-click the .cer file to install in Keychain", :white
+                  say ""
+                  say "Or download from Apple Developer:", :cyan
+                  say "  https://developer.apple.com/account/resources/certificates/list", :white
+                  return
+                end
+                
+                # Group by status
+                by_status = checker.by_status
+                
+                # Show valid certificates
+                if by_status[:valid].any?
+                  say "✓ Valid Certificates (#{by_status[:valid].count})", :green
+                  say ""
+                  by_status[:valid].each do |cert|
+                    say "  #{cert[:name]}", :green
+                    say "    Type: #{cert[:type]}"
+                    say "    Team: #{cert[:team_id] || 'Unknown'}"
+                    say "    Expires: #{cert[:expires_at].strftime('%Y-%m-%d')} (#{cert[:days_until_expiry]} days)", :white
+                    say ""
+                  end
+                end
+                
+                # Show expiring soon certificates
+                if by_status[:expiring_soon].any?
+                  say "⚠️  Expiring Soon (#{by_status[:expiring_soon].count})", :yellow
+                  say ""
+                  by_status[:expiring_soon].each do |cert|
+                    say "  #{cert[:name]}", :yellow
+                    say "    Type: #{cert[:type]}"
+                    say "    Team: #{cert[:team_id] || 'Unknown'}"
+                    say "    Expires: #{cert[:expires_at].strftime('%Y-%m-%d')} (#{cert[:days_until_expiry]} days)", :yellow
+                    say ""
+                  end
+                  say "Renew these certificates soon to avoid build failures!", :yellow
+                  say ""
+                end
+                
+                # Show expired certificates
+                if by_status[:expired].any?
+                  say "✗ Expired Certificates (#{by_status[:expired].count})", :red
+                  say ""
+                  by_status[:expired].each do |cert|
+                    say "  #{cert[:name]}", :red
+                    say "    Type: #{cert[:type]}"
+                    say "    Team: #{cert[:team_id] || 'Unknown'}"
+                    say "    Expired: #{cert[:expires_at].strftime('%Y-%m-%d')} (#{cert[:days_until_expiry].abs} days ago)", :red
+                    say ""
+                  end
+                  say "These certificates will cause build failures. Renew them at:", :red
+                  say "  https://developer.apple.com/account/resources/certificates/list", :white
+                  say ""
+                end
+                
+                # Summary
+                say "─" * 80, :cyan
+                say "Total: #{certificates.count} certificate#{certificates.count == 1 ? '' : 's'} installed locally", :cyan
+                if checker.has_issues?
+                  say "Status: ⚠️  Action required", :yellow
+                else
+                  say "Status: ✓ All certificates valid", :green
+                end
+                say ""
+                say "💡 Tip: These are certificates INSTALLED ON YOUR MAC.", :cyan
+                say "    To see all certificates in My Signer API, run: mysigner certificates", :white
+                
+              rescue Signing::CertificateChecker::CheckError => e
+                error "Certificate check failed: #{e.message}"
+                say ""
+                say "This usually means:", :yellow
+                say "  • Keychain is locked", :white
+                say "  • No certificates installed", :white
+                say "  • Security command not available", :white
+                exit 1
+              end
+              
             when 'download'
               if args.empty?
                 error "Usage: mysigner certificate download ID [--output path.cer]"

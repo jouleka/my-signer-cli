@@ -13,11 +13,13 @@ module Mysigner
       # Options:
       #   - signing_style: 'Automatic', 'Manual', or nil (default: use project setting)
       #   - team_id: Development team ID to override project setting
-      def build!(target_name = nil, configuration = 'Release', scheme: nil, signing_style: nil, team_id: nil)
+      #   - bundle_id: Bundle ID to override project setting
+      def build!(target_name = nil, configuration = 'Release', scheme: nil, signing_style: nil, team_id: nil, bundle_id: nil)
         target = target_name || @parser.main_target.name
         scheme_name = scheme || target
         @signing_style = signing_style
         @team_id = team_id
+        @bundle_id = bundle_id
 
         # Create build directory
         build_dir = File.join(@project_info[:directory], 'build')
@@ -82,6 +84,11 @@ module Mysigner
         # Override team ID if provided
         if @team_id
           cmd += ["DEVELOPMENT_TEAM=#{@team_id}"]
+        end
+        
+        # Override bundle ID if provided
+        if @bundle_id
+          cmd += ["PRODUCT_BUNDLE_IDENTIFIER=#{@bundle_id}"]
         end
 
         # Handle signing based on style
