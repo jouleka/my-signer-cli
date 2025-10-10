@@ -21,7 +21,7 @@ module Mysigner
       @user_email = nil
       @current_organization_id = nil
       @organizations = {}
-      @encryption_enabled = false
+      @encryption_enabled = true  # Enable by default for security
       load if exists?
     end
 

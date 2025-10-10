@@ -17,9 +17,82 @@ module Mysigner
         puts "=" * 80
         puts ""
         
-        # Step 1: Detect current project
-        target_name = detect_target
-        return unless target_name
+        # Check if we're configuring all targets
+        if @options[:all_targets]
+          configure_all_targets
+        else
+          configure_single_target(@options[:target])
+        end
+      end
+
+      def configure_all_targets
+        targets = @parser.signable_targets
+        
+        if targets.empty?
+          error "No signable targets found in project"
+          return
+        end
+        
+        puts "Found #{targets.count} signable target(s):"
+        targets.each do |info|
+          type_label = info[:type] == :app ? '📱 App' : '🧩 Extension'
+          puts "  #{type_label}: #{info[:name]}"
+        end
+        puts ""
+        
+        print "Configure all targets? (y/n): "
+        confirm = STDIN.gets.strip.downcase
+        
+        unless confirm == 'y' || confirm == 'yes'
+          puts "Cancelled"
+          return
+        end
+        
+        puts ""
+        
+        # Configure each target
+        successful = 0
+        failed = 0
+        
+        targets.each_with_index do |info, index|
+          puts ""
+          puts "=" * 80
+          puts "Configuring #{index + 1}/#{targets.count}: #{info[:name]}"
+          puts "=" * 80
+          puts ""
+          
+          if configure_single_target(info[:name], skip_header: true)
+            successful += 1
+          else
+            failed += 1
+            puts ""
+            print "Continue with remaining targets? (y/n): "
+            continue = STDIN.gets.strip.downcase
+            unless continue == 'y' || continue == 'yes'
+              break
+            end
+          end
+        end
+        
+        puts ""
+        puts "=" * 80
+        puts "✅ Completed: #{successful} successful, #{failed} failed"
+        puts "=" * 80
+        puts ""
+        puts "Next steps:"
+        puts "  1. Test build: mysigner build"
+        puts "  2. Or ship to TestFlight: mysigner ship testflight"
+        puts ""
+      end
+
+      def configure_single_target(target_name = nil, skip_header: false)
+        unless skip_header
+          # No header needed, already printed in run!
+        end
+        
+        # Step 1: Detect or validate target
+        target_name = detect_target(target_name)
+        return false unless target_name
         
         @current_target = target_name
         
@@ -31,11 +104,11 @@ module Mysigner
         
         # Step 3: Select team
         team_id = select_team(target_name)
-        return unless team_id
+        return false unless team_id
         
         # Step 4: Select provisioning profile
         profile = select_profile(target_name, team_id)
-        return unless profile
+        return false unless profile
         
         # Step 5: Apply configuration
         apply_configuration(target_name, team_id, profile)
@@ -43,20 +116,38 @@ module Mysigner
         # Step 6: Validate
         validate_configuration(target_name, team_id)
         
-        puts ""
-        puts "=" * 80
-        puts "✅ Signing configuration complete!"
-        puts "=" * 80
-        puts ""
-        puts "Next steps:"
-        puts "  1. Test build: mysigner build"
-        puts "  2. Or ship to TestFlight: mysigner ship testflight"
-        puts ""
+        unless skip_header
+          puts ""
+          puts "=" * 80
+          puts "✅ Signing configuration complete!"
+          puts "=" * 80
+          puts ""
+          puts "Next steps:"
+          puts "  1. Test build: mysigner build"
+          puts "  2. Or ship to TestFlight: mysigner ship testflight"
+          puts ""
+        end
+        
+        true
       end
 
       private
 
-      def detect_target
+      def detect_target(target_name = nil)
+        # If target_name provided, validate it exists
+        if target_name
+          begin
+            @parser.find_target(target_name)
+            puts "📱 Target: #{target_name}"
+            puts ""
+            return target_name
+          rescue => e
+            error "Target '#{target_name}' not found: #{e.message}"
+            return nil
+          end
+        end
+        
+        # No target provided, auto-detect or let user choose
         targets = @parser.app_targets
         
         if targets.empty?
@@ -278,11 +369,48 @@ module Mysigner
           puts "✓ Selected: #{selected['name']}"
           puts ""
           
+          # Download and install the profile
+          download_and_install_profile(selected)
+          
           selected
           
         rescue => e
           error "Failed to fetch profiles: #{e.message}"
           nil
+        end
+      end
+
+      def download_and_install_profile(profile)
+        puts "Downloading and installing profile..."
+        
+        begin
+          # Download profile
+          download_url = "/api/v1/organizations/#{@organization_id}/profiles/#{profile['id']}/download"
+          response = @client.get(download_url)
+          profile_content = response
+          
+          # Create profiles directory if it doesn't exist
+          profiles_dir = File.expand_path("~/Library/MobileDevice/Provisioning Profiles")
+          FileUtils.mkdir_p(profiles_dir) unless Dir.exist?(profiles_dir)
+          
+          # Generate filename (use UUID if available, otherwise sanitized name)
+          uuid = profile['uuid'] || profile['id']
+          filename = "#{uuid}.mobileprovision"
+          output_path = File.join(profiles_dir, filename)
+          
+          # Write profile to file
+          File.open(output_path, 'wb') do |file|
+            file.write(profile_content)
+          end
+          
+          puts "✓ Profile installed: #{output_path}"
+          puts ""
+          
+        rescue => e
+          # Non-fatal error - profile might still work if already installed
+          puts "⚠️  Could not auto-install profile: #{e.message}"
+          puts "   You may need to install it manually by double-clicking the .mobileprovision file"
+          puts ""
         end
       end
 

@@ -97,11 +97,11 @@ RSpec.describe 'mysigner help' do
       expect(stdout).to include('mysigner logout')
     end
 
-    it 'shows help for setup command' do
-      stdout, _, status = Open3.capture3("#{exe_path} help setup 2>&1")
+    it 'shows help for onboard command' do
+      stdout, _, status = Open3.capture3("#{exe_path} help onboard 2>&1")
       expect(status.exitstatus).to eq(0)
       expect(stdout).to include('Usage:')
-      expect(stdout).to include('mysigner setup')
+      expect(stdout).to include('mysigner onboard')
     end
 
     it 'shows help for status command' do

@@ -19,7 +19,7 @@ module Mysigner
           long_desc <<~DESC
             Authenticate with My Signer API using an API token.
             
-            New user? Run 'mysigner setup' for step-by-step guidance.
+            New user? Run 'mysigner onboard' for step-by-step guidance.
             
             Your credentials will be stored securely in ~/.mysigner/config.yml
             
@@ -72,7 +72,7 @@ module Mysigner
             if api_token.empty?
               error "API token cannot be empty"
               say ""
-              say "💡 Tip: Run 'mysigner setup' for detailed guidance", :yellow
+              say "💡 Tip: Run 'mysigner onboard' for detailed guidance", :yellow
               exit 1
             end
 
@@ -195,7 +195,7 @@ module Mysigner
             end
           end
 
-          desc "setup", "Interactive setup guide for first-time users"
+          desc "onboard", "Interactive onboarding guide for first-time users"
           long_desc <<~DESC
             Step-by-step guide to get started with My Signer CLI.
             
@@ -205,7 +205,7 @@ module Mysigner
             3. Help you generate an API token
             4. Configure your CLI
           DESC
-          def setup
+          def onboard
             say "🚀 My Signer Setup Guide", :cyan
             say "=" * 80, :cyan
             say ""
@@ -242,7 +242,7 @@ module Mysigner
               
               unless yes?("Have you created your account? (y/n)")
                 say ""
-                say "Come back and run 'mysigner setup' when you're ready!", :yellow
+                say "Come back and run 'mysigner onboard' when you're ready!", :yellow
                 return
               end
               say ""
@@ -276,7 +276,7 @@ module Mysigner
               
               unless yes?("Have you created your organization? (y/n)")
                 say ""
-                say "Come back and run 'mysigner setup' when you're ready!", :yellow
+                say "Come back and run 'mysigner onboard' when you're ready!", :yellow
                 return
               end
               say ""
@@ -306,7 +306,7 @@ module Mysigner
             
             unless yes?("Have you generated and copied your token? (y/n)")
               say ""
-              say "Come back and run 'mysigner setup' when you have your token!", :yellow
+              say "Come back and run 'mysigner onboard' when you have your token!", :yellow
               return
             end
             say ""
@@ -327,7 +327,7 @@ module Mysigner
             
             if api_token.empty?
               error "Token cannot be empty"
-              say "Run 'mysigner setup' again when you have your token", :yellow
+              say "Run 'mysigner onboard' again when you have your token", :yellow
               return
             end
 
@@ -412,11 +412,11 @@ module Mysigner
                 say "  3. Generate a new token if needed"
               end
               say ""
-              say "Run 'mysigner setup' to try again", :yellow
+              say "Run 'mysigner onboard' to try again", :yellow
             rescue => e
               error "Setup failed: #{e.message}"
               say ""
-              say "Run 'mysigner setup' to try again", :yellow
+              say "Run 'mysigner onboard' to try again", :yellow
             end
           end
 

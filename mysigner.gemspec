@@ -29,6 +29,22 @@ Gem::Specification.new do |spec|
       "public gem pushes."
   end
 
+  spec.post_install_message = <<~MSG
+    \e[36m╔══════════════════════════════════════════════════════════════╗\e[0m
+    \e[36m║ \e[1m🚀  Welcome to My Signer CLI\e[0m\e[36m                                      ║\e[0m
+    \e[36m╚══════════════════════════════════════════════════════════════╝\e[0m
+
+    \e[32m✓\e[0m  You're ready to automate iOS code signing without the pain.
+
+    \e[35mNext steps:\e[0m
+      • \e[33mRun\e[0m \e[1m`mysigner onboard`\e[0m   – Guided first-time setup (API URL, org, token)
+      • \e[33mRun\e[0m \e[1m`mysigner login`\e[0m     – Skip onboarding if you already have a token
+      • \e[33mRun\e[0m \e[1m`mysigner doctor`\e[0m    – Validate your macOS/Xcode environment
+      • \e[33mRun\e[0m \e[1m`mysigner help`\e[0m      – Explore every command in the toolbox
+
+    \e[36mNeed docs?\e[0m https://github.com/jurgenleka/my-signer-cli
+  MSG
+
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
   spec.files         = Dir.chdir(File.expand_path('..', __FILE__)) do

@@ -26,7 +26,7 @@ module Mysigner
             params[:q] = options[:search] if options[:search]
 
             begin
-              response = client.get("/api/v1/organizations/#{config.organization_id}/devices", params: params)
+              response = client.get("/api/v1/organizations/#{config.current_organization_id}/devices", params: params)
               devices = response[:data]['devices']
               pagination = response[:data]['pagination']
 
@@ -42,7 +42,7 @@ module Mysigner
                 status_icon = device['status'] == 'ENABLED' ? '✓' : '✗'
                 status_color = device['status'] == 'ENABLED' ? :green : :red
                 
-                say "  #{status_icon} #{device['name']}", status_color
+                say "  #{status_icon} #{device['name']} (ID: #{device['id']})", status_color
                 say "    UDID: #{device['udid']}"
                 say "    Platform: #{device['platform']} | Class: #{device['device_class']}"
                 say "    Status: #{device['status']}"
@@ -62,6 +62,64 @@ module Mysigner
           end
 
           desc "device SUBCOMMAND", "Manage devices (add, update)"
+          long_desc <<~DESC
+            Register and manage test devices for development builds.
+            
+            WHY REGISTER DEVICES?
+            
+            To install development/adhoc builds on physical devices, you must register
+            their UDIDs (Unique Device Identifiers) with Apple and include them in your
+            provisioning profiles.
+            
+            SUBCOMMANDS:
+            
+              mysigner device add NAME UDID [--platform IOS]
+              Register a new device for testing
+              
+              mysigner device update ID NEW_NAME
+              Rename an existing device
+            
+            HOW TO GET A DEVICE UDID:
+            
+            Method 1 - Via Xcode (Easiest):
+              1. Connect your iPhone/iPad to your Mac
+              2. Open Xcode → Window → Devices and Simulators
+              3. Select your device
+              4. Copy the "Identifier" value (40 characters)
+            
+            Method 2 - Via Finder:
+              1. Connect your iPhone/iPad to your Mac
+              2. Open Finder
+              3. Select your device in the sidebar
+              4. Click on the device info to reveal UDID
+              5. Right-click → Copy UDID
+            
+            Method 3 - Via Settings (iOS 16+):
+              1. On your iPhone/iPad: Settings → General → About
+              2. Look for "Device Information" or scroll down
+              3. Tap and hold to copy
+            
+            EXAMPLES:
+            
+              # Register your iPhone
+              mysigner device add "My iPhone 15" 00008030-001A1B2C3D4E567F
+              
+              # Register an iPad
+              mysigner device add "Test iPad" da83bb40dba39e35d258988d856508798db7afba
+              
+              # Register a Mac for Mac Catalyst apps
+              mysigner device add "MacBook Pro" ABC123... --platform MAC_OS
+              
+              # Rename a device (use ID from 'mysigner devices' list)
+              mysigner device update 42 "John's iPhone"
+            
+            NOTES:
+            
+            • UDIDs are 40 hex characters (0-9, a-f) or 25 characters for newer devices
+            • You can register up to 100 devices per year per account
+            • After registering, regenerate your provisioning profiles to include the device
+            • Run 'mysigner devices' to see all registered devices
+          DESC
           method_option :platform, type: :string, default: 'IOS', aliases: '-p', desc: 'Platform (IOS, MAC_OS, TV_OS)'
           def device(action, *args)
             config = load_config
@@ -71,6 +129,15 @@ module Mysigner
             when 'add'
               if args.length < 2
                 error "Usage: mysigner device add NAME UDID [--platform IOS]"
+                say ""
+                say "Example: mysigner device add \"My iPhone\" 00008030-001A1B2C3D4E567F", :yellow
+                say ""
+                say "💡 To get your device UDID:", :cyan
+                say "   1. Connect device to Mac", :cyan
+                say "   2. Open Xcode → Window → Devices and Simulators", :cyan
+                say "   3. Copy the 'Identifier' field", :cyan
+                say ""
+                say "Run 'mysigner help device' for detailed instructions", :cyan
                 exit 1
               end
 
@@ -83,7 +150,7 @@ module Mysigner
 
               begin
                 response = client.post(
-                  "/api/v1/organizations/#{config.organization_id}/devices",
+                  "/api/v1/organizations/#{config.current_organization_id}/devices",
                   body: {
                     name: name,
                     udid: udid,
@@ -120,6 +187,11 @@ module Mysigner
             when 'update'
               if args.length < 2
                 error "Usage: mysigner device update ID NEW_NAME"
+                say ""
+                say "Example: mysigner device update 42 \"John's iPhone\"", :yellow
+                say ""
+                say "💡 To get device IDs:", :cyan
+                say "   Run 'mysigner devices' to see all devices with their IDs", :cyan
                 exit 1
               end
 
@@ -131,7 +203,7 @@ module Mysigner
 
               begin
                 # Get device details first
-                response = client.get("/api/v1/organizations/#{config.organization_id}/devices/#{device_id}")
+                response = client.get("/api/v1/organizations/#{config.current_organization_id}/devices/#{device_id}")
                 device = response[:data]
 
                 say "Current name: #{device['name']}", :yellow
@@ -140,7 +212,7 @@ module Mysigner
 
                 # Update device
                 response = client.patch(
-                  "/api/v1/organizations/#{config.organization_id}/devices/#{device_id}",
+                  "/api/v1/organizations/#{config.current_organization_id}/devices/#{device_id}",
                   body: { name: new_name }
                 )
 
@@ -166,6 +238,36 @@ module Mysigner
           end
 
           desc "profiles", "List provisioning profiles"
+          long_desc <<~DESC
+            List all provisioning profiles in your organization.
+            
+            WHEN DO YOU NEED THIS?
+            
+            For Automatic Signing (Most Users):
+              ❌ You DON'T need this - Xcode handles everything
+            
+            For Manual Signing (Advanced):
+              ✅ View available profiles
+              ✅ Check expiration dates
+              ✅ Get profile IDs for download/delete
+            
+            EXAMPLES:
+            
+              # List all profiles
+              mysigner profiles
+              
+              # Filter by type
+              mysigner profiles --type APP_STORE
+              mysigner profiles --type DEVELOPMENT
+              
+              # Filter by status
+              mysigner profiles --status EXPIRED
+              
+              # Search by name
+              mysigner profiles --search "MyApp"
+            
+            NOTE: Most users can skip this and just run 'mysigner build'
+          DESC
           method_option :type, type: :string, aliases: '-t', desc: 'Filter by type (DEVELOPMENT, AD_HOC, APP_STORE, ENTERPRISE)'
           method_option :status, type: :string, aliases: '-s', desc: 'Filter by status (ACTIVE, EXPIRED, INVALID)'
           method_option :search, type: :string, aliases: '-q', desc: 'Search by name or identifier'
@@ -188,7 +290,7 @@ module Mysigner
             params[:q] = options[:search] if options[:search]
 
             begin
-              response = client.get("/api/v1/organizations/#{config.organization_id}/profiles", params: params)
+              response = client.get("/api/v1/organizations/#{config.current_organization_id}/profiles", params: params)
               profiles = response[:data]['profiles']
               pagination = response[:data]['pagination']
 
@@ -230,6 +332,73 @@ module Mysigner
           end
 
           desc "profile SUBCOMMAND", "Manage profiles (download, delete)"
+          long_desc <<~DESC
+            Manage provisioning profiles for code signing.
+            
+            WHAT ARE PROVISIONING PROFILES?
+            
+            Provisioning profiles are required for signing iOS apps. They link:
+            - Your signing certificate
+            - Your App ID (bundle ID)
+            - Authorized devices (for development/ad-hoc)
+            
+            WHEN DO YOU NEED THIS?
+            
+            For Automatic Signing (Most Users):
+              ❌ You DON'T need these commands
+              ✅ Xcode handles profiles automatically
+              ✅ Just run: mysigner build
+            
+            For Manual Signing (Advanced):
+              ✅ Download profiles from My Signer
+              ✅ Install them to ~/Library/MobileDevice/Provisioning Profiles/
+              ✅ Delete old/expired profiles
+            
+            SUBCOMMANDS:
+            
+              mysigner profile download ID [--output path]
+              Download a provisioning profile
+              
+              mysigner profile delete ID
+              Delete a provisioning profile
+            
+            HOW TO USE:
+            
+            1. List available profiles:
+               mysigner profiles
+            
+            2. Download a profile:
+               mysigner profile download 1
+            
+            3. Install it (double-click or manual):
+               open Profile_Name.mobileprovision
+               # Or: cp *.mobileprovision ~/Library/MobileDevice/Provisioning\\ Profiles/
+            
+            EXAMPLES:
+            
+              # Download profile ID 1
+              mysigner profile download 1
+              
+              # Download to specific location
+              mysigner profile download 1 --output ~/Desktop/MyProfile.mobileprovision
+              
+              # Delete expired profile
+              mysigner profile delete 5
+              
+              # List all profiles
+              mysigner profiles
+              
+              # Filter by type
+              mysigner profiles --type APP_STORE
+            
+            NOTES:
+            
+            • Most users with Automatic signing don't need this
+            • Manual signing wizard tries to auto-install profiles
+            • Profiles expire after 1 year and must be regenerated
+            • Development profiles: For testing on devices
+            • App Store profiles: For production releases
+          DESC
           method_option :output, type: :string, aliases: '-o', desc: 'Output file path (default: profile name)'
           def profile(action, *args)
             config = load_config
@@ -239,6 +408,14 @@ module Mysigner
             when 'download'
               if args.empty?
                 error "Usage: mysigner profile download ID [--output path.mobileprovision]"
+                say ""
+                say "Example: mysigner profile download 1", :yellow
+                say ""
+                say "💡 To get profile IDs:", :cyan
+                say "   Run 'mysigner profiles' to see all profiles with their IDs", :cyan
+                say ""
+                say "Note: Most users with Automatic signing don't need this", :yellow
+                say "Run 'mysigner help profile' for more info", :cyan
                 exit 1
               end
 
@@ -249,7 +426,7 @@ module Mysigner
 
               begin
                 # Get profile details first
-                response = client.get("/api/v1/organizations/#{config.organization_id}/profiles/#{profile_id}")
+                response = client.get("/api/v1/organizations/#{config.current_organization_id}/profiles/#{profile_id}")
                 profile = response[:data]
 
                 # Determine output path
@@ -263,7 +440,7 @@ module Mysigner
                 end
 
                 # Download the profile content using the client's connection with auth
-                download_url = "/api/v1/organizations/#{config.organization_id}/profiles/#{profile_id}/download"
+                download_url = "/api/v1/organizations/#{config.current_organization_id}/profiles/#{profile_id}/download"
                 
                 say "Fetching profile content...", :yellow
                 
@@ -319,6 +496,11 @@ module Mysigner
             when 'delete'
               if args.empty?
                 error "Usage: mysigner profile delete ID"
+                say ""
+                say "Example: mysigner profile delete 5", :yellow
+                say ""
+                say "💡 To get profile IDs:", :cyan
+                say "   Run 'mysigner profiles' to see all profiles with their IDs", :cyan
                 exit 1
               end
 
@@ -329,7 +511,7 @@ module Mysigner
 
               begin
                 # Get profile details first
-                response = client.get("/api/v1/organizations/#{config.organization_id}/profiles/#{profile_id}")
+                response = client.get("/api/v1/organizations/#{config.current_organization_id}/profiles/#{profile_id}")
                 profile = response[:data]
 
                 # Confirm deletion
@@ -340,7 +522,7 @@ module Mysigner
                 say ""
 
                 if yes?("Are you sure you want to delete this profile? (y/n)")
-                  client.delete("/api/v1/organizations/#{config.organization_id}/profiles/#{profile_id}")
+                  client.delete("/api/v1/organizations/#{config.current_organization_id}/profiles/#{profile_id}")
                   say ""
                   say "✓ Profile deleted successfully!", :green
                 else
@@ -383,7 +565,7 @@ module Mysigner
             params[:q] = options[:search] if options[:search]
 
             begin
-              response = client.get("/api/v1/organizations/#{config.organization_id}/certificates", params: params)
+              response = client.get("/api/v1/organizations/#{config.current_organization_id}/certificates", params: params)
               certificates = response[:data]['certificates']
               pagination = response[:data]['pagination']
 
@@ -549,7 +731,7 @@ module Mysigner
 
               begin
                 # Get certificate details first
-                response = client.get("/api/v1/organizations/#{config.organization_id}/certificates/#{certificate_id}")
+                response = client.get("/api/v1/organizations/#{config.current_organization_id}/certificates/#{certificate_id}")
                 certificate = response[:data]
 
                 # Determine output path
@@ -563,7 +745,7 @@ module Mysigner
                 end
 
                 # Download the certificate content (binary response)
-                download_url = "/api/v1/organizations/#{config.organization_id}/certificates/#{certificate_id}/download"
+                download_url = "/api/v1/organizations/#{config.current_organization_id}/certificates/#{certificate_id}/download"
                 
                 say "Fetching certificate content...", :yellow
                 

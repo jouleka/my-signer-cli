@@ -100,8 +100,6 @@ module Mysigner
 
       def execute_export(options_plist)
         FileUtils.mkdir_p(@output_dir)
-        
-        puts "🏗️  Running: xcodebuild -exportArchive..."
         puts ""
 
         cmd = [

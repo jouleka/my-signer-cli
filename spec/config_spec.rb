@@ -75,6 +75,7 @@ RSpec.describe Mysigner::Config do
 
     it "saves configuration to file in new format" do
       config = Mysigner::Config.new
+      config.encryption_enabled = false  # Disable encryption for this test
       config.api_url = 'http://localhost:3000'
       config.user_email = 'test@example.com'
       config.current_organization_id = 1
@@ -94,6 +95,7 @@ RSpec.describe Mysigner::Config do
 
     it "saves multiple organizations" do
       config = Mysigner::Config.new
+      config.encryption_enabled = false  # Disable encryption for this test
       config.api_url = 'http://localhost:3000'
       config.current_organization_id = 1
       config.save_token_for_org(1, 'Org 1', 'token1')
@@ -509,6 +511,7 @@ RSpec.describe Mysigner::Config do
 
     describe "#enable_encryption!" do
       it "enables encryption" do
+        config.encryption_enabled = false  # Start with encryption disabled
         config.save_token_for_org(1, 'Org 1', 'token1')
         config.save_token_for_org(2, 'Org 2', 'token2')
         
@@ -610,6 +613,7 @@ RSpec.describe Mysigner::Config do
       end
 
       it "returns false when config has no encrypted tokens" do
+        config.encryption_enabled = false  # Disable encryption to test unencrypted tokens
         config.save_token_for_org(1, 'Org 1', 'token1')
         
         expect(config.encrypted_config?).to be false
@@ -622,11 +626,12 @@ RSpec.describe Mysigner::Config do
 
     describe "save and load with encryption" do
       it "saves encrypted tokens and loads them correctly" do
+        config.encryption_enabled = false  # Start without encryption
         config.api_url = 'http://localhost:3000'
         config.current_organization_id = 1
         config.save_token_for_org(1, 'Org 1', 'token1')
         config.save_token_for_org(2, 'Org 2', 'token2')
-        config.enable_encryption!
+        config.enable_encryption!  # This should also call save internally
         
         # Load config in new instance
         new_config = Mysigner::Config.new

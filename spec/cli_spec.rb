@@ -41,8 +41,9 @@ RSpec.describe Mysigner::CLI do
       before do
         config = Mysigner::Config.new
         config.api_url = "http://localhost:3000"
-        config.api_token = "test_token_12345"
-        config.organization_id = 1
+        config.user_email = "test@example.com"
+        config.current_organization_id = 1
+        config.save_token_for_org(1, "Test Org", "test_token_12345")
         config.save
       end
 
@@ -106,8 +107,9 @@ RSpec.describe Mysigner::CLI do
       before do
         config = Mysigner::Config.new
         config.api_url = "http://localhost:3000"
-        config.api_token = "test_token"
-        config.organization_id = 1
+        config.user_email = "test@example.com"
+        config.current_organization_id = 1
+        config.save_token_for_org(1, "Test Org", "test_token")
         config.save
 
         # Stub API calls
@@ -170,8 +172,9 @@ RSpec.describe Mysigner::CLI do
       before do
         config = Mysigner::Config.new
         config.api_url = "http://localhost:3000"
-        config.api_token = "test_token"
-        config.organization_id = 1
+        config.user_email = "test@example.com"
+        config.current_organization_id = 1
+        config.save_token_for_org(1, "Test Org", "test_token")
         config.save
 
         stub_request(:get, "http://localhost:3000/api/v1/organizations")
@@ -212,8 +215,9 @@ RSpec.describe Mysigner::CLI do
       before do
         config = Mysigner::Config.new
         config.api_url = "http://localhost:3000"
-        config.api_token = "test_token"
-        config.organization_id = 1
+        config.user_email = "test@example.com"
+        config.current_organization_id = 1
+        config.save_token_for_org(1, "Test Org", "test_token")
         config.save
 
         stub_request(:get, "http://localhost:3000/api/v1/organizations/1/devices")
@@ -317,8 +321,9 @@ RSpec.describe Mysigner::CLI do
       before do
         config = Mysigner::Config.new
         config.api_url = "http://localhost:3000"
-        config.api_token = "test_token"
-        config.organization_id = 1
+        config.user_email = "test@example.com"
+        config.current_organization_id = 1
+        config.save_token_for_org(1, "Test Org", "test_token")
         config.save
       end
 
@@ -431,8 +436,9 @@ RSpec.describe Mysigner::CLI do
       before do
         config = Mysigner::Config.new
         config.api_url = "http://localhost:3000"
-        config.api_token = "test_token"
-        config.organization_id = 1
+        config.user_email = "test@example.com"
+        config.current_organization_id = 1
+        config.save_token_for_org(1, "Test Org", "test_token")
         config.save
       end
 
@@ -512,8 +518,9 @@ RSpec.describe Mysigner::CLI do
       before do
         config = Mysigner::Config.new
         config.api_url = "http://localhost:3000"
-        config.api_token = "test_token"
-        config.organization_id = 1
+        config.user_email = "test@example.com"
+        config.current_organization_id = 1
+        config.save_token_for_org(1, "Test Org", "test_token")
         config.save
 
         stub_request(:get, "http://localhost:3000/api/v1/organizations/1/profiles")
@@ -635,8 +642,9 @@ RSpec.describe Mysigner::CLI do
       before do
         config = Mysigner::Config.new
         config.api_url = "http://localhost:3000"
-        config.api_token = "test_token"
-        config.organization_id = 1
+        config.user_email = "test@example.com"
+        config.current_organization_id = 1
+        config.save_token_for_org(1, "Test Org", "test_token")
         config.save
       end
 
@@ -755,8 +763,9 @@ RSpec.describe Mysigner::CLI do
       before do
         config = Mysigner::Config.new
         config.api_url = "http://localhost:3000"
-        config.api_token = "test_token"
-        config.organization_id = 1
+        config.user_email = "test@example.com"
+        config.current_organization_id = 1
+        config.save_token_for_org(1, "Test Org", "test_token")
         config.save
       end
 
@@ -848,8 +857,9 @@ RSpec.describe Mysigner::CLI do
       before do
         config = Mysigner::Config.new
         config.api_url = "http://localhost:3000"
-        config.api_token = "test_token"
-        config.organization_id = 1
+        config.user_email = "test@example.com"
+        config.current_organization_id = 1
+        config.save_token_for_org(1, "Test Org", "test_token")
         config.save
 
         stub_request(:get, "http://localhost:3000/api/v1/organizations/1/certificates")
@@ -969,8 +979,9 @@ RSpec.describe Mysigner::CLI do
       before do
         config = Mysigner::Config.new
         config.api_url = "http://localhost:3000"
-        config.api_token = "test_token"
-        config.organization_id = 1
+        config.user_email = "test@example.com"
+        config.current_organization_id = 1
+        config.save_token_for_org(1, "Test Org", "test_token")
         config.save
       end
 
@@ -1088,8 +1099,9 @@ RSpec.describe Mysigner::CLI do
       # Set up config
       config = Mysigner::Config.new
       config.api_url = "http://localhost:3000"
-      config.api_token = "test_token_12345"
-      config.organization_id = 5
+      config.user_email = "test@example.com"
+      config.current_organization_id = 5
+      config.save_token_for_org(5, "Test Org", "test_token_12345")
       config.save
       
       # Create fake project structure

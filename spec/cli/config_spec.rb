@@ -59,8 +59,9 @@ RSpec.describe 'mysigner config', type: :cli do
     let(:display_config) {
       {
         api_url: 'https://api.mysigner.app',
-        api_token: 'sk_test_...xyz',
-        organization_id: '123'
+        user_email: 'test@example.com',
+        current_organization: 'Test Org (ID: 123)',
+        current_token: 'sk_test_...xyz'
       }
     }
 
@@ -81,16 +82,22 @@ RSpec.describe 'mysigner config', type: :cli do
       expect(output).to include('https://api.mysigner.app')
     end
 
-    it 'displays masked token' do
+    it 'displays user email' do
       output = capture_stdout { cli.config }
-      expect(output).to include('api_token')
-      expect(output).to include('sk_test_...xyz')
+      expect(output).to include('user_email')
+      expect(output).to include('test@example.com')
     end
 
-    it 'displays organization ID' do
+    it 'displays current organization' do
       output = capture_stdout { cli.config }
-      expect(output).to include('organization_id')
-      expect(output).to include('123')
+      expect(output).to include('current_organization')
+      expect(output).to include('Test Org (ID: 123)')
+    end
+
+    it 'displays current token' do
+      output = capture_stdout { cli.config }
+      expect(output).to include('current_token')
+      expect(output).to include('sk_test_...xyz')
     end
 
     it 'shows config file path' do
@@ -103,8 +110,8 @@ RSpec.describe 'mysigner config', type: :cli do
       output = capture_stdout { cli.config }
       # Keys should be left-justified to 20 characters
       expect(output).to match(/api_url\s+:/)
-      expect(output).to match(/api_token\s+:/)
-      expect(output).to match(/organization_id\s+:/)
+      expect(output).to match(/user_email\s+:/)
+      expect(output).to match(/current_organization\s+:/)
     end
 
     it 'does not make network calls' do
@@ -118,8 +125,9 @@ RSpec.describe 'mysigner config', type: :cli do
     let(:display_config) {
       {
         api_url: 'https://api.mysigner.app',
-        api_token: 'sk_test_...xyz',
-        organization_id: nil
+        user_email: 'test@example.com',
+        current_organization: '(not set)',
+        current_token: '(not set)'
       }
     }
 
@@ -139,15 +147,16 @@ RSpec.describe 'mysigner config', type: :cli do
       expect(output).to include('https://api.mysigner.app')
     end
 
-    it 'displays masked token' do
+    it 'shows not set message for organization' do
       output = capture_stdout { cli.config }
-      expect(output).to include('sk_test_...xyz')
+      expect(output).to include('current_organization')
+      expect(output).to include('(not set)')
     end
 
-    it 'shows nil organization_id' do
+    it 'shows not set message for token' do
       output = capture_stdout { cli.config }
-      expect(output).to include('organization_id')
-      # Ruby's to_s on nil returns empty string, so it might show as blank
+      expect(output).to include('current_token')
+      expect(output).to include('(not set)')
     end
 
     it 'shows config file path' do
@@ -160,8 +169,9 @@ RSpec.describe 'mysigner config', type: :cli do
     let(:display_config) {
       {
         api_url: 'http://localhost:3000',
-        api_token: 'sk_dev_...abc',
-        organization_id: '456'
+        user_email: 'dev@example.com',
+        current_organization: 'Dev Org (ID: 456)',
+        current_token: 'sk_dev_...abc'
       }
     }
 
@@ -209,8 +219,9 @@ RSpec.describe 'mysigner config', type: :cli do
       let(:display_config) {
         {
           api_url: 'https://api.mysigner.app',
-          api_token: 'sk_test_...xyz',
-          organization_id: '123',
+          user_email: 'test@example.com',
+          current_organization: 'Test Org (ID: 123)',
+          current_token: 'sk_test_...xyz',
           custom_key: 'custom_value',
           another_setting: 'test'
         }

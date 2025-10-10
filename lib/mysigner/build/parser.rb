@@ -52,6 +52,28 @@ module Mysigner
         app_targets.count > 1
       end
 
+      # Get detailed info about a target
+      def target_info(target_name, configuration = 'Release')
+        target = find_target(target_name)
+        
+        {
+          name: target.name,
+          type: product_type(target_name),
+          platform: target_platform(target_name),
+          bundle_id: bundle_id(target_name, configuration),
+          team_id: team_id(target_name, configuration),
+          signing_style: code_sign_style(target_name, configuration),
+          product_type: target.product_type
+        }
+      end
+
+      # Get a list of all signable targets with their info
+      def signable_targets(configuration = 'Release')
+        all_app_targets.map do |target|
+          target_info(target.name, configuration)
+        end
+      end
+
       # Detect target platform (iOS, macOS, tvOS, watchOS)
       def target_platform(target_name = nil)
         target = find_target(target_name)

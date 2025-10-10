@@ -21,14 +21,15 @@ module Mysigner
         @team_id = team_id
         @bundle_id = bundle_id
 
-        # Create build directory
-        build_dir = File.join(@project_info[:directory], 'build')
-        FileUtils.mkdir_p(build_dir) unless Dir.exist?(build_dir)
+        # Use Xcode's default DerivedData location to keep project clean
+        # This matches Xcode's behavior and avoids polluting the project directory
+        derived_data_dir = File.expand_path('~/Library/Developer/Xcode/DerivedData')
+        FileUtils.mkdir_p(derived_data_dir) unless Dir.exist?(derived_data_dir)
 
         # Generate archive path with timestamp
         timestamp = Time.now.strftime('%Y%m%d-%H%M%S')
         archive_name = "#{target}-#{timestamp}.xcarchive"
-        archive_path = File.join(build_dir, archive_name)
+        archive_path = File.join(derived_data_dir, archive_name)
 
         # Build command
         cmd = build_command(scheme_name, configuration, archive_path)

@@ -3,17 +3,39 @@ module Mysigner
     module BuildCommands
       def self.included(base)
         base.class_eval do
-          desc "ship testflight", "Build, export, and upload to TestFlight (one command!)"
+          desc "ship TARGET", "Build, export, and upload (testflight or appstore)"
+          long_desc <<~DESC
+            Build your app and upload to TestFlight or App Store.
+            
+            TARGETS:
+              testflight    Upload to TestFlight for beta testing
+              appstore      Upload to App Store Connect for production release
+            
+            OPTIONS:
+              --submit-for-review    Automatically submit for App Store review (appstore only)
+              --wait                 Wait for processing to complete
+              --team TEAM_ID         Override development team
+              --bundle-id ID         Override bundle identifier
+            
+            EXAMPLES:
+              mysigner ship testflight                    # Upload to TestFlight
+              mysigner ship appstore                      # Upload to App Store
+              mysigner ship appstore --submit-for-review  # Upload and submit for review
+          DESC
           method_option :configuration, aliases: '-c', default: 'Release', desc: 'Build configuration'
           method_option :scheme, aliases: '-s', desc: 'Scheme to build (auto-detect if not specified)'
           method_option :wait, type: :boolean, default: false, desc: 'Wait for processing to complete'
           method_option :team, desc: 'Development team ID (overrides project setting)'
           method_option :bundle_id, aliases: '-b', desc: 'Bundle ID (overrides project setting)'
+          method_option :submit_for_review, type: :boolean, default: false, desc: 'Submit for App Store review (appstore only)'
           def ship(target)
-            unless target == 'testflight'
-              error "Only 'testflight' target is supported currently"
+            unless ['testflight', 'appstore'].include?(target)
+              error "Invalid target: #{target}"
+              say "Valid targets: testflight, appstore", :yellow
               exit 1
             end
+            
+            is_appstore = (target == 'appstore')
 
             config = load_config
             client = create_client(config)
@@ -25,13 +47,17 @@ module Mysigner
             project_name = nil
             bundle_id = nil
 
-            say "🚀 My Signer - Ship to TestFlight", :cyan
+            target_label = is_appstore ? "App Store" : "TestFlight"
+            say "🚀 My Signer - Ship to #{target_label}", :cyan
             say "=" * 80, :cyan
             say ""
             say "This will:", :bold
             say "  1️⃣  Detect and build your project"
             say "  2️⃣  Export IPA for App Store"
-            say "  3️⃣  Upload to TestFlight"
+            say "  3️⃣  Upload to #{target_label}"
+            if is_appstore && options[:submit_for_review]
+              say "  4️⃣  Submit for App Store review"
+            end
             say ""
             say "⏱️  Estimated time: 3-7 minutes", :yellow
             say ""
@@ -89,7 +115,7 @@ module Mysigner
                 say "🔍 No team set in project, fetching from My Signer...", :yellow
                 
                 begin
-                  org_response = client.get("/api/v1/organizations/#{config.organization_id}")
+                  org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
                   api_team_id = org_response['app_store_connect_team_id']
                   
                   if api_team_id && !api_team_id.empty?
@@ -150,7 +176,7 @@ module Mysigner
 
               # STEP 3: UPLOAD
               say "=" * 80, :cyan
-              say "[3/3] Uploading to TestFlight", :cyan
+              say "[3/#{is_appstore && options[:submit_for_review] ? '4' : '3'}] Uploading to #{target_label}", :cyan
               say "=" * 80, :cyan
               say ""
               say "⏱️  Estimated: 1-3 minutes", :yellow
@@ -161,7 +187,7 @@ module Mysigner
               # Fetch App Store Connect credentials
               say "🔐 Fetching App Store Connect credentials...", :yellow
               
-              org_response = client.get("/api/v1/organizations/#{config.organization_id}")
+              org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
               org_data = org_response[:data]
               
               unless org_data['app_store_connect_configured']
@@ -195,12 +221,42 @@ module Mysigner
               uploader.upload!(wait_for_processing: options[:wait])
               
               timings[:upload] = Time.now - upload_start
+              
+              # STEP 4 (Optional): Submit for App Store Review
+              if is_appstore && options[:submit_for_review]
+                say ""
+                say "=" * 80, :cyan
+                say "[4/4] Submitting for App Store Review", :cyan
+                say "=" * 80, :cyan
+                say ""
+                
+                submission_start = Time.now
+                
+                require_relative '../upload/app_store_submission'
+                submission = Upload::AppStoreSubmission.new(
+                  client,
+                  config.current_organization_id,
+                  {
+                    bundle_id: bundle_id,
+                    version: parser.build_settings(target_name, options[:configuration])['MARKETING_VERSION'],
+                    build_number: parser.build_settings(target_name, options[:configuration])['CURRENT_PROJECT_VERSION']
+                  }
+                )
+                
+                submission.submit_for_review!
+                timings[:submission] = Time.now - submission_start
+              end
+              
               timings[:total] = Time.now - overall_start
 
               # SUCCESS SUMMARY!
               say ""
               say "=" * 80, :green
-              say "🎉 SUCCESS! Your app is on TestFlight!", :green
+              if is_appstore
+                say "🎉 SUCCESS! Your app is uploaded to App Store Connect!", :green
+              else
+                say "🎉 SUCCESS! Your app is on TestFlight!", :green
+              end
               say "=" * 80, :green
               say ""
               
@@ -236,7 +292,18 @@ module Mysigner
               say "  1. Wait 5-15 minutes for Apple to process your build"
               say "  2. Open App Store Connect:"
               say "     https://appstoreconnect.apple.com/apps"
-              say "  3. Add testers and distribute via TestFlight"
+              if is_appstore
+                if options[:submit_for_review]
+                  say "  3. Your build is submitted for review!"
+                  say "  4. Monitor review status in App Store Connect"
+                else
+                  say "  3. Select this build for a new version"
+                  say "  4. Fill in required metadata (screenshots, description)"
+                  say "  5. Submit for App Store review"
+                end
+              else
+                say "  3. Add testers and distribute via TestFlight"
+              end
               say ""
 
             rescue => e
@@ -360,7 +427,7 @@ module Mysigner
                 say "🔍 No team set in project, fetching from My Signer...", :yellow
                 
                 begin
-                  org_response = client.get("/api/v1/organizations/#{config.organization_id}")
+                  org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
                   api_team_id = org_response['app_store_connect_team_id']
                   
                   if api_team_id && !api_team_id.empty?
@@ -389,7 +456,7 @@ module Mysigner
                   say "⚠️  Manual signing enabled but not configured", :yellow
                   say "🔐 Configuring manual signing via My Signer API...", :cyan
                   
-                  configurator = Build::Configurator.new(parser, client, config.organization_id)
+                  configurator = Build::Configurator.new(parser, client, config.current_organization_id)
                   build_type = options[:type].to_sym
                   
                   profile = configurator.configure!(target_name, options[:configuration], build_type: build_type)
@@ -401,7 +468,7 @@ module Mysigner
                 # No signing style set, default to configuring manual signing
                 say "🔐 Configuring manual signing via My Signer API...", :cyan
                 
-                configurator = Build::Configurator.new(parser, client, config.organization_id)
+                configurator = Build::Configurator.new(parser, client, config.current_organization_id)
                 build_type = options[:type].to_sym
                 
                 profile = configurator.configure!(target_name, options[:configuration], build_type: build_type)
@@ -548,7 +615,7 @@ module Mysigner
               say "🔐 Fetching App Store Connect credentials...", :yellow
               
               begin
-                org_response = client.get("/api/v1/organizations/#{config.organization_id}")
+                org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
                 org_data = org_response[:data]
                 
                 # Check if credentials are configured
@@ -617,7 +684,7 @@ module Mysigner
             end
           end
           
-          desc "signing setup", "Interactive wizard to configure manual signing"
+          desc "signing configure", "Interactive wizard to configure manual signing"
           long_desc <<~DESC
             Guides you through setting up manual code signing for your project:
             
@@ -628,18 +695,29 @@ module Mysigner
             5. Validates the setup
             
             This is useful when automatic signing doesn't work or you need specific profiles.
+            
+            OPTIONS:
+              --target NAME       Configure specific target only
+              --all-targets       Configure all app and extension targets
+            
+            EXAMPLES:
+              mysigner signing configure                    # Configure main app (auto-detect)
+              mysigner signing configure --target MyWidget  # Configure specific target
+              mysigner signing configure --all-targets      # Configure all targets
           DESC
+          method_option :target, aliases: '-t', desc: 'Target name to configure'
+          method_option :all_targets, type: :boolean, default: false, desc: 'Configure all targets'
           def signing(action)
-            unless action == 'setup'
+            unless action == 'configure'
               error "Unknown action: #{action}"
-              say "Usage: mysigner signing setup", :yellow
+              say "Usage: mysigner signing configure", :yellow
               exit 1
             end
             
             config = load_config
             
             unless config.api_token
-              error "Not logged in. Please run 'mysigner login' or 'mysigner setup' first."
+              error "Not logged in. Please run 'mysigner login' or 'mysigner onboard' first."
               exit 1
             end
             
@@ -650,9 +728,39 @@ module Mysigner
               project_info = Build::Detector.detect
               parser = Build::Parser.new(project_info)
               
-              # Run wizard
+              # Validate options
+              if options[:target] && options[:all_targets]
+                error "Cannot use both --target and --all-targets"
+                exit 1
+              end
+              
+              # Check current signing style
+              target_name = options[:target] || parser.main_target.name
+              signing_style = parser.code_sign_style(target_name)
+              
+              if signing_style == 'Automatic'
+                say "⚠️  Project uses Automatic signing", :yellow
+                say ""
+                say "Your project is configured for Automatic signing, which means:", :cyan
+                say "  • Xcode manages profiles automatically"
+                say "  • No manual profile configuration needed"
+                say "  • Team ID is all you need"
+                say ""
+                say "Current Team ID: #{parser.team_id(target_name) || '(not set)'}", :green
+                say ""
+                say "You can build with: mysigner build"
+                say ""
+                say "💡 To convert to Manual signing, use: mysigner signing configure --force-manual"
+                return
+              end
+              
+              # Run wizard for Manual signing
               require_relative '../signing/wizard'
-              wizard = Signing::Wizard.new(parser, client, config.organization_id)
+              wizard_options = {
+                target: options[:target],
+                all_targets: options[:all_targets]
+              }
+              wizard = Signing::Wizard.new(parser, client, config.current_organization_id, wizard_options)
               wizard.run!
               
             rescue Build::Detector::NoProjectError => e

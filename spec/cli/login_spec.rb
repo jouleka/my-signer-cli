@@ -202,7 +202,7 @@ RSpec.describe 'mysigner login' do
       allow(config).to receive(:api_token=)
       allow(config).to receive(:organization_id=)
       
-      expect { cli.login }.to output(/mysigner setup/).to_stdout
+      expect { cli.login }.to output(/mysigner onboard/).to_stdout
     end
 
     it 'exits with error code' do

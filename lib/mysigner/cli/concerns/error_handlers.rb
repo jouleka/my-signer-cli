@@ -10,7 +10,7 @@ module Mysigner
           say "  3. Click 'Create Token'", :cyan
           say "  4. Copy the token (you'll only see it once!)", :cyan
           say ""
-          say "💡 Or run 'mysigner setup' for step-by-step guidance", :yellow
+          say "💡 Or run 'mysigner onboard' for step-by-step guidance", :yellow
           say ""
         end
 
@@ -25,7 +25,7 @@ module Mysigner
           say "💡 Try:", :cyan
           say "  • Check the API URL is correct"
           say "  • Verify the server is running"
-          say "  • Run 'mysigner setup' for guided setup"
+          say "  • Run 'mysigner onboard' for guided setup"
         end
 
         # Show guidance for creating an organization
@@ -36,7 +36,7 @@ module Mysigner
           say "  3. Click 'Create Organization'"
           say "  4. Then generate a new API token for that organization"
           say ""
-          say "💡 Run 'mysigner setup' for step-by-step guidance", :yellow
+          say "💡 Run 'mysigner onboard' for step-by-step guidance", :yellow
         end
 
         # Handle unauthorized error
@@ -61,7 +61,7 @@ module Mysigner
           say "  4. Copy the NEW token carefully (entire string)"
           say "  5. Run 'mysigner login' again"
           say ""
-          say "💡 Or run 'mysigner setup' for guided setup", :yellow
+          say "💡 Or run 'mysigner onboard' for guided setup", :yellow
           say ""
         end
 
@@ -101,7 +101,7 @@ module Mysigner
           say "  Or set a custom API URL:", :bold
           say "    export MYSIGNER_API_URL=http://your-server.com"
           say ""
-          say "💡 Run 'mysigner setup' to reconfigure", :yellow
+          say "💡 Run 'mysigner onboard' to reconfigure", :yellow
           say ""
         end
 
@@ -116,7 +116,7 @@ module Mysigner
           say "Type: #{error.class}", :red if ENV['DEBUG']
           say ""
           say "This is unexpected. Please try:", :yellow
-          say "  1. Run 'mysigner setup' to reconfigure"
+          say "  1. Run 'mysigner onboard' to reconfigure"
           say "  2. Check #{api_url} is accessible"
           say "  3. Run 'mysigner doctor' to check your environment"
           say ""

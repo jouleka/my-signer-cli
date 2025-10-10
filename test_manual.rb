@@ -18,13 +18,15 @@ puts "✅ Config instance created"
 
 # Set some values
 config.api_url = "http://localhost:3000"
-config.api_token = "test_token_12345678"
-config.organization_id = 1
+config.user_email = "test@example.com"
+config.current_organization_id = 1
+config.save_token_for_org(1, "Test Org", "test_token_12345678")
 
 puts "✅ Config values set:"
 puts "   - API URL: #{config.api_url}"
-puts "   - API Token: #{config.display[:api_token]}"
-puts "   - Org ID: #{config.organization_id}"
+puts "   - User Email: #{config.user_email}"
+puts "   - Current Token: #{config.display[:current_token]}"
+puts "   - Org ID: #{config.current_organization_id}"
 
 # Save config
 config.save
