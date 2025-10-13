@@ -1,6 +1,8 @@
 require 'spec_helper'
+require 'tempfile'
 require 'mysigner/cli'
 require 'mysigner/upload/app_store_submission'
+require 'mysigner/upload/app_store_automation'
 
 RSpec.describe 'App Store Distribution', type: :cli do
   let(:cli) { Mysigner::CLI.new }
@@ -8,6 +10,7 @@ RSpec.describe 'App Store Distribution', type: :cli do
     double('Config', 
       api_token: 'test_token',
       organization_id: 'org-123',
+      current_organization_id: 'org-123',
       user_email: 'test@example.com'
     )
   end
@@ -21,7 +24,7 @@ RSpec.describe 'App Store Distribution', type: :cli do
     allow(cli).to receive(:error)
     allow(cli).to receive(:exit)
   end
-  
+
   describe 'mysigner ship appstore' do
     it 'shows help for ship command' do
       expect { cli.help(:ship) }.to output(/appstore/).to_stdout
@@ -162,14 +165,23 @@ RSpec.describe 'App Store Distribution', type: :cli do
     end
     
     it 'calls submission when --submit-for-review is passed' do
-      submission = double('Submission')
-      expect(submission).to receive(:submit_for_review!)
-      allow(Mysigner::Upload::AppStoreSubmission).to receive(:new).and_return(submission)
-      
+      submission = instance_double(Mysigner::Upload::AppStoreSubmission)
+      automation = instance_double(Mysigner::Upload::AppStoreAutomation)
+
+      expect(Mysigner::Upload::AppStoreAutomation).to receive(:new).and_return(automation)
+      expect(submission).to receive(:submit_for_review!).with(automation: automation).and_return({ success: true, metadata: {}, automation: { wait: {}, submitted: false } })
+      expect(Mysigner::Upload::AppStoreSubmission).to receive(:new).and_return(submission)
+
       cli.ship('appstore')
     end
-    
-    it 'passes correct build info to submission' do
+
+    it 'passes correct build info to submission and reports automation outcome' do
+      automation = instance_double(Mysigner::Upload::AppStoreAutomation)
+      allow(Mysigner::Upload::AppStoreAutomation).to receive(:new).and_return(automation)
+
+      allow(cli).to receive(:say)
+      expect(cli).to receive(:say).with(/ASC Polling:/)
+
       expect(Mysigner::Upload::AppStoreSubmission).to receive(:new).with(
         client,
         'org-123',
@@ -177,21 +189,153 @@ RSpec.describe 'App Store Distribution', type: :cli do
           bundle_id: 'com.example.app',
           version: '1.0.0',
           build_number: '1'
-        )
-      ).and_return(double('Submission', submit_for_review!: nil))
-      
+        ),
+        metadata_overrides: {},
+        override_sources: []
+      ).and_return(double('Submission', submit_for_review!: {
+        success: true,
+        metadata: {},
+        automation: {
+          wait: {
+            enabled: true,
+            poll_seconds: 15,
+            timeout_seconds: 900,
+            timed_out: false,
+            elapsed_seconds: 10,
+            last_state: 'PROCESSING_COMPLETE'
+          },
+          submitted: true,
+          submission_source: 'Dashboard configuration'
+        }
+      }))
+
       cli.ship('appstore')
     end
-    
+
     it 'skips submission when --submit-for-review is false' do
       cli.options = { submit_for_review: false }
-      
+
+      expect(Mysigner::Upload::AppStoreAutomation).not_to receive(:new)
       expect(Mysigner::Upload::AppStoreSubmission).not_to receive(:new)
-      
+
       cli.ship('appstore')
     end
   end
   
+  describe 'metadata overrides' do
+    let(:parser) do
+      double('Parser',
+        main_target: double(name: 'MyApp'),
+        bundle_id: 'com.example.app',
+        team_id: 'ABCD123456',
+        product_type: :app,
+        has_extensions?: false,
+        code_sign_style: 'Automatic',
+        build_settings: {
+          'MARKETING_VERSION' => '1.0.0',
+          'CURRENT_PROJECT_VERSION' => '1'
+        }
+      )
+    end
+
+    before do
+      allow(Mysigner::Build::Detector).to receive(:detect).and_return({
+        path: '/path/to/project.xcodeproj',
+        type: :project,
+        directory: '/path/to',
+        framework: :native
+      })
+
+      allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
+
+      validator = double('Validator', validate!: true)
+      allow(Mysigner::Signing::Validator).to receive(:new).and_return(validator)
+
+      executor = double('Executor', build!: '/path/to/archive.xcarchive')
+      allow(Mysigner::Build::Executor).to receive(:new).and_return(executor)
+
+      exporter = double('Exporter', export!: '/path/to/app.ipa')
+      allow(Mysigner::Export::Exporter).to receive(:new).and_return(exporter)
+
+      allow(client).to receive(:get).with("/api/v1/organizations/org-123").and_return({
+        data: {
+          'app_store_connect_configured' => true,
+          'app_store_connect_key_id' => 'KEY123',
+          'app_store_connect_issuer_id' => 'ISSUER123',
+          'app_store_connect_private_key' => 'PRIVATE_KEY',
+          'app_store_connect_team_id' => 'TEAM123'
+        }
+      })
+
+      uploader = double('Uploader', upload!: true)
+      allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
+
+      allow(File).to receive(:exist?).and_return(true)
+      allow(File).to receive(:size).and_return(10_000_000)
+    end
+
+    it 'passes release notes override to the submission' do
+      cli.options = { submit_for_review: true, release_notes: 'CLI release notes' }
+
+      automation = instance_double(Mysigner::Upload::AppStoreAutomation)
+      allow(Mysigner::Upload::AppStoreAutomation).to receive(:new).and_return(automation)
+
+      expect(Mysigner::Upload::AppStoreSubmission).to receive(:new).with(
+        client,
+        'org-123',
+        hash_including(
+          bundle_id: 'com.example.app',
+          version: '1.0.0',
+          build_number: '1'
+        ),
+        metadata_overrides: hash_including('whats_new' => 'CLI release notes'),
+        override_sources: array_including(hash_including(type: :inline))
+      ).and_return(double('Submission', submit_for_review!: { success: true, metadata: {}, automation: { wait: {} } }))
+
+      cli.ship('appstore')
+    end
+
+    it 'passes metadata file overrides to the submission' do
+      Tempfile.create(['metadata', '.json']) do |file|
+        file.write({ support_url: 'https://example.com/support', phased_release: true }.to_json)
+        file.flush
+
+        cli.options = { submit_for_review: true, metadata_file: file.path }
+
+        automation = instance_double(Mysigner::Upload::AppStoreAutomation)
+        allow(Mysigner::Upload::AppStoreAutomation).to receive(:new).and_return(automation)
+
+        expect(Mysigner::Upload::AppStoreSubmission).to receive(:new).with(
+          client,
+          'org-123',
+          hash_including(
+            bundle_id: 'com.example.app',
+            version: '1.0.0',
+            build_number: '1'
+          ),
+          metadata_overrides: hash_including(
+            'support_url' => 'https://example.com/support',
+            'phased_release' => true
+          ),
+          override_sources: array_including(hash_including(type: :file, path: file.path))
+        ).and_return(double('Submission', submit_for_review!: { success: true, metadata: {}, automation: { wait: {} } }))
+
+        cli.ship('appstore')
+      end
+    end
+
+    it 'fails fast when metadata file is missing' do
+      missing_path = File.join(Dir.tmpdir, 'missing_metadata.json')
+      cli.options = { submit_for_review: true, metadata_file: missing_path }
+
+      expect(Mysigner::Upload::AppStoreSubmission).not_to receive(:new)
+      expect(cli).to receive(:say).with("Error: Metadata file not found: #{File.expand_path(missing_path)}", :red)
+      expect(cli).to receive(:exit).with(1)
+
+      cli.ship('appstore')
+    end
+  end
+
   describe 'App Store messages' do
     before do
       cli.options = {}

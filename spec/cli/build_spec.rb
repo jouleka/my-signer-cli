@@ -25,6 +25,8 @@ RSpec.describe 'mysigner build', type: :cli do
     allow(Mysigner::Config).to receive(:new).and_return(config)
     allow(Mysigner::Client).to receive(:new).and_return(client)
     allow(cli).to receive(:exit) # Stub exit
+    allow(config).to receive(:needs_email_migration?).and_return(false)
+    allow(config).to receive(:user_email).and_return(nil)
   end
 
   describe 'when not logged in' do
@@ -33,7 +35,7 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return(nil)
       allow(config).to receive(:api_token).and_return(nil)
-      allow(config).to receive(:organization_id).and_return(nil)
+      allow(config).to receive(:current_organization_id).and_return(nil)
     end
 
     it 'shows error message' do
@@ -58,7 +60,7 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
       allow(Mysigner::Build::Detector).to receive(:detect).and_raise(
         Mysigner::Build::Detector::NoProjectError.new('No Xcode project found')
       )
@@ -104,7 +106,7 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
       allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
       allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:product_type).and_return(:framework)
@@ -155,7 +157,7 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
       
       allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
       allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
@@ -263,7 +265,7 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
       
       allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
       allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
@@ -314,7 +316,7 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
       
       allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
       allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
@@ -386,7 +388,7 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
       
       allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
       allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
@@ -437,7 +439,7 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
       
       allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
       allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)

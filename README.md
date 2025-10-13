@@ -196,7 +196,7 @@ mysigner config set KEY VAL # Update configuration value
 - OR Phase 6: Build & Ship
   - `mysigner build` - Xcode build wrapper
   - `mysigner upload testflight` - TestFlight upload
-  - `mysigner ship` - One-command deploy
+- `mysigner ship` - One-command deploy (TestFlight & App Store)
 
 📅 **Future**:
 - Pretty tables (TTY::Table)
@@ -313,3 +313,14 @@ limitations under the License.
 ---
 
 **Built with ❤️ by developers who hate provisioning profile hell.**
+
+### Ship to App Store
+
+```bash
+mysigner ship appstore --submit-for-review
+mysigner ship appstore --release-notes "Bug fixes"         # Inline release notes override
+mysigner ship appstore --metadata-file metadata.json        # Merge custom metadata (JSON/YAML)
+mysigner ship appstore --no-wait                           # Skip build-processing wait (manual submission)
+mysigner ship appstore --asc-poll-seconds 30               # Custom ASC polling cadence
+mysigner ship appstore --no-auto-submit                    # Run automation but skip final submission
+```

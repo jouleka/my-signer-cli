@@ -1,0 +1,310 @@
+module Mysigner
+  module Upload
+    class AppStoreAutomation
+      class AutomationError < Mysigner::Error; end
+
+      DEFAULT_WAIT_TIMEOUT = 900 # 15 minutes
+      DEFAULT_POLL_INTERVAL = 15
+
+      attr_reader :wait_enabled, :poll_interval, :timeout, :no_submit
+
+      def initialize(client:, organization_id:, opts: {})
+        @client = client
+        @organization_id = organization_id
+        @wait_enabled = opts.key?(:wait) ? !!opts[:wait] : true
+
+        poll = opts[:poll_interval] || opts[:poll_seconds]
+        poll = poll.to_i if poll
+        @poll_interval = poll && poll.positive? ? poll : DEFAULT_POLL_INTERVAL
+
+        timeout = opts[:timeout] || opts[:timeout_seconds]
+        timeout = timeout.to_i if timeout
+        @timeout = timeout && timeout.positive? ? timeout : DEFAULT_WAIT_TIMEOUT
+
+        @no_submit = !!opts[:no_submit]
+        @now = opts[:now]
+      end
+
+      def perform!(metadata:, build_info:, metadata_overrides: {})
+        build_info = symbolize_keys(build_info)
+        metadata = metadata || {}
+
+        result = {
+          wait: {
+            enabled: @wait_enabled,
+            poll_seconds: @poll_interval,
+            timeout_seconds: @timeout,
+            timed_out: false,
+            elapsed_seconds: 0,
+            last_state: nil
+          },
+          submitted: false,
+          skip_reason: nil,
+          submission_source: nil
+        }
+
+        puts ""
+        puts "🤖 App Store automation in progress..."
+        puts ""
+
+        app = ensure_app(build_info[:bundle_id])
+        raise AutomationError, "App with bundle ID #{build_info[:bundle_id]} not found" unless app
+
+        build, wait_status = wait_for_build(app['id'], build_info)
+        result[:wait].merge!(wait_status)
+
+        unless build && build_processed?(build)
+          raise AutomationError, "Build #{build_info[:version]} (#{build_info[:build_number]}) is still processing"
+        end
+
+        version = ensure_app_store_version(app_id: app['id'], metadata: metadata, overrides: metadata_overrides)
+        attach_build_to_version(version_id: version['id'], build_id: build['id'])
+
+        should_submit, submit_source, skip_reason = should_submit_with_reason(metadata, metadata_overrides)
+
+        if should_submit
+          submit_for_review(version_id: version['id'])
+          puts "✓ Submitted for App Store review"
+          result[:submitted] = true
+          result[:submission_source] = submit_source
+        else
+          puts "💡 Skipping automatic submission (#{skip_reason})"
+          result[:skip_reason] = skip_reason
+        end
+
+        puts ""
+        puts "✅ App Store automation complete"
+
+        result
+      end
+
+      private
+
+      def ensure_app(bundle_id)
+        response = @client.get(
+          "/api/v1/organizations/#{@organization_id}/apps",
+          params: { bundle_id: bundle_id }
+        )
+
+        Array(response[:data]['apps']).first
+      rescue => e
+        raise AutomationError, "Failed to fetch app: #{e.message}"
+      end
+
+      def wait_for_build(app_id, build_info)
+        build = latest_build(app_id, build_info)
+        status = {
+          timed_out: false,
+          elapsed_seconds: 0,
+          last_state: build_state(build)
+        }
+
+        return [build, status] unless @wait_enabled
+
+        puts "⏳ Waiting for Apple to finish processing the build..."
+        puts "   Polling every #{@poll_interval}s (timeout #{@timeout}s)"
+        print ""
+
+        start_time = current_time
+        loop do
+          build = latest_build(app_id, build_info)
+          status[:last_state] = build_state(build)
+
+          if build && build_processed?(build)
+            puts "\r✓ Build is processed and ready".ljust(70)
+            puts ""
+            return [build, status]
+          end
+
+          elapsed = current_time - start_time
+          status[:elapsed_seconds] = elapsed
+
+          if elapsed >= @timeout
+            status[:timed_out] = true
+            puts "\r✗ Timed out after #{format_duration(elapsed)} (use --asc-timeout-seconds to extend)".ljust(90)
+            puts ""
+            return [build, status]
+          end
+
+          print "\r   Waiting #{format_duration(elapsed)} / #{format_duration(@timeout)} – #{status[:last_state] || 'pending from Apple'}"
+          $stdout.flush
+          sleep @poll_interval
+        end
+      end
+
+      def latest_build(app_id, build_info)
+        response = @client.get(
+          "/api/v1/organizations/#{@organization_id}/builds",
+          params: {
+            app_id: app_id,
+            version: build_info[:version],
+            build_number: build_info[:build_number]
+          }
+        )
+
+        Array(response[:data]['builds']).first
+      rescue Mysigner::NotFoundError
+        nil
+      rescue => e
+        raise AutomationError, "Failed to fetch build: #{e.message}"
+      end
+
+      def build_processed?(build)
+        processing_state = build['processing_state'] || build.dig('attributes', 'processingState')
+        status = build['status'] || build.dig('attributes', 'buildStatus')
+
+        %w[VALID PROCESSING_COMPLETE].include?(processing_state) || status == 'valid'
+      end
+
+      def build_state(build)
+        return nil unless build
+
+        state = build['processing_state'] || build.dig('attributes', 'processingState')
+        status = build['status'] || build.dig('attributes', 'buildStatus')
+        joined = [state, status].compact.map { |value| value.to_s.upcase }.reject(&:empty?).join(' / ')
+        joined.empty? ? 'processing' : joined
+      end
+
+      def ensure_app_store_version(app_id:, metadata:, overrides: {})
+        desired_version = overrides['version_string'] || metadata['version_string'] || metadata['version']
+        desired_version ||= metadata.dig('localizations', 0, 'versionString')
+
+        current_version = fetch_editable_version(app_id)
+
+        if current_version && version_matches?(current_version, desired_version)
+          puts "✓ Reusing existing App Store version #{current_version['versionString']}"
+          update_version(current_version['id'], metadata, overrides)
+          current_version
+        else
+          puts "✨ Creating new App Store version #{desired_version || build_default_version}"
+          create_version(app_id, desired_version, metadata, overrides)
+        end
+      end
+
+      def fetch_editable_version(app_id)
+        response = @client.get(
+          "/api/v1/organizations/#{@organization_id}/app_store_versions",
+          params: { app_id: app_id, editable: true }
+        )
+
+        Array(response[:data]['versions']).first
+      rescue => e
+        raise AutomationError, "Failed to fetch App Store versions: #{e.message}"
+      end
+
+      def version_matches?(version, desired)
+        return false unless desired
+
+        normalized = desired.to_s.strip
+        return false if normalized.empty?
+
+        version['versionString'] == normalized || version.dig('attributes', 'versionString') == normalized
+      end
+
+      def build_default_version
+        current_time.strftime('%Y.%m.%d')
+      end
+
+      def create_version(app_id, version_string, metadata, overrides)
+        payload = {
+          app_store_version: {
+            app_id: app_id,
+            version_string: version_string,
+            release_type: determine_release_type(metadata, overrides),
+            attributes: extract_version_attributes(metadata, overrides)
+          }
+        }
+
+        response = @client.post(
+          "/api/v1/organizations/#{@organization_id}/app_store_versions",
+          body: payload
+        )
+
+        response[:data]
+      rescue => e
+        raise AutomationError, "Failed to create App Store version: #{e.message}"
+      end
+
+      def update_version(version_id, metadata, overrides)
+        payload = {
+          app_store_version: {
+            attributes: extract_version_attributes(metadata, overrides)
+          }
+        }
+
+        @client.patch(
+          "/api/v1/organizations/#{@organization_id}/app_store_versions/#{version_id}",
+          body: payload
+        )
+      rescue => e
+        raise AutomationError, "Failed to update App Store version: #{e.message}"
+      end
+
+      def determine_release_type(metadata, overrides)
+        overrides['release_type'] || metadata['release_type'] || 'MANUAL'
+      end
+
+      def extract_version_attributes(metadata, overrides)
+        localizations = overrides['localizations'] || metadata['localizations'] || []
+        {
+          whats_new: overrides['whats_new'] || metadata['whats_new'],
+          support_url: overrides['support_url'] || metadata['support_url'],
+          marketing_url: overrides['marketing_url'] || metadata['marketing_url'],
+          privacy_policy_url: overrides['privacy_policy_url'] || metadata['privacy_policy_url'],
+          phased_release: overrides.fetch('phased_release', metadata['phased_release']),
+          localizations: localizations
+        }.compact
+      end
+
+      def attach_build_to_version(version_id:, build_id:)
+        @client.post(
+          "/api/v1/organizations/#{@organization_id}/app_store_versions/#{version_id}/build",
+          body: { build_id: build_id }
+        )
+
+        puts "✓ Attached build to App Store version"
+      rescue => e
+        raise AutomationError, "Failed to attach build to version: #{e.message}"
+      end
+
+      def should_submit_with_reason(metadata, overrides)
+        return [false, nil, '--no-auto-submit flag'] if @no_submit
+
+        if overrides.key?('auto_submit')
+          return overrides['auto_submit'] ? [true, 'CLI override', nil] : [false, nil, 'CLI override disabled auto_submit']
+        end
+
+        if metadata.key?('auto_submit')
+          return metadata['auto_submit'] ? [true, 'Dashboard configuration', nil] : [false, nil, 'Dashboard auto_submit disabled']
+        end
+
+        [false, nil, 'No auto_submit configuration']
+      end
+
+      def submit_for_review(version_id:)
+        @client.post(
+          "/api/v1/organizations/#{@organization_id}/app_store_versions/#{version_id}/submit"
+        )
+      rescue => e
+        raise AutomationError, "Failed to submit for review: #{e.message}"
+      end
+
+      def symbolize_keys(hash)
+        hash.each_with_object({}) do |(key, value), memo|
+          memo[key.to_sym] = value
+        end
+      end
+
+
+      def format_duration(seconds)
+        minutes = (seconds / 60).floor
+        seconds = (seconds % 60).round
+        format('%<m>02d:%<s>02d', m: minutes, s: seconds)
+      end
+
+      def current_time
+        (@now && @now.call) || Time.now
+      end
+    end
+  end
+end

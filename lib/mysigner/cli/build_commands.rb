@@ -1,26 +1,39 @@
+require 'json'
+require 'yaml'
+
 module Mysigner
   class CLI < Thor
     module BuildCommands
+      MetadataFileError = Class.new(StandardError)
+
       def self.included(base)
         base.class_eval do
           desc "ship TARGET", "Build, export, and upload (testflight or appstore)"
           long_desc <<~DESC
-            Build your app and upload to TestFlight or App Store.
-            
-            TARGETS:
-              testflight    Upload to TestFlight for beta testing
-              appstore      Upload to App Store Connect for production release
-            
-            OPTIONS:
-              --submit-for-review    Automatically submit for App Store review (appstore only)
-              --wait                 Wait for processing to complete
-              --team TEAM_ID         Override development team
-              --bundle-id ID         Override bundle identifier
-            
-            EXAMPLES:
-              mysigner ship testflight                    # Upload to TestFlight
-              mysigner ship appstore                      # Upload to App Store
-              mysigner ship appstore --submit-for-review  # Upload and submit for review
+            Build your project, export an IPA, and upload in one go.
+
+            TARGETS
+              testflight : Upload a beta build to TestFlight
+              appstore   : Upload a production build to App Store Connect
+
+            COMMON OPTIONS
+              --wait                 Wait for Apple to finish processing the upload
+              --team TEAM_ID         Override the detected development team
+              --bundle-id ID         Override the bundle identifier pulled from the project
+
+            APP STORE EXTRAS
+              --submit-for-review    Kick off the post-upload submission helper
+              --no-wait              Skip waiting for Apple build processing (automation only)
+              --release-notes TEXT   Override “What’s New” directly from the CLI
+              --metadata-file PATH   Merge JSON/YAML metadata into the dashboard configuration
+              --no-auto-submit       Run automation but skip the final submission step
+              --asc-poll-seconds N   Override polling interval while waiting for Apple
+              --asc-timeout-seconds N  Override maximum wait time for Apple processing
+
+            EXAMPLES
+              mysigner ship testflight
+              mysigner ship appstore --submit-for-review
+              mysigner ship appstore --release-notes "Bug fixes" --metadata-file ./metadata.json
           DESC
           method_option :configuration, aliases: '-c', default: 'Release', desc: 'Build configuration'
           method_option :scheme, aliases: '-s', desc: 'Scheme to build (auto-detect if not specified)'
@@ -28,6 +41,11 @@ module Mysigner
           method_option :team, desc: 'Development team ID (overrides project setting)'
           method_option :bundle_id, aliases: '-b', desc: 'Bundle ID (overrides project setting)'
           method_option :submit_for_review, type: :boolean, default: false, desc: 'Submit for App Store review (appstore only)'
+          method_option :release_notes, type: :string, desc: "Override 'What's New' text for App Store submission"
+          method_option :metadata_file, type: :string, desc: 'Path to JSON or YAML file with App Store metadata overrides'
+          method_option :asc_poll_seconds, type: :numeric, desc: 'Polling interval while waiting for App Store processing (seconds)'
+          method_option :asc_timeout_seconds, type: :numeric, desc: 'Timeout while waiting for App Store processing (seconds)'
+          method_option :no_auto_submit, type: :boolean, default: false, desc: 'Skip App Store submission even if auto-submit is enabled'
           def ship(target)
             unless ['testflight', 'appstore'].include?(target)
               error "Invalid target: #{target}"
@@ -63,6 +81,25 @@ module Mysigner
             say ""
 
             begin
+              metadata_overrides = {}
+              override_sources = []
+
+              if is_appstore
+                metadata_overrides, override_sources = build_metadata_overrides(options)
+
+                override_sources.each do |source|
+                  case source[:type]
+                  when :file
+                    keys = source[:keys]&.any? ? " (#{source[:keys].join(', ')})" : ''
+                    say "🧾 Loaded metadata overrides from #{source[:path]}#{keys}", :cyan
+                  when :inline
+                    say "📝 Using release notes override from CLI flag", :cyan
+                  end
+                end
+
+                say '' if override_sources.any?
+              end
+
               # STEP 1: BUILD
               say "=" * 80, :cyan
               say "[1/3] Building Archive", :cyan
@@ -233,6 +270,17 @@ module Mysigner
                 submission_start = Time.now
                 
                 require_relative '../upload/app_store_submission'
+                automation = Upload::AppStoreAutomation.new(
+                  client: client,
+                  organization_id: config.current_organization_id,
+                  opts: {
+                    wait: options[:wait],
+                    timeout: options[:asc_timeout_seconds],
+                    poll_interval: options[:asc_poll_seconds],
+                    no_submit: options[:no_auto_submit]
+                  }
+                )
+
                 submission = Upload::AppStoreSubmission.new(
                   client,
                   config.current_organization_id,
@@ -240,10 +288,13 @@ module Mysigner
                     bundle_id: bundle_id,
                     version: parser.build_settings(target_name, options[:configuration])['MARKETING_VERSION'],
                     build_number: parser.build_settings(target_name, options[:configuration])['CURRENT_PROJECT_VERSION']
-                  }
+                  },
+                  metadata_overrides: metadata_overrides,
+                  override_sources: override_sources
                 )
                 
-                submission.submit_for_review!
+                submission_result = submission.submit_for_review!(automation: automation)
+                report_automation_outcome(submission_result[:automation], override_sources)
                 timings[:submission] = Time.now - submission_start
               end
               
@@ -268,6 +319,11 @@ module Mysigner
               say "  Target:      #{target_name}"
               say "  IPA Size:    #{format_bytes(File.size(ipa_path))}"
               say ""
+              if is_appstore && options[:submit_for_review]
+                poll_msg = options[:wait] ? "every #{automation.poll_interval}s" : 'skipped (--no-wait)'
+                say "  ASC Polling: #{poll_msg}"
+                say "  ASC Timeout: #{format_duration(options[:asc_timeout_seconds])}" if options[:asc_timeout_seconds]
+              end
               
               # Timing breakdown
               say "⏱️  Time Breakdown", :bold
@@ -305,7 +361,15 @@ module Mysigner
                 say "  3. Add testers and distribute via TestFlight"
               end
               say ""
-
+            rescue MetadataFileError => e
+              say ""
+              say "=" * 80, :red
+              say "✗ Ship Failed", :red
+              say "=" * 80, :red
+              say ""
+              say "Error: #{e.message}", :red
+              say ""
+              exit 1
             rescue => e
               say ""
               say "=" * 80, :red
@@ -323,6 +387,146 @@ module Mysigner
               end
               
               exit 1
+            end
+          end
+
+          no_commands do
+            def build_metadata_overrides(opts)
+              overrides = {}
+              sources = []
+
+              if opts[:metadata_file]
+                file_overrides = load_metadata_file(opts[:metadata_file])
+              overrides = deep_merge_hashes(overrides, file_overrides)
+                sources << {
+                  type: :file,
+                  path: File.expand_path(opts[:metadata_file]),
+                  keys: flatten_metadata_keys(file_overrides)
+                }
+              end
+
+              if opts[:release_notes]
+                overrides = deep_merge_hashes(overrides, { 'whats_new' => opts[:release_notes] })
+                sources << {
+                  type: :inline,
+                  keys: ['whats_new']
+                }
+              end
+
+              [overrides, sources]
+            end
+
+            def load_metadata_file(path)
+              expanded = File.expand_path(path)
+
+              unless File.exist?(expanded) && File.file?(expanded)
+                raise MetadataFileError, "Metadata file not found: #{expanded}"
+              end
+
+              content = File.read(expanded)
+              parsed = parse_metadata_content(content, expanded)
+
+              unless parsed.is_a?(Hash)
+                raise MetadataFileError, 'Metadata file must contain a JSON/YAML object at the top level'
+              end
+
+              stringify_keys(parsed)
+            rescue Errno::EACCES => e
+              raise MetadataFileError, "Cannot read metadata file #{expanded}: #{e.message}"
+            end
+
+            def parse_metadata_content(content, path)
+              stripped = content.lstrip
+
+              begin
+                if stripped.start_with?('---') || stripped.start_with?('- ')
+                  return YAML.safe_load(content, aliases: true) || {}
+                end
+
+                return JSON.parse(content)
+              rescue JSON::ParserError
+                begin
+                  YAML.safe_load(content, aliases: true) || {}
+                rescue Psych::Exception => e
+                  raise MetadataFileError, "Failed to parse metadata file #{path}: #{e.message}"
+                end
+              rescue Psych::Exception => e
+                raise MetadataFileError, "Failed to parse metadata file #{path}: #{e.message}"
+              end
+            end
+
+            def deep_merge_hashes(base, overrides)
+              base = stringify_keys(base || {})
+              overrides = stringify_keys(overrides || {})
+
+              merged = base.dup
+              overrides.each do |key, value|
+                merged[key] = if merged[key].is_a?(Hash) && value.is_a?(Hash)
+                  deep_merge_hashes(merged[key], value)
+                else
+                  value
+                end
+              end
+              merged
+            end
+
+            def flatten_metadata_keys(hash, prefix = nil, acc = [])
+              hash.each do |key, value|
+                current = prefix ? "#{prefix}.#{key}" : key
+                if value.is_a?(Hash)
+                  flatten_metadata_keys(value, current, acc)
+                else
+                  acc << current
+                end
+              end
+              acc
+            end
+
+            def stringify_keys(object)
+              case object
+              when Hash
+                object.each_with_object({}) do |(k, v), memo|
+                  memo[k.to_s] = stringify_keys(v)
+                end
+              when Array
+                object.map { |item| stringify_keys(item) }
+              else
+                object
+              end
+            end
+
+            def report_automation_outcome(result, override_sources)
+              return unless result.is_a?(Hash)
+
+              wait = result[:wait] || {}
+              if wait[:enabled]
+                timeout_seconds = wait[:timeout_seconds] || Upload::AppStoreAutomation::DEFAULT_WAIT_TIMEOUT
+                timeout_str = format_duration(timeout_seconds)
+                say "   ASC Polling: every #{wait[:poll_seconds]}s (timeout #{timeout_str})"
+                if wait[:timed_out]
+                  say "   ⚠️  Build still processing after #{format_duration(wait[:elapsed_seconds])}", :yellow
+                elsif wait[:elapsed_seconds].to_i.positive?
+                  say "   ASC Polling: completed in #{format_duration(wait[:elapsed_seconds])}"
+                end
+              else
+                say "   ASC Polling: skipped (--no-wait)", :yellow
+              end
+
+              if result[:submitted]
+                say "   Submission: sent via #{result[:submission_source]}", :green
+              elsif result[:skip_reason]
+                say "   Submission: skipped (#{result[:skip_reason]})", :yellow
+              end
+
+              override_sources.each do |source|
+                keys = Array(source[:keys]).join(', ')
+                case source[:type]
+                when :inline
+                  say "   Overrides: CLI flag#{keys.empty? ? '' : " (#{keys})"}"
+                when :file
+                  say "   Overrides: #{File.basename(source[:path])}#{keys.empty? ? '' : " (#{keys})"}"
+                end
+              end
             end
           end
 

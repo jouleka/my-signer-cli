@@ -67,6 +67,10 @@ module Mysigner
       @organizations.keys.map(&:to_i)
     end
 
+    def organization_id
+      @current_organization_id
+    end
+
     # Remove token for specific organization
     def remove_token_for_org(org_id)
       @organizations.delete(org_id.to_s)
