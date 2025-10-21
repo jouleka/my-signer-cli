@@ -101,8 +101,8 @@ module Mysigner
           # For manual signing, don't override - project already configured
           # No additional flags needed
         else
-          # Default: let xcodebuild use project settings
-          # May need -allowProvisioningUpdates if project uses Automatic signing
+          # Default to automatic signing for simplicity
+          cmd += ['-allowProvisioningUpdates']
         end
 
         # Suppress verbose output

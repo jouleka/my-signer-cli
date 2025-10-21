@@ -153,7 +153,7 @@ module Mysigner
                 
                 begin
                   org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
-                  api_team_id = org_response['app_store_connect_team_id']
+                  api_team_id = org_response.dig(:data, 'app_store_connect_team_id') || org_response['app_store_connect_team_id']
                   
                   if api_team_id && !api_team_id.empty?
                     team_id_to_use = api_team_id
@@ -632,7 +632,7 @@ module Mysigner
                 
                 begin
                   org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
-                  api_team_id = org_response['app_store_connect_team_id']
+                  api_team_id = org_response.dig(:data, 'app_store_connect_team_id') || org_response['app_store_connect_team_id']
                   
                   if api_team_id && !api_team_id.empty?
                     team_id_to_use = api_team_id
@@ -669,15 +669,11 @@ module Mysigner
                   say ""
                 end
               else
-                # No signing style set, default to configuring manual signing
-                say "🔐 Configuring manual signing via My Signer API...", :cyan
-                
-                configurator = Build::Configurator.new(parser, client, config.current_organization_id)
-                build_type = options[:type].to_sym
-                
-                profile = configurator.configure!(target_name, options[:configuration], build_type: build_type)
-                
-                say "✓ Configured with profile: #{profile['name']}", :green
+                # No signing style set, default to automatic signing for simplicity
+                say "ℹ️  No signing style set, defaulting to Automatic signing", :yellow
+                say "ℹ️  Xcode will manage profiles automatically", :yellow
+                say ""
+                say "💡 To use Manual signing instead, run: mysigner signing configure", :cyan
                 say ""
               end
 

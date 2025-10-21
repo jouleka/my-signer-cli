@@ -255,7 +255,7 @@ module Mysigner
         
         begin
           response = @client.get("/api/v1/organizations/#{@organization_id}")
-          team_id = response['app_store_connect_team_id']
+          team_id = response.dig(:data, 'app_store_connect_team_id') || response['app_store_connect_team_id']
           
           if team_id && !team_id.empty?
             puts "✓ Found team: #{team_id}"
@@ -497,8 +497,8 @@ module Mysigner
         begin
           # Fetch current org's team
           response = @client.get("/api/v1/organizations/#{@organization_id}")
-          org_name = response['name']
-          org_team = response['app_store_connect_team_id']
+          org_name = response.dig(:data, 'name') || response['name']
+          org_team = response.dig(:data, 'app_store_connect_team_id') || response['app_store_connect_team_id']
           
           if org_team && org_team != project_team
             puts ""
