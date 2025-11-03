@@ -76,23 +76,19 @@ module Mysigner
       @organizations.delete(org_id.to_s)
     end
 
-    # Check if config needs email migration
-    def needs_email_migration?
-      @user_email.nil? || @user_email.empty?
-    end
-
     # Load configuration from file
     def load
       return false unless exists?
 
       data = YAML.load_file(CONFIG_FILE)
       
-      # Check for old format and migrate
-      if data['api_token'] && !data['organizations']
-        migrate_from_old_format(data)
-      else
-        load_new_format(data)
-      end
+      @api_url = data['api_url']
+      @user_email = data['user_email']
+      @current_organization_id = data['current_organization_id']
+      @organizations = data['organizations'] || {}
+      
+      # Auto-detect encryption from config
+      @encryption_enabled = encrypted_config?
       
       true
     rescue => e
@@ -149,9 +145,7 @@ module Mysigner
       {
         api_url: @api_url,
         user_email: @user_email,
-        current_organization_id: @current_organization_id,
-        api_token: api_token, # For backward compatibility
-        organization_id: @current_organization_id # For backward compatibility
+        current_organization_id: @current_organization_id
       }
     end
 
@@ -176,17 +170,6 @@ module Mysigner
       end
       
       display_data
-    end
-    
-    # Setter for backward compatibility (deprecated)
-    def api_token=(token)
-      return unless @current_organization_id
-      save_token_for_org(@current_organization_id, org_name(@current_organization_id) || 'Unknown', token)
-    end
-    
-    # Setter for backward compatibility (deprecated)
-    def organization_id=(org_id)
-      @current_organization_id = org_id
     end
 
     # Enable encryption and re-encrypt all tokens
@@ -230,33 +213,6 @@ module Mysigner
     end
 
     private
-
-    def load_new_format(data)
-      @api_url = data['api_url']
-      @user_email = data['user_email']
-      @current_organization_id = data['current_organization_id']
-      @organizations = data['organizations'] || {}
-      
-      # Auto-detect encryption from config
-      @encryption_enabled = encrypted_config?
-    end
-
-    def migrate_from_old_format(data)
-      @api_url = data['api_url']
-      @current_organization_id = data['organization_id']
-      
-      # If we have old format, save the token under current org
-      # (Note: we don't know the org name yet, will be filled in by login command)
-      if @current_organization_id && data['api_token']
-        @organizations[@current_organization_id.to_s] = {
-          'name' => 'Unknown', # Will be updated on next API call
-          'token' => data['api_token']
-        }
-      end
-      
-      # Detect encryption
-      @encryption_enabled = encrypted_config?
-    end
 
     def ensure_config_dir_exists
       FileUtils.mkdir_p(CONFIG_DIR) unless Dir.exist?(CONFIG_DIR)

@@ -3,7 +3,7 @@ module Mysigner
     module AuthCommands
       def self.included(base)
         base.class_eval do
-          desc "version", "Show version information"
+          desc "version", "Show CLI version and system information"
           def version
             say "My Signer CLI v#{Mysigner::VERSION}", :cyan
             say ""
@@ -15,7 +15,7 @@ module Mysigner
             say "Issues:      https://github.com/yourusername/my-signer-cli/issues", :white
           end
 
-          desc "login", "Authenticate with My Signer API"
+          desc "login", "Log in with existing API token (⭐ first-timers: use 'onboard' instead)"
           long_desc <<~DESC
             Authenticate with My Signer API using an API token.
             
@@ -195,7 +195,7 @@ module Mysigner
             end
           end
 
-          desc "onboard", "Interactive onboarding guide for first-time users"
+          desc "onboard", "⭐ START HERE - Complete setup wizard for new users"
           long_desc <<~DESC
             Step-by-step guide to get started with My Signer CLI.
             
@@ -211,6 +211,121 @@ module Mysigner
             say ""
             say "Welcome! Let's get you set up with My Signer.", :bold
             say ""
+
+            # Check if already configured
+            config = Config.new
+            if config.exists? && config.api_token && config.current_organization_id
+              say "✓ You're already logged in!", :green
+              say ""
+              say "Current configuration:", :cyan
+              say "  Email: #{config.user_email}"
+              say "  Organization ID: #{config.current_organization_id}"
+              say "  API URL: #{config.api_url}"
+              say ""
+              
+              # Check App Store Connect status
+              begin
+                client = Client.new(api_url: config.api_url, api_token: config.api_token)
+                org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
+                org_data = org_response[:data]
+                
+                asc_configured = org_data['app_store_connect_configured'] || false
+                
+                if !asc_configured
+                  # Missing ASC credentials - offer to add them
+                  say "⚠️  App Store Connect: Not configured", :yellow
+                  say ""
+                  say "What would you like to do?", :bold
+                  say "  1. Set up App Store Connect credentials now"
+                  say "  2. Check status with 'mysigner status'"
+                  say "  3. Log out and start fresh"
+                  say "  4. Exit"
+                  say ""
+                  
+                  choice = ask("Select (1-4):", limited_to: ['1', '2', '3', '4'])
+                  say ""
+                  
+                  case choice
+                  when '1'
+                    # Go directly to ASC setup
+                    say "🚀 Setting up App Store Connect credentials...", :cyan
+                    say ""
+                    asc_configured = setup_app_store_connect_credentials(client, config, config.current_organization_id)
+                    
+                    say ""
+                    say "=" * 80, :green
+                    if asc_configured
+                      say "✓ App Store Connect configured successfully!", :green
+                    else
+                      say "⚠️  Setup incomplete", :yellow
+                      say "Run 'mysigner onboard' again or use 'mysigner doctor'", :yellow
+                    end
+                    say "=" * 80, :green
+                    return
+                  when '2'
+                    invoke :status
+                    return
+                  when '3'
+                    say "Clearing configuration...", :yellow
+                    say ""
+                    # Continue with full onboarding
+                  when '4'
+                    say "No changes made.", :green
+                    return
+                  end
+                else
+                  # Already fully configured
+                  say "✓ App Store Connect: Configured", :green
+                  if org_data['app_store_connect_team_id']
+                    say "  Team ID: #{org_data['app_store_connect_team_id']}"
+                  end
+                  say ""
+                  say "You're all set! 🎉", :bold
+                  say ""
+                  say "What would you like to do?", :bold
+                  say "  1. Check status"
+                  say "  2. Switch to another organization"
+                  say "  3. Log out and start fresh"
+                  say "  4. Exit"
+                  say ""
+                  
+                  choice = ask("Select (1-4):", limited_to: ['1', '2', '3', '4'])
+                  say ""
+                  
+                  case choice
+                  when '1'
+                    invoke :status
+                    return
+                  when '2'
+                    invoke :switch
+                    return
+                  when '3'
+                    say "Clearing configuration...", :yellow
+                    say ""
+                    # Continue with full onboarding
+                  when '4'
+                    say "No changes made.", :green
+                    return
+                  end
+                end
+              rescue => e
+                say "⚠️  Could not check organization status: #{e.message}", :yellow
+                say ""
+                
+                unless yes_with_default?("Do you want to re-configure from scratch?", :yellow)
+                  say ""
+                  say "Keeping existing configuration.", :green
+                  say ""
+                  say "💡 Tip: Use 'mysigner status' to check your setup", :cyan
+                  say "💡 Tip: Use 'mysigner switch' to add another organization", :cyan
+                  return
+                end
+                
+                say ""
+                say "Clearing existing configuration...", :yellow
+                say ""
+              end
+            end
 
             # Get API URL
             api_url = prompt_api_url
@@ -240,11 +355,11 @@ module Mysigner
               say "3. Verify your email (check your inbox)", :bold
               say ""
               
-              unless yes?("Have you created your account? (y/n)")
-                say ""
-                say "Come back and run 'mysigner onboard' when you're ready!", :yellow
-                return
-              end
+            unless yes_with_default?("Have you created your account?", :green)
+              say ""
+              say "Come back and run 'mysigner onboard' when you're ready!", :yellow
+              return
+            end
               say ""
             end
 
@@ -274,11 +389,11 @@ module Mysigner
               say "4. Enter your organization name (e.g., 'My Startup')", :bold
               say ""
               
-              unless yes?("Have you created your organization? (y/n)")
-                say ""
-                say "Come back and run 'mysigner onboard' when you're ready!", :yellow
-                return
-              end
+            unless yes_with_default?("Have you created your organization?", :green)
+              say ""
+              say "Come back and run 'mysigner onboard' when you're ready!", :yellow
+              return
+            end
               say ""
             end
 
@@ -304,7 +419,7 @@ module Mysigner
             say "   ⚠️  You'll only see it once!", :yellow
             say ""
             
-            unless yes?("Have you generated and copied your token? (y/n)")
+            unless yes_with_default?("Have you generated and copied your token?", :green)
               say ""
               say "Come back and run 'mysigner onboard' when you have your token!", :yellow
               return
@@ -365,6 +480,52 @@ module Mysigner
               config.save_token_for_org(org_id, org_data['name'], api_token)
               config.save
 
+              # Step 5: App Store Connect Setup (Optional)
+              say ""
+              say "Step 5: App Store Connect Setup (optional but recommended)", :cyan
+              say "-" * 80
+              say ""
+              
+              # Check if already configured
+              asc_configured = org_data['app_store_connect_configured'] || false
+              
+              if asc_configured
+                say "✓ App Store Connect is already configured!", :green
+                say ""
+                say "Current setup:", :cyan
+                if org_data['app_store_connect_team_id']
+                  say "  • Team ID: #{org_data['app_store_connect_team_id']}"
+                end
+                say "  • Status: Active"
+                say ""
+                say "You can manage credentials in the web dashboard:", :cyan
+                say "  #{api_url}/organizations/#{org_id}", :green
+                say ""
+                say "💡 Tip: You can add multiple credentials (for different teams)", :cyan
+                say ""
+              else
+                say "To upload to TestFlight/App Store, we need your API credentials.", :bold
+                say ""
+                say "Do you want to set this up now?", :bold
+                say "  1. Yes, guide me through it (recommended)"
+                say "  2. Skip for now (you can do this later)"
+                say ""
+                
+                asc_choice = ask("Select (1-2):", limited_to: ['1', '2'])
+                say ""
+                
+                if asc_choice == '1'
+                  asc_configured = setup_app_store_connect_credentials(client, config, org_id)
+                else
+                  say "⏭️  Skipped App Store Connect setup", :yellow
+                  say ""
+                  say "You can set this up later by:", :cyan
+                  say "  • Running: mysigner doctor"
+                  say "  • Or via the web dashboard"
+                  say ""
+                end
+              end
+
               say ""
               say "=" * 80, :green
               say "🎉 Setup Complete!", :green
@@ -375,6 +536,20 @@ module Mysigner
               say "User: #{user_email}", :cyan
               say "Organization: #{org_data['name']} (ID: #{org_id})", :cyan
               say "Config saved to: #{Config::CONFIG_FILE}", :cyan
+              
+              # Show App Store Connect status
+              say ""
+              if asc_configured
+                say "✓ App Store Connect: Configured", :green
+              elsif defined?(asc_choice) && asc_choice == '1'
+                say "⚠️  App Store Connect:", :yellow
+                say "  Setup was attempted but not completed", :yellow
+                say "  Run 'mysigner doctor' to configure it", :yellow
+              else
+                say "⚠️  App Store Connect: Not configured", :yellow
+                say "  Run 'mysigner doctor' to set it up", :yellow
+              end
+              
               say ""
               say "🔒 Security Note:", :yellow
               say "  Your token is organization-specific. Use 'mysigner switch'", :yellow
@@ -420,7 +595,7 @@ module Mysigner
             end
           end
 
-          desc "logout", "Clear stored credentials"
+          desc "logout", "Log out and clear stored credentials"
           def logout
             config = Config.new
             
@@ -438,7 +613,7 @@ module Mysigner
             end
           end
 
-          desc "status", "Show connection status and configuration"
+          desc "status", "Check connection, credentials, and App Store Connect setup"
           def status
             config = Config.new
 
@@ -482,7 +657,7 @@ module Mysigner
             
             begin
               client = Client.new(api_url: config.api_url, api_token: config.api_token)
-              response = client.test_connection
+              client.test_connection
               
               say "  Status: ✓ Connected", :green
               
@@ -493,6 +668,19 @@ module Mysigner
                 
                 say "  Role:   #{org['role'] || 'member'}"
                 say "  Members: #{org['member_count'] || 0}"
+                say ""
+                
+                # Show App Store Connect status
+                say "App Store Connect:", :bold
+                if org['app_store_connect_configured']
+                  say "  ✓ Configured", :green
+                  if org['app_store_connect_team_id']
+                    say "  Team ID: #{org['app_store_connect_team_id']}"
+                  end
+                else
+                  say "  ✗ Not configured", :yellow
+                  say "  Run 'mysigner doctor' to set it up"
+                end
               end
             rescue Mysigner::UnauthorizedError
               say "  Status: ✗ Unauthorized (invalid token)", :red
@@ -508,7 +696,7 @@ module Mysigner
             end
           end
 
-          desc "orgs", "List accessible organizations"
+          desc "orgs", "List all organizations you're a member of"
           def orgs
             config = load_config
             client = create_client(config)
@@ -563,7 +751,7 @@ module Mysigner
             end
           end
 
-          desc "switch", "Switch to a different organization"
+          desc "switch", "Switch between organizations (for multi-org users)"
           long_desc <<~DESC
             Switch to a different organization.
             
@@ -746,7 +934,7 @@ module Mysigner
             end
           end
 
-          desc "config", "Show current configuration"
+          desc "config", "Show current CLI configuration (API URL, tokens, org)"
           def config
             config = Config.new
 
@@ -764,6 +952,246 @@ module Mysigner
             end
             say ""
             say "Config file: #{Config::CONFIG_FILE}"
+          end
+
+          no_commands do
+            # Helper method for yes/no prompts with Enter defaulting to yes
+            def yes_with_default?(statement, color = nil)
+              response = ask("#{statement} [Y/n]", color).to_s.strip.downcase
+              response.empty? || response == 'y' || response == 'yes'
+            end
+
+            # Helper method for App Store Connect credential setup
+            # Returns true if successfully configured, false otherwise
+            def setup_app_store_connect_credentials(client, config, org_id)
+            say "📱 App Store Connect API Key Setup", :cyan
+            say ""
+            say "Let's set up your App Store Connect credentials.", :bold
+            say ""
+            say "Step 1: Create an API Key (if you don't have one)", :bold
+            say ""
+            say "1. Go to:", :cyan
+            say "   https://appstoreconnect.apple.com/access/api", :green
+            say ""
+            say "2. Click the '+' button to create a new key", :cyan
+            say ""
+            say "3. Select access:", :cyan
+            say "   • App Manager (for uploading builds)"
+            say "   • Or Admin (full access)"
+            say ""
+            say "4. Download the .p8 file", :cyan
+            say "   ⚠️  Save it securely - you can only download it once!", :yellow
+            say ""
+
+            unless yes_with_default?("Have you created and downloaded your API key?", :green)
+              say ""
+              say "⏭️  You can set this up later with:", :yellow
+              say "   • mysigner doctor", :cyan
+              say "   • Or via the web dashboard", :cyan
+              return false
+            end
+            say ""
+
+            # Prompt for .p8 file path with retry
+            max_retries = 3
+            attempts = 0
+            p8_path = nil
+            private_key = nil
+
+            while attempts < max_retries
+              say "Step 2: Locate your .p8 file", :bold
+              say ""
+              say "💡 Tip: You can drag & drop the file into terminal to get the path", :cyan
+              say ""
+              p8_path = ask("Enter the path to your .p8 file:").strip.gsub(/^['"]|['"]$/, '') # Remove quotes
+              say ""
+
+              # Expand ~ to home directory
+              p8_path = File.expand_path(p8_path)
+
+              if File.exist?(p8_path)
+                # Read private key
+                begin
+                  private_key = File.read(p8_path).strip
+                  
+                  # Validate it looks like a private key
+                  unless private_key.include?("BEGIN PRIVATE KEY") || private_key.include?("BEGIN EC PRIVATE KEY")
+                    error "This doesn't look like a valid .p8 private key file"
+                    attempts += 1
+                    next
+                  end
+                  
+                  break # Success!
+                rescue => e
+                  error "Failed to read file: #{e.message}"
+                  attempts += 1
+                  next
+                end
+              else
+                error "File not found: #{p8_path}"
+                attempts += 1
+                
+                if attempts < max_retries
+                  say ""
+                  say "Please try again (attempt #{attempts + 1}/#{max_retries})", :yellow
+                  say ""
+                end
+              end
+            end
+
+            unless private_key
+              say ""
+              error "Could not read .p8 file after #{max_retries} attempts"
+              say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+              return false
+            end
+
+            # Auto-extract Key ID from filename (e.g., AuthKey_ABC123.p8 → ABC123)
+            filename = File.basename(p8_path)
+            key_id = nil
+            if filename =~ /AuthKey_([A-Z0-9]+)\.p8/i
+              key_id = $1
+              say "✓ Auto-detected Key ID: #{key_id}", :green
+              say ""
+            end
+
+            # Prompt for Key ID if not auto-detected
+            unless key_id
+              say "Could not auto-detect Key ID from filename.", :yellow
+              say ""
+              say "Find your Key ID in App Store Connect:", :cyan
+              say "  https://appstoreconnect.apple.com/access/api", :green
+              say ""
+              key_id = ask("Enter your Key ID (e.g., ABC12345):").strip
+              say ""
+              
+              if key_id.empty?
+                error "Key ID cannot be empty"
+                say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+                return false
+              end
+            end
+
+            # Prompt for Issuer ID
+            say "Step 3: Find your Issuer ID", :bold
+            say ""
+            say "Find it in App Store Connect (top right of Keys page):", :cyan
+            say "  https://appstoreconnect.apple.com/access/api", :green
+            say ""
+            issuer_id = ask("Enter your Issuer ID (UUID format):").strip
+            say ""
+            
+            if issuer_id.empty?
+              error "Issuer ID cannot be empty"
+              say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+              return false
+            end
+            
+            # Basic UUID format validation
+            unless issuer_id.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+              say "⚠️  Warning: Issuer ID doesn't look like a UUID format", :yellow
+              say "   Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", :yellow
+              say ""
+              unless yes_with_default?("Continue anyway?", :yellow)
+                say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+                return false
+              end
+              say ""
+            end
+
+            # Prompt for credential name
+            say "Step 4: Name this credential", :bold
+            say ""
+            say "Choose a name to identify this API key (e.g., 'Production Key', 'Team A Key')", :cyan
+            say "Default: 'CLI Setup' - just press Enter to use it", :cyan
+            say ""
+            
+            credential_name = nil
+            while credential_name.nil? || credential_name.empty?
+              name_input = ask("Credential name:").strip
+              credential_name = name_input.empty? ? "CLI Setup" : name_input
+              
+              if credential_name.empty?
+                error "Name cannot be empty"
+                say ""
+              end
+            end
+            say ""
+            say "→ Using name: '#{credential_name}'", :cyan
+            say ""
+            
+            # Validate and upload
+            say "Step 5: Validating credentials with Apple...", :bold
+            say ""
+            say "This may take a few seconds...", :yellow
+            say ""
+
+            begin
+              response = client.post("/api/v1/organizations/#{org_id}/app_store_connect_credentials", 
+                body: {
+                  app_store_connect_credential: {
+                    name: credential_name,
+                    key_id: key_id,
+                    issuer_id: issuer_id,
+                    private_key: private_key
+                  }
+                }
+              )
+
+              if response[:success]
+                data = response[:data]
+                team_id = data['team_id']
+                
+                say "✓ Credentials validated successfully!", :green
+                say ""
+                say "Details:", :cyan
+                say "  • Name: #{credential_name}"
+                say "  • Key ID: #{key_id}"
+                say "  • Issuer ID: #{issuer_id}"
+                if team_id
+                  say "  • Team ID: #{team_id}"
+                else
+                  say "  • Team ID: (will be extracted after first sync)"
+                end
+                say "  • Status: Active ✓"
+                say ""
+                say "🎉 App Store Connect is now configured!", :green
+                say ""
+                return true # Success!
+              else
+                error "Validation failed"
+                say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+                return false
+              end
+            rescue Mysigner::ClientError => e
+              error_msg = e.message
+              
+              # Check for duplicate name error
+              if error_msg.include?("Name has already been taken") || error_msg.include?("validation_failed")
+                error "A credential with the name '#{credential_name}' already exists"
+                say ""
+                say "Please choose a different name and try again.", :yellow
+                say "Or manage credentials via the web dashboard:", :cyan
+                say "  #{client.api_url}/organizations/#{org_id}", :green
+              else
+                error "Failed to configure credentials: #{error_msg}"
+                say ""
+                say "Common issues:", :yellow
+                say "  • Invalid Key ID or Issuer ID"
+                say "  • Incorrect .p8 file content"
+                say "  • API key doesn't have proper permissions"
+                say "  • API key may be revoked or expired"
+              end
+              
+              say ""
+              say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+              return false
+            rescue => e
+              error "Unexpected error: #{e.message}"
+              say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+              return false
+            end
+            end
           end
         end
       end

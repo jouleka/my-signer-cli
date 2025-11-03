@@ -70,9 +70,9 @@ module Mysigner
           raise UploadError, "Invalid file type: #{@ipa_path} (must be .ipa)"
         end
         
-        # Check file size (should be at least 1MB)
+        # Check file size (should be at least 10KB to catch truly corrupt files)
         file_size = File.size(@ipa_path)
-        if file_size < 1_000_000
+        if file_size < 10_000
           raise UploadError, "IPA file seems too small: #{file_size} bytes (possible corruption)"
         end
       end
@@ -294,9 +294,31 @@ module Mysigner
         
         if error_lines.any?
           # Clean up and join error messages
-          error_lines.map(&:strip)
+          cleaned_errors = error_lines.map(&:strip)
                     .reject { |l| l.empty? || l.start_with?('code :') || l.start_with?('iris-code') }
                     .join("\n")
+          
+          # Add helpful context for common errors
+          if output.include?('Cannot determine the Apple ID from Bundle ID')
+            cleaned_errors += "\n\n💡 This usually means:\n"
+            cleaned_errors += "   • Your bundle ID doesn't have an App created in App Store Connect\n"
+            cleaned_errors += "   • Or your Xcode project's bundle ID doesn't match the App's bundle ID\n"
+            cleaned_errors += "\n   Fix:\n"
+            cleaned_errors += "   1. Check your app in App Store Connect → App Information\n"
+            cleaned_errors += "   2. Note the Bundle ID shown there\n"
+            cleaned_errors += "   3. Either:\n"
+            cleaned_errors += "      a) Update your Xcode project to use that bundle ID\n"
+            cleaned_errors += "      b) Or run: mysigner ship testflight --bundle-id <correct-bundle-id>\n"
+          elsif output.include?('Missing required icon file')
+            cleaned_errors += "\n\n💡 Your app is missing required icon assets.\n"
+            cleaned_errors += "   Fix:\n"
+            cleaned_errors += "   1. Open your Xcode project\n"
+            cleaned_errors += "   2. Go to Assets.xcassets → AppIcon\n"
+            cleaned_errors += "   3. Add icon images for all required sizes\n"
+            cleaned_errors += "   4. Or use a tool like https://appicon.co to generate all sizes\n"
+          end
+          
+          cleaned_errors
         else
           "Unknown error"
         end
@@ -326,11 +348,6 @@ module Mysigner
         puts "=" * 80
         puts ""
         puts "🎉 Your build is now processing in App Store Connect"
-        puts ""
-        puts "Next steps:"
-        puts "  1. Wait for processing to complete (5-15 minutes typically)"
-        puts "  2. Open App Store Connect to manage your build"
-        puts "  3. Add to TestFlight for beta testing"
         puts ""
       end
 

@@ -25,7 +25,6 @@ RSpec.describe 'mysigner build', type: :cli do
     allow(Mysigner::Config).to receive(:new).and_return(config)
     allow(Mysigner::Client).to receive(:new).and_return(client)
     allow(cli).to receive(:exit) # Stub exit
-    allow(config).to receive(:needs_email_migration?).and_return(false)
     allow(config).to receive(:user_email).and_return(nil)
   end
 

@@ -3,7 +3,7 @@ module Mysigner
     module ResourceCommands
       def self.included(base)
         base.class_eval do
-          desc "devices", "List devices"
+          desc "devices", "List registered test devices (UDIDs)"
           method_option :platform, type: :string, aliases: '-p', desc: 'Filter by platform (IOS, MAC_OS, TV_OS)'
           method_option :status, type: :string, aliases: '-s', desc: 'Filter by status (ENABLED, DISABLED)'
           method_option :search, type: :string, aliases: '-q', desc: 'Search by name or UDID'
@@ -61,7 +61,7 @@ module Mysigner
             end
           end
 
-          desc "device SUBCOMMAND", "Manage devices (add, update)"
+          desc "device SUBCOMMAND", "Register test devices by UDID (add, update)"
           long_desc <<~DESC
             Register and manage test devices for development builds.
             
@@ -237,7 +237,7 @@ module Mysigner
             end
           end
 
-          desc "profiles", "List provisioning profiles"
+          desc "profiles", "List provisioning profiles (advanced - only needed for manual signing)"
           long_desc <<~DESC
             List all provisioning profiles in your organization.
             
@@ -331,7 +331,7 @@ module Mysigner
             end
           end
 
-          desc "profile SUBCOMMAND", "Manage profiles (download, delete)"
+          desc "profile SUBCOMMAND", "Download or delete profiles (advanced - only needed for manual signing)"
           long_desc <<~DESC
             Manage provisioning profiles for code signing.
             
@@ -542,7 +542,7 @@ module Mysigner
             end
           end
 
-          desc "certificates", "List signing certificates"
+          desc "certificates", "List signing certificates from App Store Connect"
           method_option :type, type: :string, aliases: '-p', desc: 'Filter by type (DEVELOPMENT, DISTRIBUTION)'
           method_option :status, type: :string, aliases: '-s', desc: 'Filter by status (ACTIVE, EXPIRED, REVOKED)'
           method_option :search, type: :string, aliases: '-q', desc: 'Search by name'
@@ -606,7 +606,7 @@ module Mysigner
             end
           end
 
-          desc "certificate ACTION", "Manage signing certificates (check, download)"
+          desc "certificate ACTION", "Check local keychain or download certificates (check, download)"
           long_desc <<~DESC
             Actions:
               check              - Check certificates installed in your Mac's Keychain (not API)

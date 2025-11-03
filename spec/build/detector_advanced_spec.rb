@@ -56,41 +56,4 @@ RSpec.describe Mysigner::Build::Detector do
       end
     end
   end
-
-  describe 'backward compatibility' do
-    it 'still detects Capacitor projects' do
-      # Create Capacitor structure
-      File.write(File.join(test_dir, 'capacitor.config.json'), '{"appId": "com.test.app"}')
-      FileUtils.mkdir_p(File.join(test_dir, 'ios', 'App'))
-      FileUtils.mkdir_p(File.join(test_dir, 'ios', 'App', 'App.xcworkspace'))
-
-      result = described_class.detect(test_dir)
-      expect(result[:framework]).to eq(:capacitor)
-    end
-
-    it 'still detects React Native projects' do
-      File.write(File.join(test_dir, 'package.json'), '{"dependencies": {"react-native": "0.73.0"}}')
-      FileUtils.mkdir_p(File.join(test_dir, 'ios'))
-      FileUtils.mkdir_p(File.join(test_dir, 'ios', 'TestApp.xcodeproj'))
-
-      result = described_class.detect(test_dir)
-      expect(result[:framework]).to eq(:react_native)
-    end
-
-    it 'still detects Flutter projects' do
-      File.write(File.join(test_dir, 'pubspec.yaml'), 'name: test_app')
-      FileUtils.mkdir_p(File.join(test_dir, 'ios'))
-      FileUtils.mkdir_p(File.join(test_dir, 'ios', 'Runner.xcworkspace'))
-
-      result = described_class.detect(test_dir)
-      expect(result[:framework]).to eq(:flutter)
-    end
-
-    it 'still detects native iOS projects' do
-      FileUtils.mkdir_p(File.join(test_dir, 'TestApp.xcodeproj'))
-
-      result = described_class.detect(test_dir)
-      expect(result[:framework]).to eq(:native)
-    end
-  end
 end

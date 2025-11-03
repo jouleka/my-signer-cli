@@ -86,18 +86,4 @@ RSpec.describe Mysigner::Build::Parser do
       end
     end
   end
-
-  describe 'backward compatibility' do
-    it 'main_target still works as before' do
-      skip 'Requires test project - verify existing behavior unchanged'
-    end
-    
-    it 'bundle_id still works as before' do
-      skip 'Requires test project - verify existing behavior unchanged'
-    end
-    
-    it 'code_sign_style still works as before' do
-      skip 'Requires test project - verify existing behavior unchanged'
-    end
-  end
 end

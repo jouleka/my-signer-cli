@@ -53,8 +53,14 @@ module Mysigner
         build, wait_status = wait_for_build(app['id'], build_info)
         result[:wait].merge!(wait_status)
 
-        unless build && build_processed?(build)
-          raise AutomationError, "Build #{build_info[:version]} (#{build_info[:build_number]}) is still processing"
+        unless build
+          version_info = [build_info[:version], build_info[:build_number]].compact.join(' / ')
+          version_info = "for #{version_info}" unless version_info.empty?
+          raise AutomationError, "No processed build found #{version_info}. Upload a build first with 'mysigner ship appstore --wait'"
+        end
+
+        unless build_processed?(build)
+          raise AutomationError, "Build #{build_info[:version]} (#{build_info[:build_number]}) is still processing. Wait for it or use --wait flag."
         end
 
         version = ensure_app_store_version(app_id: app['id'], metadata: metadata, overrides: metadata_overrides)
@@ -63,7 +69,12 @@ module Mysigner
         should_submit, submit_source, skip_reason = should_submit_with_reason(metadata, metadata_overrides)
 
         if should_submit
-          submit_for_review(version_id: version['id'])
+          submit_for_review(
+            version_id: version['id'], 
+            version_string: version['versionString'],
+            metadata: metadata, 
+            overrides: metadata_overrides
+          )
           puts "✓ Submitted for App Store review"
           result[:submitted] = true
           result[:submission_source] = submit_source
@@ -82,11 +93,11 @@ module Mysigner
 
       def ensure_app(bundle_id)
         response = @client.get(
-          "/api/v1/organizations/#{@organization_id}/apps",
+          "/api/v1/organizations/#{@organization_id}/apple_apps",
           params: { bundle_id: bundle_id }
         )
 
-        Array(response[:data]['apps']).first
+        Array(response[:data]['data']['apps']).first
       rescue => e
         raise AutomationError, "Failed to fetch app: #{e.message}"
       end
@@ -106,6 +117,7 @@ module Mysigner
         print ""
 
         start_time = current_time
+        
         loop do
           build = latest_build(app_id, build_info)
           status[:last_state] = build_state(build)
@@ -115,7 +127,7 @@ module Mysigner
             puts ""
             return [build, status]
           end
-
+          
           elapsed = current_time - start_time
           status[:elapsed_seconds] = elapsed
 
@@ -126,23 +138,34 @@ module Mysigner
             return [build, status]
           end
 
-          print "\r   Waiting #{format_duration(elapsed)} / #{format_duration(@timeout)} – #{status[:last_state] || 'pending from Apple'}"
+          state_msg = status[:last_state] || (build ? 'pending from Apple' : 'waiting for sync')
+          print "\r   Waiting #{format_duration(elapsed)} / #{format_duration(@timeout)} – #{state_msg}"
           $stdout.flush
           sleep @poll_interval
         end
       end
 
       def latest_build(app_id, build_info)
+        # For ship appstore (use_latest): get absolute latest build, no filtering
+        # For mysigner submit: filter by version/build_number to get a specific one
+        params = {
+          app_id: app_id,
+          processed_only: !@wait_enabled
+        }
+        
+        # Only filter by version/build if NOT using latest
+        unless build_info[:use_latest]
+          params[:version] = build_info[:version] if build_info[:version]
+          params[:build_number] = build_info[:build_number] if build_info[:build_number]
+        end
+        
         response = @client.get(
           "/api/v1/organizations/#{@organization_id}/builds",
-          params: {
-            app_id: app_id,
-            version: build_info[:version],
-            build_number: build_info[:build_number]
-          }
+          params: params.compact
         )
 
-        Array(response[:data]['builds']).first
+        builds = Array(response[:data]['data']['builds'])
+        builds.first  # Already ordered by uploaded_date desc
       rescue Mysigner::NotFoundError
         nil
       rescue => e
@@ -176,8 +199,9 @@ module Mysigner
           update_version(current_version['id'], metadata, overrides)
           current_version
         else
-          puts "✨ Creating new App Store version #{desired_version || build_default_version}"
-          create_version(app_id, desired_version, metadata, overrides)
+          version_to_create = desired_version || build_default_version
+          puts "✨ Creating new App Store version #{version_to_create}"
+          create_version(app_id, version_to_create, metadata, overrides)
         end
       end
 
@@ -187,7 +211,7 @@ module Mysigner
           params: { app_id: app_id, editable: true }
         )
 
-        Array(response[:data]['versions']).first
+        Array(response[:data]['data']['versions']).first
       rescue => e
         raise AutomationError, "Failed to fetch App Store versions: #{e.message}"
       end
@@ -220,7 +244,7 @@ module Mysigner
           body: payload
         )
 
-        response[:data]
+        response[:data]['data']
       rescue => e
         raise AutomationError, "Failed to create App Store version: #{e.message}"
       end
@@ -281,10 +305,45 @@ module Mysigner
         [false, nil, 'No auto_submit configuration']
       end
 
-      def submit_for_review(version_id:)
+      def submit_for_review(version_id:, version_string: nil, metadata: {}, overrides: {})
+        # Merge metadata and overrides
+        merged = metadata.merge(overrides)
+        
+        # Get version string to check if first version
+        version_string ||= merged['version_string'] || merged['version'] || '1.0'
+        is_first_version = version_string.split('.').first.to_i <= 1
+        
+        # Validate required fields for Apple submission
+        # Note: What's New is NOT required for version 1.0 (first release)
+        # Support URL may already be set in App Store Connect, so we only warn if missing
+        missing_fields = []
+        missing_fields << "What's New text" if !is_first_version && merged['whats_new'].to_s.strip.empty?
+        
+        # Don't block on missing support_url - it may already be in App Store Connect
+        # Just warn about it
+        if merged['support_url'].to_s.strip.empty?
+          puts "⚠️  Note: No Support URL provided via CLI - using value from App Store Connect if available"
+        end
+        
+        unless missing_fields.empty?
+          raise AutomationError, "Cannot submit to Apple Store: missing required fields: #{missing_fields.join(', ')}. Please configure these in your My Signer dashboard or provide via --whats-new flag."
+        end
+        
+        payload = {
+          whats_new: merged['whats_new'],
+          keywords: merged['keywords'],
+          marketing_url: merged['marketing_url'],
+          promotional_text: merged['promotional_text'],
+          support_url: merged['support_url'],
+          locale: merged['locale']
+        }.compact  # Remove nil values
+
         @client.post(
-          "/api/v1/organizations/#{@organization_id}/app_store_versions/#{version_id}/submit"
+          "/api/v1/organizations/#{@organization_id}/app_store_versions/#{version_id}/submit",
+          body: payload
         )
+      rescue AutomationError
+        raise
       rescue => e
         raise AutomationError, "Failed to submit for review: #{e.message}"
       end

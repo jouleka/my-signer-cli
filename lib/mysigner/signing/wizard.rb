@@ -314,12 +314,40 @@ module Mysigner
           profiles = response[:data]['profiles'] || []
           
           if profiles.empty?
-            error "No provisioning profiles found for bundle ID: #{bundle_id}"
+            puts "No provisioning profiles found for bundle ID: #{bundle_id}"
             puts ""
-            puts "Create a profile at: https://developer.apple.com/account/resources/profiles/add"
-            puts "Or sync from App Store Connect using My Signer web dashboard"
+            puts "Options:"
+            puts "  1. Auto-create App Store profile (recommended)"
+            puts "  2. Auto-create Development profile"
+            puts "  3. Create manually and sync"
+            puts "  4. Skip"
             puts ""
-            return nil
+            
+            print "Select option (1-4): "
+            choice = STDIN.gets.strip
+            puts ""
+            
+            case choice
+            when "1"
+              profile = auto_create_profile(bundle_id, :appstore)
+              return profile if profile
+              return nil
+            when "2"
+              profile = auto_create_profile(bundle_id, :development)
+              return profile if profile
+              return nil
+            when "3"
+              puts "Create profile at: https://developer.apple.com/account/resources/profiles/add"
+              puts "Then sync from My Signer web dashboard"
+              puts ""
+              return nil
+            when "4"
+              puts "Skipped profile selection"
+              return nil
+            else
+              error "Invalid selection"
+              return nil
+            end
           end
           
           # Filter profiles by type (development vs distribution)
@@ -556,6 +584,163 @@ module Mysigner
         rescue => e
           # Ignore errors in org checking - don't block the wizard
           puts "Warning: Could not verify organization match: #{e.message}" if ENV['DEBUG']
+        end
+      end
+
+      def auto_create_profile(bundle_id, type)
+        puts "Creating #{type} profile for #{bundle_id}..."
+        puts ""
+        
+        profile_type = type == :appstore ? 'IOS_APP_STORE' : 'IOS_APP_DEVELOPMENT'
+        
+        begin
+          # Sync first to ensure we have latest resources
+          puts "  Syncing organization resources..."
+          @client.post("/api/v1/organizations/#{@organization_id}/sync_app_store_connect")
+          
+          # Wait for sync
+          sleep 2
+          
+          # Check sync status
+          max_wait = 15
+          waited = 0
+          
+          while waited < max_wait
+            status_response = @client.get("/api/v1/organizations/#{@organization_id}/sync/status")
+            sync_data = status_response[:data]['sync']
+            
+            if !sync_data['running']
+              break
+            end
+            
+            sleep 1
+            waited += 1
+          end
+          
+          puts "  ✓ Sync complete"
+          puts ""
+          
+          # Create profile
+          puts "  Creating #{profile_type} profile..."
+          response = @client.post(
+            "/api/v1/organizations/#{@organization_id}/profiles/auto_create",
+            body: {
+              bundle_id: bundle_id,
+              profile_type: profile_type
+            }
+          )
+          
+          profile = response[:data]['profile']
+          puts "  ✓ Created profile: #{profile['name']}"
+          puts ""
+          
+          # Download and install
+          download_and_install_profile(profile)
+          
+          profile
+        rescue Mysigner::ClientError => e
+          error_msg = e.message
+          
+          if error_msg.include?("bundle_id_not_found")
+            error "Bundle ID '#{bundle_id}' not found"
+            puts ""
+            puts "Register it at: https://developer.apple.com/account/resources/identifiers/add"
+            puts "Then sync in the web dashboard"
+          elsif error_msg.include?("certificates found") || error_msg.include?("no_certificates")
+            cert_name = type == :appstore ? "Apple Distribution" : "Apple Development"
+            
+            error "No #{cert_name} certificates found"
+            puts ""
+            
+            print "Generate CSR automatically? [Y/n] "
+            response = STDIN.gets.strip.downcase
+            
+            if response.empty? || response == 'y' || response == 'yes'
+              puts ""
+              csr_path = generate_csr_for_wizard
+              
+              if csr_path
+                puts ""
+                puts "  ✓ CSR ready: #{File.basename(csr_path)}"
+                puts ""
+              puts "  📋 Next steps:"
+              puts "    1. https://developer.apple.com/account/resources/certificates/add"
+              puts "    2. Select: '#{cert_name}' (or older 'iOS' variant if available)"
+              puts "    3. Upload: #{csr_path}"
+              puts "    4. Download .cer → Double-click → Sync → Try again"
+              puts ""
+              end
+            else
+              puts ""
+              puts "Quick fix:"
+              puts "  1. Open Keychain Access → Request Certificate (save CSR)"
+              puts "  2. https://developer.apple.com/account/resources/certificates/add"
+              puts "  3. Select '#{cert_name}' → Upload CSR → Download .cer"
+              puts "  4. Double-click .cer → Sync My Signer → Try again"
+              puts ""
+            end
+          elsif error_msg.include?("no_devices") || error_msg.include?("devices found")
+            error "No test devices registered"
+            puts ""
+            puts "Quick fix:"
+            puts "  • Get UDID: Connect device → Finder → Click serial number"
+            puts "  • Run: mysigner device add <UDID> <NAME>"
+            puts ""
+          else
+            error "Failed to create profile: #{error_msg}"
+          end
+          puts ""
+          nil
+        rescue => e
+          error "Unexpected error: #{e.message}"
+          puts ""
+          nil
+        end
+      end
+
+      def generate_csr_for_wizard
+        require 'openssl'
+        
+        begin
+          # Save to Downloads (visible in file picker)
+          csr_dir = File.expand_path("~/Downloads")
+          FileUtils.mkdir_p(csr_dir)
+          
+          # Generate RSA key pair
+          key = OpenSSL::PKey::RSA.new(2048)
+          
+          # Create CSR
+          csr = OpenSSL::X509::Request.new
+          csr.version = 0
+          csr.subject = OpenSSL::X509::Name.new([
+            ['CN', 'My Signer User'],
+            ['emailAddress', 'user@example.com']
+          ])
+          csr.public_key = key.public_key
+          csr.sign(key, OpenSSL::Digest::SHA256.new)
+          
+          # Generate unique filename
+          timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
+          csr_filename = "CertificateSigningRequest_#{timestamp}.certSigningRequest"
+          key_filename = "private_key_#{timestamp}.pem"
+          
+          # Save CSR to Downloads (visible)
+          csr_path = File.join(csr_dir, csr_filename)
+          
+          # Save private key to hidden location (secure)
+          key_dir = File.expand_path("~/.mysigner/keys")
+          FileUtils.mkdir_p(key_dir)
+          key_path = File.join(key_dir, key_filename)
+          
+          # Save files
+          File.write(csr_path, csr.to_pem)
+          File.write(key_path, key.to_pem)
+          File.chmod(0600, key_path)
+          
+          csr_path
+        rescue => e
+          puts "  ✗ Failed to generate CSR: #{e.message}"
+          nil
         end
       end
 

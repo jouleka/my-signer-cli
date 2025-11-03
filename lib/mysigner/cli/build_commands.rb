@@ -8,7 +8,7 @@ module Mysigner
 
       def self.included(base)
         base.class_eval do
-          desc "ship TARGET", "Build, export, and upload (testflight or appstore)"
+          desc "ship TARGET", "🚀 All-in-one: Build + export + upload to TestFlight or App Store"
           long_desc <<~DESC
             Build your project, export an IPA, and upload in one go.
 
@@ -21,31 +21,28 @@ module Mysigner
               --team TEAM_ID         Override the detected development team
               --bundle-id ID         Override the bundle identifier pulled from the project
 
-            APP STORE EXTRAS
-              --submit-for-review    Kick off the post-upload submission helper
-              --no-wait              Skip waiting for Apple build processing (automation only)
-              --release-notes TEXT   Override “What’s New” directly from the CLI
-              --metadata-file PATH   Merge JSON/YAML metadata into the dashboard configuration
-              --no-auto-submit       Run automation but skip the final submission step
-              --asc-poll-seconds N   Override polling interval while waiting for Apple
-              --asc-timeout-seconds N  Override maximum wait time for Apple processing
+            WORKFLOW
+              For TestFlight:
+                mysigner ship testflight              # Build → Upload → Done!
+              
+              For App Store:
+                mysigner ship appstore                # Build → Upload → Wait for Apple
+                # Then later (when build is processed):
+                mysigner submit                       # Submit latest build for review
+                
+            NOTE: Use 'mysigner submit' instead of '--submit-for-review' for App Store
+                  submissions. It's faster and doesn't require re-uploading.
 
             EXAMPLES
               mysigner ship testflight
-              mysigner ship appstore --submit-for-review
-              mysigner ship appstore --release-notes "Bug fixes" --metadata-file ./metadata.json
+              mysigner ship appstore
+              mysigner submit                         # Submit existing build for review
           DESC
           method_option :configuration, aliases: '-c', default: 'Release', desc: 'Build configuration'
           method_option :scheme, aliases: '-s', desc: 'Scheme to build (auto-detect if not specified)'
           method_option :wait, type: :boolean, default: false, desc: 'Wait for processing to complete'
           method_option :team, desc: 'Development team ID (overrides project setting)'
           method_option :bundle_id, aliases: '-b', desc: 'Bundle ID (overrides project setting)'
-          method_option :submit_for_review, type: :boolean, default: false, desc: 'Submit for App Store review (appstore only)'
-          method_option :release_notes, type: :string, desc: "Override 'What's New' text for App Store submission"
-          method_option :metadata_file, type: :string, desc: 'Path to JSON or YAML file with App Store metadata overrides'
-          method_option :asc_poll_seconds, type: :numeric, desc: 'Polling interval while waiting for App Store processing (seconds)'
-          method_option :asc_timeout_seconds, type: :numeric, desc: 'Timeout while waiting for App Store processing (seconds)'
-          method_option :no_auto_submit, type: :boolean, default: false, desc: 'Skip App Store submission even if auto-submit is enabled'
           def ship(target)
             unless ['testflight', 'appstore'].include?(target)
               error "Invalid target: #{target}"
@@ -73,32 +70,15 @@ module Mysigner
             say "  1️⃣  Detect and build your project"
             say "  2️⃣  Export IPA for App Store"
             say "  3️⃣  Upload to #{target_label}"
-            if is_appstore && options[:submit_for_review]
-              say "  4️⃣  Submit for App Store review"
+            if is_appstore
+              say "  4️⃣  Wait for Apple to process build"
+              say "  5️⃣  Submit for App Store review"
             end
             say ""
-            say "⏱️  Estimated time: 3-7 minutes", :yellow
+            say "⏱️  Estimated time: #{is_appstore ? '15-30 minutes' : '3-7 minutes'}", :yellow
             say ""
 
             begin
-              metadata_overrides = {}
-              override_sources = []
-
-              if is_appstore
-                metadata_overrides, override_sources = build_metadata_overrides(options)
-
-                override_sources.each do |source|
-                  case source[:type]
-                  when :file
-                    keys = source[:keys]&.any? ? " (#{source[:keys].join(', ')})" : ''
-                    say "🧾 Loaded metadata overrides from #{source[:path]}#{keys}", :cyan
-                  when :inline
-                    say "📝 Using release notes override from CLI flag", :cyan
-                  end
-                end
-
-                say '' if override_sources.any?
-              end
 
               # STEP 1: BUILD
               say "=" * 80, :cyan
@@ -211,9 +191,49 @@ module Mysigner
               say "📦 IPA: #{ipa_path}", :cyan
               say ""
 
+              # STEP 2.5: Get current latest build (BEFORE upload) - App Store only
+              latest_build_before_upload = nil
+              if is_appstore
+                say "=" * 80, :cyan
+                say "Getting Current Latest Build", :cyan
+                say "=" * 80, :cyan
+                say ""
+                
+                say "🔄 Syncing from App Store Connect...", :yellow
+                begin
+                  client.post("/api/v1/organizations/#{config.current_organization_id}/sync", body: { force: true })
+                  sleep 15
+                  say "✓ Sync complete", :green
+                rescue => e
+                  say "⚠️  Sync failed: #{e.message}", :yellow
+                end
+                say ""
+                
+                begin
+                  app_response = client.get("/api/v1/organizations/#{config.current_organization_id}/apple_apps", params: { bundle_id: bundle_id })
+                  app = Array(app_response[:data]['data']['apps']).first
+                  
+                  if app
+                    builds_response = client.get("/api/v1/organizations/#{config.current_organization_id}/builds", params: { app_id: app['id'] })
+                    latest = Array(builds_response[:data]['data']['builds']).first
+                    if latest
+                      latest_build_before_upload = latest['build_number'].to_i
+                      say "✓ Current latest build: ##{latest_build_before_upload}", :green
+                    else
+                      say "✓ No builds yet", :green
+                      latest_build_before_upload = 0
+                    end
+                  end
+                rescue => e
+                  say "⚠️  Could not fetch builds: #{e.message}", :yellow
+                  latest_build_before_upload = 0
+                end
+                say ""
+              end
+              
               # STEP 3: UPLOAD
               say "=" * 80, :cyan
-              say "[3/#{is_appstore && options[:submit_for_review] ? '4' : '3'}] Uploading to #{target_label}", :cyan
+              say "[3/#{is_appstore ? '5' : '3'}] Uploading to #{target_label}", :cyan
               say "=" * 80, :cyan
               say ""
               say "⏱️  Estimated: 1-3 minutes", :yellow
@@ -229,9 +249,15 @@ module Mysigner
               
               unless org_data['app_store_connect_configured']
                 say ""
-                say "✗ Error: App Store Connect credentials not configured", :red
+                say "✗ App Store Connect credentials not configured", :red
                 say ""
-                say "Please configure your API key in the web dashboard first.", :yellow
+                say "Quick fix:", :cyan
+                say "  mysigner doctor    # Auto-configure now", :green
+                say ""
+                say "Or manually:", :cyan
+                say "  1. Run: mysigner onboard"
+                say "  2. Follow Step 5 to add credentials"
+                say ""
                 exit 1
               end
               
@@ -259,42 +285,102 @@ module Mysigner
               
               timings[:upload] = Time.now - upload_start
               
-              # STEP 4 (Optional): Submit for App Store Review
-              if is_appstore && options[:submit_for_review]
+              # STEP 4: Submit for App Store Review (appstore only)
+              if is_appstore
                 say ""
                 say "=" * 80, :cyan
-                say "[4/4] Submitting for App Store Review", :cyan
+                say "[4/5] Waiting for Apple to Process Build", :cyan
                 say "=" * 80, :cyan
                 say ""
                 
                 submission_start = Time.now
                 
+                # Poll sync every 3 minutes until we find a newer build
+                say "⏳ Waiting for build ##{latest_build_before_upload + 1} to sync (polls every 3min)...", :yellow
+                timeout = 1800  # 30 minutes
+                poll_interval = 180  # 3 minutes
+                start_time = Time.now
+                new_build = nil
+                poll_count = 0
+                
+                loop do
+                  poll_count += 1
+                  elapsed = Time.now - start_time
+                  
+                  # Run sync
+                  begin
+                    client.post("/api/v1/organizations/#{config.current_organization_id}/sync", body: { force: true })
+                    sleep 15
+                  rescue => e
+                    # Ignore
+                  end
+                  
+                  # Check for new build
+                  begin
+                    app_response = client.get("/api/v1/organizations/#{config.current_organization_id}/apple_apps", params: { bundle_id: bundle_id })
+                    app = Array(app_response[:data]['data']['apps']).first
+                    
+                    if app
+                      builds_response = client.get("/api/v1/organizations/#{config.current_organization_id}/builds", params: { app_id: app['id'] })
+                      latest = Array(builds_response[:data]['data']['builds']).first
+                      
+                      current_build_num = latest ? latest['build_number'].to_i : 0
+                      
+                      if current_build_num > latest_build_before_upload
+                        new_build = latest
+                        say "✅ Build ##{new_build['build_number']} synced! (#{new_build['processing_state']})", :green
+                        break
+                      else
+                        # Show progress
+                        print "\r   [#{(elapsed / 60).to_i}m] Latest: ##{current_build_num}, waiting for ##{latest_build_before_upload + 1}..."
+                        $stdout.flush
+                      end
+                    end
+                  rescue => e
+                    say "   ⚠️  Could not check builds: #{e.message}", :yellow
+                  end
+                  
+                  # Check timeout
+                  if elapsed >= timeout
+                    say ""
+                    say "✗ Timeout after #{(elapsed / 60).to_i} minutes", :red
+                    say "   Latest build is still ##{latest_build_before_upload}", :yellow
+                    exit 1
+                  end
+                  
+                  # Wait before next poll
+                  sleep poll_interval unless new_build
+                end
+                say ""
+                
+                # Step 3: Now wait for the new build to be processed
                 require_relative '../upload/app_store_submission'
+                require_relative '../upload/app_store_automation'
+                
                 automation = Upload::AppStoreAutomation.new(
                   client: client,
                   organization_id: config.current_organization_id,
                   opts: {
-                    wait: options[:wait],
-                    timeout: options[:asc_timeout_seconds],
-                    poll_interval: options[:asc_poll_seconds],
-                    no_submit: options[:no_auto_submit]
+                    wait: true,
+                    timeout: 1800,
+                    poll_interval: 15,
+                    no_submit: false
                   }
                 )
 
+                # Submit the new build (use its specific build number)
                 submission = Upload::AppStoreSubmission.new(
                   client,
                   config.current_organization_id,
                   {
                     bundle_id: bundle_id,
-                    version: parser.build_settings(target_name, options[:configuration])['MARKETING_VERSION'],
-                    build_number: parser.build_settings(target_name, options[:configuration])['CURRENT_PROJECT_VERSION']
+                    build_number: new_build['build_number']  # Use the specific build we found
                   },
-                  metadata_overrides: metadata_overrides,
-                  override_sources: override_sources
+                  metadata_overrides: { 'auto_submit' => true },
+                  override_sources: [{ type: :inline, keys: ['auto_submit'] }]
                 )
                 
                 submission_result = submission.submit_for_review!(automation: automation)
-                report_automation_outcome(submission_result[:automation], override_sources)
                 timings[:submission] = Time.now - submission_start
               end
               
@@ -304,7 +390,11 @@ module Mysigner
               say ""
               say "=" * 80, :green
               if is_appstore
-                say "🎉 SUCCESS! Your app is uploaded to App Store Connect!", :green
+                if submission_result && submission_result[:automation][:submitted]
+                  say "🎉 SUCCESS! Your app is submitted for App Store review!", :green
+                else
+                  say "🎉 SUCCESS! Your app is uploaded to App Store Connect!", :green
+                end
               else
                 say "🎉 SUCCESS! Your app is on TestFlight!", :green
               end
@@ -331,6 +421,9 @@ module Mysigner
               say "  Build:       #{format_duration(timings[:build])}"
               say "  Export:      #{format_duration(timings[:export])}"
               say "  Upload:      #{format_duration(timings[:upload])}"
+              if timings[:submission]
+                say "  Submission:  #{format_duration(timings[:submission])}"
+              end
               say "  " + "-" * 30
               say "  Total:       #{format_duration(timings[:total])}", :bold
               say ""
@@ -345,19 +438,23 @@ module Mysigner
               # Next steps
               say "🔮 Next Steps", :bold
               say ""
-              say "  1. Wait 5-15 minutes for Apple to process your build"
-              say "  2. Open App Store Connect:"
-              say "     https://appstoreconnect.apple.com/apps"
               if is_appstore
-                if options[:submit_for_review]
-                  say "  3. Your build is submitted for review!"
-                  say "  4. Monitor review status in App Store Connect"
+                if submission_result && submission_result[:automation][:submitted]
+                  say "  ✓ Your build is submitted for App Store review!", :green
+                  say ""
+                  say "  Monitor review status:", :cyan
+                  say "     https://appstoreconnect.apple.com/apps", :green
                 else
-                  say "  3. Select this build for a new version"
-                  say "  4. Fill in required metadata (screenshots, description)"
-                  say "  5. Submit for App Store review"
+                  say "  ⚠️  Submission completed but not submitted", :yellow
+                  say "     (May need release config in My Signer dashboard)", :yellow
+                  say ""
+                  say "  Or submit manually:", :cyan
+                  say "     mysigner submit", :green
                 end
               else
+                say "  1. Wait 5-15 minutes for Apple to process your build"
+                say "  2. Open App Store Connect:"
+                say "     https://appstoreconnect.apple.com/apps"
                 say "  3. Add testers and distribute via TestFlight"
               end
               say ""
@@ -530,7 +627,7 @@ module Mysigner
             end
           end
 
-          desc "build", "Build iOS archive from current project"
+          desc "build", "Build .xcarchive only (advanced - most users should use 'ship')"
           method_option :configuration, aliases: '-c', default: 'Release', desc: 'Build configuration (Debug, Release, etc.)'
           method_option :target, aliases: '-t', desc: 'Target to build (auto-detect if not specified)'
           method_option :scheme, aliases: '-s', desc: 'Scheme to build (defaults to target name)'
@@ -733,7 +830,7 @@ module Mysigner
             end
           end
 
-          desc "export ARCHIVE_PATH", "Export .xcarchive to .ipa file"
+          desc "export ARCHIVE_PATH", "Export .xcarchive to .ipa (advanced - most users should use 'ship')"
           method_option :method, type: :string, default: 'appstore', desc: 'Export method (appstore, adhoc, enterprise, development)'
           method_option :output, type: :string, desc: 'Output directory for .ipa file'
           def export(archive_path)
@@ -788,7 +885,7 @@ module Mysigner
             end
           end
 
-          desc "upload testflight IPA_PATH", "Upload IPA to TestFlight"
+          desc "upload testflight IPA_PATH", "Upload existing .ipa to TestFlight (advanced - most users should use 'ship')"
           method_option :wait, type: :boolean, default: false, desc: 'Wait for processing to complete'
           def upload(target, ipa_path)
             unless target == 'testflight'
@@ -821,12 +918,14 @@ module Mysigner
                 # Check if credentials are configured
                 unless org_data['app_store_connect_configured']
                   say ""
-                  say "✗ Error: App Store Connect credentials not configured", :red
+                  say "✗ App Store Connect credentials not configured", :red
                   say ""
-                  say "Please configure your App Store Connect API key in the web dashboard:", :yellow
-                  say "  1. Go to your organization settings"
-                  say "  2. Add your API Key ID, Issuer ID, and .p8 file"
-                  say "  3. Run sync to verify credentials"
+                  say "Quick fix:", :cyan
+                  say "  mysigner doctor    # Auto-configure now", :green
+                  say ""
+                  say "Or manually:", :cyan
+                  say "  1. Run: mysigner onboard"
+                  say "  2. Follow Step 5 to add credentials"
                   say ""
                   exit 1
                 end
@@ -884,7 +983,166 @@ module Mysigner
             end
           end
           
-          desc "signing configure", "Interactive wizard to configure manual signing"
+          desc "submit", "📤 Submit latest processed build for App Store review (no upload)"
+          long_desc <<~DESC
+            Submit an existing build for App Store review without building/uploading.
+            
+            This command:
+            1. Finds your app by bundle ID
+            2. Gets the latest VALID (processed) build
+            3. Creates or updates an App Store version
+            4. Attaches the build to the version
+            5. Submits for App Store review
+            
+            USE CASES:
+            • You already uploaded builds earlier
+            • Build is processed and ready in App Store Connect
+            • You want to submit without re-uploading
+            
+            OPTIONS:
+              --bundle-id ID          Specify bundle ID (auto-detect from project if not provided)
+              --build-number NUM      Submit specific build number (defaults to latest)
+              --version STRING        Create version with specific version string
+            
+            EXAMPLES:
+              mysigner submit                           # Submit latest build
+              mysigner submit --bundle-id com.app.id    # Specify bundle ID
+              mysigner submit --build-number 12         # Submit specific build
+          DESC
+          method_option :bundle_id, aliases: '-b', desc: 'Bundle ID (auto-detect from project)'
+          method_option :build_number, type: :string, desc: 'Specific build number to submit'
+          method_option :version, type: :string, desc: 'Version string for App Store version'
+          method_option :whats_new, type: :string, banner: 'TEXT', desc: "What's New text (required for submission)"
+          method_option :support_url, type: :string, banner: 'URL', desc: 'Support URL (required for submission)'
+          method_option :marketing_url, type: :string, banner: 'URL', desc: 'Marketing URL (optional)'
+          method_option :privacy_url, type: :string, banner: 'URL', desc: 'Privacy Policy URL (optional)'
+          def submit
+            config = load_config
+            client = create_client(config)
+            
+            say "📤 Submit for App Store Review", :cyan
+            say "=" * 80, :cyan
+            say ""
+            
+            # Get bundle ID from project or option
+            bundle_id = options[:bundle_id]
+            
+            unless bundle_id
+              begin
+                project_info = Build::Detector.detect
+                parser = Build::Parser.new(project_info)
+                target_name = parser.main_target.name
+                bundle_id = parser.bundle_id(target_name, 'Release')
+                say "✓ Detected bundle ID from project: #{bundle_id}", :green
+              rescue
+                error "Could not detect bundle ID from project"
+                say ""
+                say "Please specify manually:", :yellow
+                say "  mysigner submit --bundle-id com.your.app.id", :cyan
+                exit 1
+              end
+            end
+            
+            say ""
+            say "📱 Bundle ID: #{bundle_id}", :cyan
+            say ""
+            
+            begin
+              require_relative '../upload/app_store_submission'
+              require_relative '../upload/app_store_automation'
+              
+              automation = Upload::AppStoreAutomation.new(
+                client: client,
+                organization_id: config.current_organization_id,
+                opts: {
+                  wait: false,  # No need to wait - only using already-processed builds
+                  no_submit: false
+                }
+              )
+              
+              # Get version from project or option
+              version_string = options[:version]
+              unless version_string
+                begin
+                  project_info ||= Build::Detector.detect
+                  parser ||= Build::Parser.new(project_info)
+                  target_name ||= parser.main_target.name
+                  version_string = parser.build_settings(target_name, 'Release')['MARKETING_VERSION']
+                rescue
+                  version_string = nil
+                end
+              end
+              
+              build_info = {
+                bundle_id: bundle_id,
+                version: version_string || '1.0',
+                build_number: options[:build_number]
+              }
+              
+              # Force submission when running 'mysigner submit' explicitly
+              # Build metadata overrides from CLI options
+              metadata_overrides = { 'auto_submit' => true }
+              override_keys = ['auto_submit']
+              
+              if options[:whats_new]
+                metadata_overrides['whats_new'] = options[:whats_new]
+                override_keys << 'whats_new'
+              end
+              
+              if options[:support_url]
+                metadata_overrides['support_url'] = options[:support_url]
+                override_keys << 'support_url'
+              end
+              
+              if options[:marketing_url]
+                metadata_overrides['marketing_url'] = options[:marketing_url]
+                override_keys << 'marketing_url'
+              end
+              
+              if options[:privacy_url]
+                metadata_overrides['privacy_policy_url'] = options[:privacy_url]
+                override_keys << 'privacy_policy_url'
+              end
+              
+              submission = Upload::AppStoreSubmission.new(
+                client,
+                config.current_organization_id,
+                build_info,
+                metadata_overrides: metadata_overrides,
+                override_sources: [{ type: :inline, keys: override_keys }]
+              )
+              
+              result = submission.submit_for_review!(automation: automation)
+              
+              say ""
+              say "=" * 80, :green
+              say "✓ Submission Complete!", :green
+              say "=" * 80, :green
+              say ""
+              
+              if result[:automation][:submitted]
+                say "🎉 Your app is submitted for App Store review!", :green
+                say ""
+                say "Monitor status:", :cyan
+                say "  https://appstoreconnect.apple.com/apps", :green
+              else
+                say "⚠️  Submission skipped: #{result[:automation][:skip_reason]}", :yellow
+              end
+              say ""
+              
+            rescue => e
+              say ""
+              say "=" * 80, :red
+              say "✗ Submission Failed", :red
+              say "=" * 80, :red
+              say ""
+              say "Error: #{e.message}", :red
+              say ""
+              exit 1
+            end
+          end
+
+          desc "signing configure", "🧙 Wizard: Configure manual code signing in your Xcode project"
           long_desc <<~DESC
             Guides you through setting up manual code signing for your project:
             

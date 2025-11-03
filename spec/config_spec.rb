@@ -45,21 +45,6 @@ RSpec.describe Mysigner::Config do
       expect(config.api_token).to eq('test_token')
       expect(config.current_organization_id).to eq(1)
     end
-
-    it "migrates from old format automatically" do
-      FileUtils.mkdir_p(test_config_dir)
-      File.write(test_config_file, {
-        'api_url' => 'http://localhost:3000',
-        'api_token' => 'old_token',
-        'organization_id' => 42
-      }.to_yaml)
-
-      config = Mysigner::Config.new
-      expect(config.api_url).to eq('http://localhost:3000')
-      expect(config.current_organization_id).to eq(42)
-      expect(config.api_token(42)).to eq('old_token')
-      expect(config.has_token_for_org?(42)).to be true
-    end
   end
 
   describe "#save" do
@@ -145,22 +130,6 @@ RSpec.describe Mysigner::Config do
       expect(config.api_token(42)).to eq('secret_token')
       expect(config.current_organization_id).to eq(42)
     end
-
-    it "migrates old format when loading" do
-      FileUtils.mkdir_p(test_config_dir)
-      File.write(test_config_file, {
-        'api_url' => 'http://example.com',
-        'api_token' => 'old_token',
-        'organization_id' => 10
-      }.to_yaml)
-
-      config = Mysigner::Config.new
-      config.load
-
-      expect(config.api_url).to eq('http://example.com')
-      expect(config.current_organization_id).to eq(10)
-      expect(config.api_token(10)).to eq('old_token')
-    end
   end
 
   describe "#clear" do
@@ -245,7 +214,7 @@ RSpec.describe Mysigner::Config do
   end
 
   describe "#to_h" do
-    it "returns config as hash with backward compatibility" do
+    it "returns config as hash" do
       config = Mysigner::Config.new
       config.api_url = 'http://localhost:3000'
       config.user_email = 'test@example.com'
@@ -253,12 +222,10 @@ RSpec.describe Mysigner::Config do
       config.save_token_for_org(1, 'Test Org', 'token')
 
       hash = config.to_h
-      expect(hash).to include({
+      expect(hash).to eq({
         api_url: 'http://localhost:3000',
         user_email: 'test@example.com',
-        current_organization_id: 1,
-        api_token: 'token',
-        organization_id: 1
+        current_organization_id: 1
       })
     end
   end
@@ -405,32 +372,6 @@ RSpec.describe Mysigner::Config do
         
         expect(config.has_token_for_org?(5)).to be false
         expect(config.has_token_for_org?(7)).to be true
-      end
-    end
-  end
-
-  describe "backward compatibility setters" do
-    let(:config) { Mysigner::Config.new }
-
-    describe "#api_token=" do
-      it "saves token for current organization" do
-        config.current_organization_id = 5
-        config.save_token_for_org(5, 'My Org', 'old_token')
-        config.api_token = 'new_token'
-        
-        expect(config.api_token(5)).to eq('new_token')
-      end
-
-      it "does nothing when current_organization_id is nil" do
-        config.api_token = 'token'
-        expect(config.organizations).to eq({})
-      end
-    end
-
-    describe "#organization_id=" do
-      it "sets current_organization_id" do
-        config.organization_id = 42
-        expect(config.current_organization_id).to eq(42)
       end
     end
   end
@@ -670,16 +611,6 @@ RSpec.describe Mysigner::Config do
         config.save_token_for_org(5, 'My Org', 'secret_token')
         
         expect(config.has_token_for_org?(5)).to be true
-      end
-
-      it "works with backward compatibility setters" do
-        config.current_organization_id = 5
-        config.encryption_enabled = true
-        config.save_token_for_org(5, 'My Org', 'old_token')
-        config.api_token = 'new_token'
-        
-        expect(config.api_token(5)).to eq('new_token')
-        expect(config.organizations['5']['token']).to start_with('encrypted:')
       end
     end
   end

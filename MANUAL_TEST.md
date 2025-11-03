@@ -36,15 +36,15 @@ config = Mysigner::Config.new
 
 # Set values
 config.api_url = "http://localhost:3000"
-config.api_token = "your_token_here"
-config.organization_id = 1
+config.current_organization_id = 1
+config.save_token_for_org(1, 'My Organization', 'your_token_here')
 
 # Save config (creates ~/.mysigner/config.yml)
 config.save
 
 # Display config (token is masked)
 config.display
-# => {:api_url=>"http://localhost:3000", :api_token=>"your...here", :organization_id=>1}
+# => {:api_url=>"http://localhost:3000", :current_organization=>"My Organization (ID: 1)", :current_token=>"your...here"}
 
 # Check if valid
 config.valid?

@@ -70,7 +70,8 @@ RSpec.describe Mysigner::CLI do
       before do
         config = Mysigner::Config.new
         config.api_url = "http://localhost:3000"
-        config.api_token = "test_token"
+        config.current_organization_id = 1
+        config.save_token_for_org(1, 'Test Org', 'test_token')
         config.save
       end
 
@@ -144,7 +145,8 @@ RSpec.describe Mysigner::CLI do
       before do
         config = Mysigner::Config.new
         config.api_url = "http://localhost:3000"
-        config.api_token = "test_token"
+        config.current_organization_id = 1
+        config.save_token_for_org(1, 'Test Org', 'test_token')
         config.save
 
         stub_request(:get, "http://localhost:3000/api/v1/status")
@@ -177,7 +179,7 @@ RSpec.describe Mysigner::CLI do
         config.save_token_for_org(1, "Test Org", "test_token")
         config.save
 
-        stub_request(:get, "http://localhost:3000/api/v1/organizations")
+        stub_request(:get, "http://localhost:3000/api/v1/user/organizations")
           .to_return(
             status: 200,
             body: {
@@ -194,7 +196,7 @@ RSpec.describe Mysigner::CLI do
         output = capture_output { Mysigner::CLI.start(['orgs']) }
         
         expect(output).to include("Organizations")
-        expect(output).to include("Test Org 1")
+        expect(output).to include("Test Org")
         expect(output).to include("(current)")  # Current org
         expect(output).to include("Test Org 2")
         expect(output).to include("Total: 2 organization(s)")

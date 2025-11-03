@@ -228,13 +228,22 @@ module Mysigner
       def warn_missing_submission_fields(metadata)
         return unless metadata['auto_submit']
 
+        # Get version to check if first version
+        version_string = metadata['version_string'] || metadata['version'] || '1.0'
+        is_first_version = version_string.split('.').first.to_i <= 1
+
         warnings = []
-        warnings << "Missing What's New copy" if metadata['whats_new'].to_s.strip.empty?
-        warnings << 'Missing Support URL' if metadata['support_url'].to_s.strip.empty?
+        # What's New only required for updates (version > 1.0)
+        warnings << "Missing What's New copy (required for version updates)" if !is_first_version && metadata['whats_new'].to_s.strip.empty?
+        
+        # Support URL may already be in App Store Connect, so just note it
+        if metadata['support_url'].to_s.strip.empty?
+          warnings << "Support URL not configured in My Signer (will use App Store Connect value if available)"
+        end
 
         return if warnings.empty?
 
-        puts "   ⚠️  Submission blockers:" unless warnings.empty?
+        puts "   ⚠️  Notes:" unless warnings.empty?
         warnings.each { |msg| puts "     - #{msg}" }
       end
     end
