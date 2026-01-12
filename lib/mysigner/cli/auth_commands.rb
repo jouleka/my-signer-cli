@@ -1192,6 +1192,187 @@ module Mysigner
               return false
             end
             end
+
+            # Setup Google Play credentials
+            def setup_google_play_credentials(client, config, org_id)
+              say "🤖 Google Play Service Account Setup", :cyan
+              say ""
+              say "Let's set up your Google Play credentials.", :bold
+              say ""
+              say "Step 1: Create a Service Account (if you don't have one)", :bold
+              say ""
+              say "1. Go to Google Play Console:", :cyan
+              say "   https://play.google.com/console", :green
+              say ""
+              say "2. Navigate to: Settings → API access", :cyan
+              say ""
+              say "3. Click 'Create new service account' or 'Link existing service account'", :cyan
+              say ""
+              say "4. In Google Cloud Console, create a Service Account with:", :cyan
+              say "   • Name: 'My Signer CLI' (or anything)"
+              say "   • Role: Editor or Admin"
+              say ""
+              say "5. Create a JSON key for the service account", :cyan
+              say "   • Click on the service account → Keys → Add Key → JSON"
+              say "   • Download the JSON file"
+              say ""
+              say "6. Back in Play Console, grant the service account access:", :cyan
+              say "   • Click 'Done' in the modal"
+              say "   • Click on the service account"
+              say "   • Set permissions: Release apps, Manage production releases"
+              say ""
+
+              unless yes_with_default?("Have you created and downloaded your service account JSON?", :green)
+                say ""
+                say "⏭️  You can set this up later with:", :yellow
+                say "   • mysigner doctor (will prompt for setup)", :cyan
+                say "   • Or via the web dashboard", :cyan
+                return false
+              end
+              say ""
+
+              # Prompt for JSON file path with retry
+              max_retries = 3
+              attempts = 0
+              json_path = nil
+              service_account_json = nil
+
+              while attempts < max_retries
+                say "Step 2: Locate your service account JSON file", :bold
+                say ""
+                say "💡 Tip: You can drag & drop the file into terminal to get the path", :cyan
+                say ""
+                json_path = ask("Enter the path to your service account JSON file:").strip.gsub(/^['"]|['"]$/, '')
+                say ""
+
+                # Expand ~ to home directory
+                json_path = File.expand_path(json_path)
+
+                if File.exist?(json_path)
+                  begin
+                    service_account_json = File.read(json_path).strip
+                    
+                    # Validate it looks like a service account JSON
+                    parsed = JSON.parse(service_account_json)
+                    unless parsed['type'] == 'service_account' && parsed['client_email'] && parsed['private_key']
+                      error "This doesn't look like a valid service account JSON file"
+                      say "Expected: type: 'service_account', client_email, and private_key fields", :yellow
+                      attempts += 1
+                      next
+                    end
+                    
+                    say "✓ Valid service account JSON detected", :green
+                    say "  Email: #{parsed['client_email']}", :cyan
+                    say ""
+                    break # Success!
+                  rescue JSON::ParserError => e
+                    error "Invalid JSON file: #{e.message}"
+                    attempts += 1
+                    next
+                  rescue => e
+                    error "Failed to read file: #{e.message}"
+                    attempts += 1
+                    next
+                  end
+                else
+                  error "File not found: #{json_path}"
+                  attempts += 1
+                  
+                  if attempts < max_retries
+                    say ""
+                    say "Please try again (attempt #{attempts + 1}/#{max_retries})", :yellow
+                    say ""
+                  end
+                end
+              end
+
+              unless service_account_json
+                say ""
+                error "Could not read JSON file after #{max_retries} attempts"
+                say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+                return false
+              end
+
+              # Prompt for credential name
+              say "Step 3: Name this credential", :bold
+              say ""
+              say "Choose a name to identify this service account (e.g., 'Production', 'CI/CD')", :cyan
+              say "Default: 'CLI Setup' - just press Enter to use it", :cyan
+              say ""
+              
+              credential_name = nil
+              while credential_name.nil? || credential_name.empty?
+                name_input = ask("Credential name:").strip
+                credential_name = name_input.empty? ? "CLI Setup" : name_input
+                
+                if credential_name.empty?
+                  error "Name cannot be empty"
+                  say ""
+                end
+              end
+              say ""
+              say "→ Using name: '#{credential_name}'", :cyan
+              say ""
+              
+              # Validate and upload
+              say "Step 4: Saving credentials...", :bold
+              say ""
+
+              begin
+                response = client.post("/api/v1/organizations/#{org_id}/google_play_credentials", 
+                  body: {
+                    google_play_credential: {
+                      name: credential_name,
+                      service_account_json: service_account_json,
+                      active: true
+                    }
+                  }
+                )
+
+                say "✓ Google Play credentials saved!", :green
+                say ""
+                say "Details:", :cyan
+                say "  • Name: #{credential_name}"
+                say "  • Status: Active ✓"
+                say ""
+                
+                # Test the connection
+                say "Testing connection to Google Play...", :yellow
+                
+                begin
+                  cred_id = response[:data]['id']
+                  client.post("/api/v1/organizations/#{org_id}/google_play_credentials/#{cred_id}/test")
+                  say "✓ Successfully connected to Google Play API!", :green
+                rescue => e
+                  say "⚠️  Connection test failed: #{e.message}", :yellow
+                  say "   The credentials are saved but may need verification", :yellow
+                end
+                
+                say ""
+                say "🎉 Google Play is now configured!", :green
+                say ""
+                return true
+
+              rescue Mysigner::ClientError => e
+                error_msg = e.message
+                
+                if error_msg.include?("already been taken") || error_msg.include?("validation")
+                  error "A credential with the name '#{credential_name}' already exists"
+                  say ""
+                  say "Please choose a different name and try again.", :yellow
+                else
+                  error "Failed to configure credentials: #{error_msg}"
+                end
+                
+                say ""
+                say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+                return false
+              rescue => e
+                error "Unexpected error: #{e.message}"
+                say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+                return false
+              end
+            end
           end
         end
       end

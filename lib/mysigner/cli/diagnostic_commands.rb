@@ -4,6 +4,7 @@ module Mysigner
       def self.included(base)
         base.class_eval do
           desc "doctor", "🩺 Run health check and diagnose setup issues (run this if stuck)"
+          method_option :platform, type: :string, desc: 'Check specific platform only: ios, android, or all (default)'
           def doctor
             say "🩺 My Signer Health Check", :cyan
             say "=" * 80, :cyan
@@ -12,7 +13,19 @@ module Mysigner
             issues = []
             warnings = []
             
-            # Check 1: Xcode
+            # Determine which platforms to check
+            platform_filter = options[:platform]&.downcase
+            check_ios = platform_filter.nil? || platform_filter == 'all' || platform_filter == 'ios'
+            check_android = platform_filter.nil? || platform_filter == 'all' || platform_filter == 'android'
+
+            if platform_filter && !%w[ios android all].include?(platform_filter)
+              error "Invalid platform: #{platform_filter}"
+              say "Valid options: ios, android, all", :yellow
+              exit 1
+            end
+
+            # Check 1: Xcode (iOS only)
+            if check_ios
             say "Checking Xcode...", :yellow
             if system('which xcodebuild > /dev/null 2>&1')
               xcode_version = `xcodebuild -version`.lines.first.strip rescue "Unknown"
@@ -421,6 +434,146 @@ module Mysigner
               say "⚠️  Project detected but cannot check signing (not logged in)", :yellow
               say ""
             end
+            end # end of check_ios block
+
+            # ==================== ANDROID CHECKS ====================
+            if check_android
+            say "Checking Android development environment...", :yellow
+            android_available = false
+
+            # Check 11: Java/JDK
+            if system('which java > /dev/null 2>&1')
+              java_version = `java -version 2>&1`.lines.first.strip rescue "Unknown"
+              say "  ✓ Java installed: #{java_version}", :green
+              android_available = true
+              
+              # Check JAVA_HOME validity
+              java_home = ENV['JAVA_HOME']
+              if java_home && !java_home.empty?
+                if Dir.exist?(java_home)
+                  say "  ✓ JAVA_HOME: #{java_home}", :green
+                else
+                  say "  ✗ JAVA_HOME invalid: #{java_home}", :red
+                  
+                  # Try to auto-detect correct JAVA_HOME
+                  detected_java_home = detect_java_home
+                  if detected_java_home
+                    say "  💡 Detected valid Java at: #{detected_java_home}", :yellow
+                    say ""
+                    if yes_with_default?("  Would you like to fix JAVA_HOME in your shell config?", :green)
+                      fix_java_home(detected_java_home)
+                    else
+                      say "  To fix manually, add to ~/.zshrc:", :yellow
+                      say "    export JAVA_HOME=#{detected_java_home}", :cyan
+                      issues << "JAVA_HOME points to non-existent directory"
+                    end
+                  else
+                    issues << "JAVA_HOME points to non-existent directory and no Java found"
+                  end
+                end
+              else
+                # JAVA_HOME not set - try to detect and suggest
+                detected_java_home = detect_java_home
+                if detected_java_home
+                  say "  ⚠️  JAVA_HOME not set", :yellow
+                  say "  💡 Detected Java at: #{detected_java_home}", :yellow
+                  say ""
+                  if yes_with_default?("  Would you like to set JAVA_HOME in your shell config?", :green)
+                    fix_java_home(detected_java_home)
+                  else
+                    warnings << "JAVA_HOME not set (recommended: export JAVA_HOME=#{detected_java_home})"
+                  end
+                else
+                  say "  ⚠️  JAVA_HOME not set", :yellow
+                end
+              end
+            else
+              say "  ℹ️  Java not found (required for Android)", :cyan
+            end
+
+            # Check 12: Android SDK
+            android_home = ENV['ANDROID_HOME'] || ENV['ANDROID_SDK_ROOT']
+            if android_home && Dir.exist?(android_home)
+              say "  ✓ Android SDK: #{android_home}", :green
+              android_available = true
+            else
+              say "  ℹ️  Android SDK not found (set ANDROID_HOME)", :cyan
+            end
+
+            # Check 13: Gradle
+            if system('which gradle > /dev/null 2>&1') || (android_home && File.exist?("#{android_home}/../gradle"))
+              gradle_version = `gradle --version 2>&1 | grep 'Gradle '`.strip rescue ""
+              if gradle_version.empty?
+                say "  ✓ Gradle available (version check skipped)", :green
+              else
+                say "  ✓ #{gradle_version}", :green
+              end
+            else
+              say "  ℹ️  Gradle not found (will use project gradlew)", :cyan
+            end
+            say ""
+
+            # Check 14: Google Play credentials (if logged in)
+            if client && org_data
+              say "Checking Google Play configuration...", :yellow
+              
+              if org_data['google_play_configured']
+                say "  ✓ Google Play credentials configured", :green
+              else
+                say "  ℹ️  Google Play not configured", :cyan
+                say "    Configure in My Signer dashboard or run 'mysigner doctor'", :cyan
+              end
+
+              # Check for keystores
+              begin
+                require_relative '../signing/keystore_manager'
+                manager = Signing::KeystoreManager.new(client, config.current_organization_id)
+                keystores = manager.list
+                
+                if keystores.any?
+                  active = keystores.find { |k| k['active'] }
+                  if active
+                    say "  ✓ Active keystore: #{active['name']}", :green
+                  else
+                    say "  ⚠️  #{keystores.count} keystores, none active", :yellow
+                    warnings << "No active keystore - activate one with: mysigner keystore activate ID"
+                  end
+                else
+                  say "  ℹ️  No Android keystores", :cyan
+                  say "    Upload with: mysigner keystore upload PATH", :cyan
+                end
+              rescue => e
+                say "  ⚠️  Could not check keystores: #{e.message}", :yellow
+              end
+              say ""
+            end
+
+            # Check 15: Android Project Detection
+            android_project = nil
+            begin
+              android_project = Build::Detector.detect_android
+              framework = case android_project[:framework]
+              when :capacitor then "Capacitor/Ionic"
+              when :react_native then "React Native"
+              when :flutter then "Flutter"
+              else "Native Android"
+              end
+              say "Checking Android project...", :yellow
+              say "  ✓ Found #{framework} Android project", :green
+              
+              # Parse project details
+              require_relative '../build/android_parser'
+              parser = Build::AndroidParser.new(android_project)
+              say "  Package: #{parser.application_id}", :cyan
+              say "  Version: #{parser.version_name} (#{parser.version_code})", :cyan
+              say "  Gradle wrapper: #{parser.gradle_wrapper_exists? ? '✓' : '✗'}", :cyan
+              say ""
+            rescue Build::Detector::NoProjectError
+              # Not an Android project, that's fine
+            rescue => e
+              say "  ⚠️  Could not analyze Android project: #{e.message}", :yellow if android_available
+            end
+            end # end of check_android block
             
             # Final Report
             say "=" * 80, :cyan
@@ -672,51 +825,192 @@ module Mysigner
             end
           end
 
-          desc "sync", "🔄 Sync data from Apple (certificates, devices, profiles, builds)"
+          desc "sync [PLATFORM]", "🔄 Sync data from App Store Connect or Google Play"
+          long_desc <<~DESC
+            Sync your organization's data from app stores.
+
+            PLATFORMS (optional):
+              ios      : Sync from App Store Connect (default)
+              android  : Sync from Google Play
+              all      : Sync from both platforms
+
+            Without a platform argument, syncs iOS (App Store Connect) data.
+
+            EXAMPLES:
+              mysigner sync              # Sync iOS data
+              mysigner sync ios          # Sync iOS data
+              mysigner sync android      # Sync Android data
+              mysigner sync all          # Sync both platforms
+          DESC
           option :force, type: :boolean, aliases: '-f', desc: 'Force sync even if recently synced'
-          def sync
+          def sync(platform = 'ios')
             config = load_config
             client = create_client(config)
 
-            say "🔄 Syncing data from Apple...", :cyan
-            say ""
+            platform = platform.to_s.downcase
 
-            begin
-              # Trigger sync via API
-              response = client.post(
-                "/api/v1/organizations/#{config.current_organization_id}/sync",
-                body: { force: options[:force] }
-              )
-
-              if response[:success]
-                data = response[:data]
-                say "✓ Sync completed successfully!", :green
-                say ""
-                
-                if data['synced_at']
-                  say "Last synced: #{data['synced_at']}", :cyan
-                end
-                
-                if data['summary']
-                  say ""
-                  say "📊 Summary:", :cyan
-                  summary = data['summary']
-                  say "  • Apps: #{summary['apps']}" if summary['apps']
-                  say "  • Builds: #{summary['builds']}" if summary['builds']
-                  say "  • Certificates: #{summary['certificates']}" if summary['certificates']
-                  say "  • Devices: #{summary['devices']}" if summary['devices']
-                  say "  • Profiles: #{summary['profiles']}" if summary['profiles']
-                end
-                
-                say ""
-                say "💡 Tip: Syncing happens automatically every 30 minutes in the background.", :yellow
-              else
-                say "✗ Sync failed: #{response[:error]}", :red
-                exit 1
-              end
-            rescue => e
-              say "✗ Sync failed: #{e.message}", :red
+            case platform
+            when 'ios', 'apple', 'appstore'
+              sync_ios(client, config)
+            when 'android', 'google', 'googleplay', 'play'
+              sync_android(client, config)
+            when 'all', 'both'
+              sync_ios(client, config)
+              say ""
+              sync_android(client, config)
+            else
+              error "Unknown platform: #{platform}"
+              say "Valid platforms: ios, android, all", :yellow
               exit 1
+            end
+          end
+
+          no_commands do
+            def sync_ios(client, config)
+              say "🔄 Syncing data from App Store Connect...", :cyan
+              say ""
+
+              begin
+                response = client.post(
+                  "/api/v1/organizations/#{config.current_organization_id}/sync",
+                  body: { force: options[:force] }
+                )
+
+                if response[:success]
+                  data = response[:data]
+                  say "✓ iOS sync completed!", :green
+                  say ""
+                  
+                  if data['synced_at']
+                    say "Last synced: #{data['synced_at']}", :cyan
+                  end
+                  
+                  if data['summary']
+                    say ""
+                    say "📊 Summary:", :cyan
+                    summary = data['summary']
+                    say "  • Apps: #{summary['apps']}" if summary['apps']
+                    say "  • Builds: #{summary['builds']}" if summary['builds']
+                    say "  • Certificates: #{summary['certificates']}" if summary['certificates']
+                    say "  • Devices: #{summary['devices']}" if summary['devices']
+                    say "  • Profiles: #{summary['profiles']}" if summary['profiles']
+                  end
+                else
+                  say "✗ iOS sync failed: #{response[:error]}", :red
+                end
+              rescue => e
+                say "✗ iOS sync failed: #{e.message}", :red
+              end
+            end
+
+            def sync_android(client, config)
+              say "🔄 Syncing data from Google Play...", :cyan
+              say ""
+
+              begin
+                response = client.post(
+                  "/api/v1/organizations/#{config.current_organization_id}/sync_google_play",
+                  body: { force: options[:force] }
+                )
+
+                if response[:success]
+                  say "✓ Android sync started!", :green
+                  say ""
+                  say "Sync runs in the background. Check status with:", :cyan
+                  say "  mysigner android-apps", :green
+                  say ""
+                  
+                  # Optionally wait and show status
+                  say "💡 Google Play sync may take a few minutes.", :yellow
+                  say "   Unlike iOS, Google Play doesn't auto-discover apps.", :yellow
+                  say "   If no apps appear, add them in the web dashboard first.", :yellow
+                else
+                  say "✗ Android sync failed: #{response[:error] || 'Unknown error'}", :red
+                end
+              rescue Mysigner::ClientError => e
+                if e.message.include?("No active Google Play credential")
+                  say "✗ Google Play not configured", :red
+                  say ""
+                  say "Set up credentials first:", :yellow
+                  say "  Configure Google Play in My Signer dashboard", :green
+                else
+                  say "✗ Android sync failed: #{e.message}", :red
+                end
+              rescue => e
+                say "✗ Android sync failed: #{e.message}", :red
+              end
+            end
+
+            # Detect valid JAVA_HOME using macOS java_home utility or common paths
+            def detect_java_home(version: nil)
+              # Try macOS java_home utility first (most reliable)
+              if system('which /usr/libexec/java_home > /dev/null 2>&1')
+                cmd = '/usr/libexec/java_home'
+                cmd += " -v #{version}" if version
+                java_home = `#{cmd} 2>/dev/null`.strip
+                return java_home if !java_home.empty? && Dir.exist?(java_home)
+              end
+
+              # Try common Homebrew paths (Apple Silicon)
+              homebrew_paths = %w[
+                /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+                /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+                /opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home
+              ]
+              homebrew_paths.each do |path|
+                return path if Dir.exist?(path)
+              end
+
+              # Try common Homebrew paths (Intel)
+              intel_paths = %w[
+                /usr/local/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+                /usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+                /usr/local/opt/openjdk/libexec/openjdk.jdk/Contents/Home
+              ]
+              intel_paths.each do |path|
+                return path if Dir.exist?(path)
+              end
+
+              # Try system Java
+              system_paths = Dir.glob('/Library/Java/JavaVirtualMachines/*/Contents/Home')
+              return system_paths.first if system_paths.any?
+
+              nil
+            end
+
+            # Fix JAVA_HOME in shell config
+            def fix_java_home(java_home)
+              shell_config = File.expand_path('~/.zshrc')
+              
+              # Use ~/.bash_profile if zsh config doesn't exist
+              unless File.exist?(shell_config)
+                shell_config = File.expand_path('~/.bash_profile')
+              end
+
+              # Read existing content
+              content = File.exist?(shell_config) ? File.read(shell_config) : ""
+
+              # Check if JAVA_HOME is already set
+              if content.include?('export JAVA_HOME=')
+                # Replace existing JAVA_HOME line
+                new_content = content.gsub(/^export JAVA_HOME=.*$/, "export JAVA_HOME=\"#{java_home}\"")
+                File.write(shell_config, new_content)
+                say "  ✓ Updated JAVA_HOME in #{shell_config}", :green
+              else
+                # Append JAVA_HOME
+                File.open(shell_config, 'a') do |f|
+                  f.puts ""
+                  f.puts "# Added by mysigner doctor"
+                  f.puts "export JAVA_HOME=\"#{java_home}\""
+                end
+                say "  ✓ Added JAVA_HOME to #{shell_config}", :green
+              end
+
+              say ""
+              say "  To apply now, run:", :yellow
+              say "    source #{shell_config}", :cyan
+              say ""
+              say "  Or restart your terminal.", :yellow
             end
           end
         end

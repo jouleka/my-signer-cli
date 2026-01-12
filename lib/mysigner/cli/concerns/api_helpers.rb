@@ -46,8 +46,8 @@ module Mysigner
           loop do
             custom = ask("Press Enter to use default, or type custom URL:", default: "")
             
-            # Use default if empty
-            if custom.empty?
+            # Use default if empty or nil
+            if custom.nil? || custom.empty?
               return default
             end
             
