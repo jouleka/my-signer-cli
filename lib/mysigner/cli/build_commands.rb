@@ -517,6 +517,31 @@ module Mysigner
               say "Error: #{e.message}", :red
               say ""
               exit 1
+            rescue Build::Executor::BuildError => e
+              # Analyze build errors and show helpful suggestions
+              say ""
+
+              if defined?(executor) && executor.respond_to?(:build_errors)
+                require_relative '../build/error_analyzer'
+                analyzer = Build::ErrorAnalyzer.new(executor.build_errors)
+
+                if analyzer.any_issues?
+                  say analyzer.format_suggestions, :cyan
+                end
+              end
+
+              say "=" * 80, :red
+              say "✗ Ship Failed", :red
+              say "=" * 80, :red
+              say ""
+              say "Error: #{e.message}", :red
+              say ""
+
+              if archive_path && File.exist?(archive_path)
+                say "Archive saved at: #{archive_path}", :yellow
+              end
+
+              exit 1
             rescue => e
               say ""
               say "=" * 80, :red
@@ -525,14 +550,14 @@ module Mysigner
               say ""
               say "Error: #{e.message}", :red
               say ""
-              
+
               if archive_path && File.exist?(archive_path)
                 say "Archive saved at: #{archive_path}", :yellow
               end
               if ipa_path && File.exist?(ipa_path)
                 say "IPA saved at: #{ipa_path}", :yellow
               end
-              
+
               exit 1
             end
           end
@@ -1265,6 +1290,7 @@ module Mysigner
           method_option :type, default: 'appstore', desc: 'Build type: development, adhoc, appstore, enterprise'
           method_option :team, desc: 'Development team ID (overrides project setting)'
           method_option :bundle_id, aliases: '-b', desc: 'Bundle ID (overrides project setting)'
+          method_option :skip_extensions, type: :boolean, default: false, desc: 'Skip extension targets (useful when extensions are not configured)'
           def build
             config = load_config
             client = create_client(config)
@@ -1327,7 +1353,11 @@ module Mysigner
               # Show extensions if any
               if parser.has_extensions?
                 ext_count = parser.extension_targets.count
-                say "🧩 Extensions: #{ext_count} (will be included in build)", :cyan
+                if options[:skip_extensions]
+                  say "🧩 Extensions: #{ext_count} (will be SKIPPED - signing disabled)", :yellow
+                else
+                  say "🧩 Extensions: #{ext_count} (will be included in build)", :cyan
+                end
               end
               
               bundle_id = options[:bundle_id] || parser.bundle_id(target_name, options[:configuration])
@@ -1413,12 +1443,13 @@ module Mysigner
               # Build
               executor = Build::Executor.new(project_info, parser)
               archive_path = executor.build!(
-                target_name, 
-                options[:configuration], 
+                target_name,
+                options[:configuration],
                 scheme: options[:scheme],
                 signing_style: sign_style,
                 team_id: team_id_to_use,
-                bundle_id: options[:bundle_id]
+                bundle_id: options[:bundle_id],
+                skip_extensions: options[:skip_extensions]
               )
 
               say ""
@@ -1450,6 +1481,18 @@ module Mysigner
               say "  mysigner profile create              # Create a new profile"
               exit 1
             rescue Build::Executor::BuildError => e
+              # Analyze build errors and show helpful suggestions
+              say ""
+
+              if executor && executor.respond_to?(:build_errors)
+                require_relative '../build/error_analyzer'
+                analyzer = Build::ErrorAnalyzer.new(executor.build_errors)
+
+                if analyzer.any_issues?
+                  say analyzer.format_suggestions, :cyan
+                end
+              end
+
               error e.message
               exit 1
             rescue => e
@@ -1894,6 +1937,7 @@ module Mysigner
               exit 1
             end
           end
+
         end
       end
     end

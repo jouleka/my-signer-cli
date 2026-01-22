@@ -1,3 +1,6 @@
+require 'faraday'
+require 'json'
+
 module Mysigner
   module Signing
     class Wizard
@@ -41,7 +44,7 @@ module Mysigner
         puts ""
         
         print "Configure all targets? (y/n): "
-        confirm = STDIN.gets.strip.downcase
+        confirm = get_input.downcase
         
         unless confirm == 'y' || confirm == 'yes'
           puts "Cancelled"
@@ -67,7 +70,7 @@ module Mysigner
             failed += 1
             puts ""
             print "Continue with remaining targets? (y/n): "
-            continue = STDIN.gets.strip.downcase
+            continue = get_input.downcase
             unless continue == 'y' || continue == 'yes'
               break
             end
@@ -170,7 +173,7 @@ module Mysigner
         puts ""
         
         print "Select target (1-#{targets.count}): "
-        choice = STDIN.gets.strip.to_i
+        choice = get_input.to_i
         
         if choice < 1 || choice > targets.count
           error "Invalid selection"
@@ -223,8 +226,8 @@ module Mysigner
         
         puts ""
         print "Select option: "
-        choice = STDIN.gets.strip.to_i
-        
+        choice = get_input.to_i
+
         case choice
         when 1
           if current_team
@@ -284,7 +287,7 @@ module Mysigner
       def enter_team_manually
         puts ""
         print "Enter Team ID (10 characters): "
-        team_id = STDIN.gets.strip
+        team_id = get_input
         
         if team_id =~ /^[A-Z0-9]{10}$/
           puts "✓ Team ID: #{team_id}"
@@ -324,7 +327,7 @@ module Mysigner
             puts ""
             
             print "Select option (1-4): "
-            choice = STDIN.gets.strip
+            choice = get_input
             puts ""
             
             case choice
@@ -386,7 +389,7 @@ module Mysigner
           end
           
           print "Select profile (1-#{all_profiles.count}): "
-          choice = STDIN.gets.strip.to_i
+          choice = get_input.to_i
           
           if choice < 1 || choice > all_profiles.count
             error "Invalid selection"
@@ -410,30 +413,52 @@ module Mysigner
 
       def download_and_install_profile(profile)
         puts "Downloading and installing profile..."
-        
+
         begin
-          # Download profile
+          # Download profile using direct Faraday connection for binary data
+          # (the client's get method uses JSON middleware which corrupts binary data)
           download_url = "/api/v1/organizations/#{@organization_id}/profiles/#{profile['id']}/download"
-          response = @client.get(download_url)
-          profile_content = response
-          
+
+          conn = Faraday.new(url: @client.api_url) do |f|
+            f.request :authorization, 'Bearer', @client.api_token
+            f.adapter Faraday.default_adapter
+          end
+
+          response = conn.get(download_url) do |req|
+            req.options.timeout = 30
+            req.options.open_timeout = 10
+          end
+
+          unless response.success?
+            if response.headers['content-type']&.include?('json')
+              begin
+                error_data = JSON.parse(response.body)
+                raise "Download failed: #{error_data['message'] || error_data['error']}"
+              rescue JSON::ParserError
+                raise "Download failed with status #{response.status}"
+              end
+            else
+              raise "Download failed with status #{response.status}"
+            end
+          end
+
+          profile_content = response.body
+
           # Create profiles directory if it doesn't exist
           profiles_dir = File.expand_path("~/Library/MobileDevice/Provisioning Profiles")
           FileUtils.mkdir_p(profiles_dir) unless Dir.exist?(profiles_dir)
-          
+
           # Generate filename (use UUID if available, otherwise sanitized name)
           uuid = profile['uuid'] || profile['id']
           filename = "#{uuid}.mobileprovision"
           output_path = File.join(profiles_dir, filename)
-          
-          # Write profile to file
-          File.open(output_path, 'wb') do |file|
-            file.write(profile_content)
-          end
-          
+
+          # Write binary profile to file
+          File.binwrite(output_path, profile_content)
+
           puts "✓ Profile installed: #{output_path}"
           puts ""
-          
+
         rescue => e
           # Non-fatal error - profile might still work if already installed
           puts "⚠️  Could not auto-install profile: #{e.message}"
@@ -551,8 +576,8 @@ module Mysigner
             puts "  4. Run this wizard again"
             puts ""
             print "Continue anyway? (y/N): "
-            answer = STDIN.gets.strip.downcase
-            
+            answer = get_input.downcase
+
             unless answer == 'y' || answer == 'yes'
               puts ""
               puts "Wizard cancelled. Please switch organizations and try again."
@@ -572,8 +597,8 @@ module Mysigner
             puts "Consider adding Team ID to this org at: https://app.mysigner.app"
             puts ""
             print "Continue? (Y/n): "
-            answer = STDIN.gets.strip.downcase
-            
+            answer = get_input.downcase
+
             if answer == 'n' || answer == 'no'
               puts ""
               puts "Wizard cancelled."
@@ -653,8 +678,8 @@ module Mysigner
             puts ""
             
             print "Generate CSR automatically? [Y/n] "
-            response = STDIN.gets.strip.downcase
-            
+            response = get_input.downcase
+
             if response.empty? || response == 'y' || response == 'yes'
               puts ""
               csr_path = generate_csr_for_wizard
@@ -742,6 +767,12 @@ module Mysigner
           puts "  ✗ Failed to generate CSR: #{e.message}"
           nil
         end
+      end
+
+      # Safely get user input, returns empty string if STDIN is closed or nil
+      def get_input
+        input = STDIN.gets
+        input ? input.strip : ''
       end
 
       def error(message)

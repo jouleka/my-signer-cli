@@ -1,11 +1,16 @@
+require 'set'
+
 module Mysigner
   module Build
     class Executor
       class BuildError < StandardError; end
 
+      attr_reader :build_errors
+
       def initialize(project_info, parser)
         @project_info = project_info
         @parser = parser
+        @build_errors = []
       end
 
       # Build archive
@@ -14,12 +19,14 @@ module Mysigner
       #   - signing_style: 'Automatic', 'Manual', or nil (default: use project setting)
       #   - team_id: Development team ID to override project setting
       #   - bundle_id: Bundle ID to override project setting
-      def build!(target_name = nil, configuration = 'Release', scheme: nil, signing_style: nil, team_id: nil, bundle_id: nil)
+      #   - skip_extensions: If true, disable code signing for extension targets
+      def build!(target_name = nil, configuration = 'Release', scheme: nil, signing_style: nil, team_id: nil, bundle_id: nil, skip_extensions: false)
         target = target_name || @parser.main_target.name
         scheme_name = scheme || target
         @signing_style = signing_style
         @team_id = team_id
         @bundle_id = bundle_id
+        @skip_extensions = skip_extensions
 
         # Use Xcode's default DerivedData location to keep project clean
         # This matches Xcode's behavior and avoids polluting the project directory
@@ -105,6 +112,16 @@ module Mysigner
           cmd += ['-allowProvisioningUpdates']
         end
 
+        # Skip extension signing if requested
+        # This disables code signing for extension targets while keeping it enabled for the main app
+        if @skip_extensions && @parser.has_extensions?
+          @parser.extension_targets.each do |ext_target|
+            ext_name = ext_target.name
+            # Disable code signing for this extension target
+            cmd += ["CODE_SIGNING_ALLOWED[target=#{ext_name}]=NO"]
+          end
+        end
+
         # Suppress verbose output
         cmd += [
           '-quiet'
@@ -117,17 +134,31 @@ module Mysigner
         puts "🏗️  Running: xcodebuild archive..."
         puts ""
 
+        @build_errors = []
+
         # Run command and capture output in real-time
         IO.popen(cmd, err: [:child, :out]) do |io|
           io.each_line do |line|
             # Filter output to show only important messages
             next if line.strip.empty?
-            
-            # Show errors and warnings
-            if line.include?('error:') || line.include?('warning:')
+
+            # Detect error lines (case-insensitive for error:)
+            # Check for various error patterns including curly quotes from Xcode
+            is_error = line.downcase.include?('error:') ||
+                       line.include?('Provisioning profile') ||
+                       line.include?('Code Sign error') ||
+                       line.include?("doesn't support") ||
+                       line.include?("doesn\u2019t support") ||
+                       line.include?('capability')
+
+            is_warning = line.downcase.include?('warning:')
+
+            # Show and capture errors and warnings
+            if is_error || is_warning
               puts line
+              @build_errors << line if is_error
             # Show progress markers
-            elsif line.include?('Building') || line.include?('Compiling') || 
+            elsif line.include?('Building') || line.include?('Compiling') ||
                   line.include?('Linking') || line.include?('Signing') ||
                   line.include?('Copying')
               print '.'

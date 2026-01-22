@@ -1962,6 +1962,169 @@ module Mysigner
 
           public
 
+          # ==================== BUNDLE IDS ====================
+
+          desc "bundleid SUBCOMMAND", "Register and manage iOS Bundle IDs"
+          long_desc <<~DESC
+            Register and manage iOS Bundle IDs in App Store Connect.
+
+            WHAT ARE BUNDLE IDs?
+
+            Bundle IDs are unique identifiers for your iOS apps (e.g., com.company.app).
+            Every iOS app and app extension needs its own Bundle ID registered in
+            App Store Connect before you can sign and distribute it.
+
+            SUBCOMMANDS:
+
+              mysigner bundleid register IDENTIFIER [NAME]
+                Register a new Bundle ID in App Store Connect.
+                The NAME is optional - defaults to the last part of the identifier.
+
+              mysigner bundleid list
+                List all registered Bundle IDs in your organization.
+
+            EXAMPLES:
+
+              # Register main app bundle ID
+              mysigner bundleid register com.company.myapp
+
+              # Register with a custom name
+              mysigner bundleid register com.company.myapp "My App"
+
+              # Register a widget extension bundle ID
+              mysigner bundleid register com.company.myapp.widget "My App Widget"
+
+              # List all bundle IDs
+              mysigner bundleid list
+
+            NOTES:
+
+              • Bundle IDs must be unique across all of App Store Connect
+              • Use reverse domain notation (e.g., com.company.app)
+              • Extensions should use parent app's bundle ID as prefix (e.g., com.company.app.widget)
+              • After registering, run 'mysigner sync ios' to update local cache
+          DESC
+          def bundleid(action, *args)
+            config = load_config
+            client = create_client(config)
+
+            case action
+            when 'register'
+              if args.empty?
+                error "Usage: mysigner bundleid register IDENTIFIER [NAME]"
+                say ""
+                say "Example: mysigner bundleid register com.company.myapp", :yellow
+                say "Example: mysigner bundleid register com.company.myapp.widget \"My Widget\"", :yellow
+                exit 1
+              end
+
+              identifier = args[0]
+              # Default name is the last component of the identifier
+              name = args[1] || identifier.split('.').last.capitalize
+
+              # Validate bundle ID format
+              unless identifier =~ /^[a-zA-Z][a-zA-Z0-9.-]*\.[a-zA-Z][a-zA-Z0-9.-]*$/
+                error "Invalid Bundle ID format: #{identifier}"
+                say ""
+                say "Bundle IDs must:", :yellow
+                say "  • Start with a letter", :cyan
+                say "  • Use reverse domain notation (e.g., com.company.app)", :cyan
+                say "  • Contain only letters, numbers, hyphens, and periods", :cyan
+                exit 1
+              end
+
+              say "🔗 Registering Bundle ID...", :cyan
+              say ""
+              say "  Identifier: #{identifier}", :white
+              say "  Name: #{name}", :white
+              say ""
+
+              begin
+                response = client.post(
+                  "/api/v1/organizations/#{config.current_organization_id}/bundle_ids",
+                  body: {
+                    identifier: identifier,
+                    name: name,
+                    platform: 'IOS'
+                  }
+                )
+
+                bundle_id_data = response[:data]['bundle_id'] || response[:data]
+                say "✓ Bundle ID registered successfully!", :green
+                say ""
+                say "Details:", :bold
+                say "  Identifier: #{bundle_id_data['identifier'] || identifier}"
+                say "  Name: #{bundle_id_data['name'] || name}"
+                say ""
+                say "Next steps:", :cyan
+                say "  1. Sync to update local cache: mysigner sync ios", :white
+                say "  2. Create a provisioning profile: mysigner doctor (will auto-create)", :white
+                say "  3. Or run: mysigner signing configure", :white
+              rescue Mysigner::ValidationError => e
+                error "Validation failed:"
+                if e.details
+                  e.details.each do |field, errors|
+                    say "  #{field}: #{errors.join(', ')}", :red
+                  end
+                else
+                  say "  #{e.message}", :red
+                end
+                exit 1
+              rescue Mysigner::ClientError => e
+                if e.message.include?("already exists") || e.message.include?("ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE")
+                  say "ℹ️  Bundle ID already registered: #{identifier}", :yellow
+                  say ""
+                  say "This Bundle ID already exists in App Store Connect.", :white
+                  say "Run 'mysigner sync ios' to update your local cache.", :cyan
+                else
+                  error "Failed to register Bundle ID: #{e.message}"
+                  say ""
+                  say "Common issues:", :yellow
+                  say "  • Bundle ID already exists (check App Store Connect)", :cyan
+                  say "  • Invalid format (must be like com.company.app)", :cyan
+                  say "  • API credentials may not have permission", :cyan
+                end
+                exit 1
+              end
+
+            when 'list'
+              say "📦 Registered Bundle IDs", :cyan
+              say ""
+
+              begin
+                response = client.get(
+                  "/api/v1/organizations/#{config.current_organization_id}/bundle_ids"
+                )
+                bundle_ids = response[:data]['bundle_ids'] || response[:data] || []
+
+                if bundle_ids.empty?
+                  say "  No Bundle IDs found", :yellow
+                  say ""
+                  say "  Register one with: mysigner bundleid register com.company.app", :cyan
+                else
+                  bundle_ids.each do |bid|
+                    identifier = bid['identifier'] || bid['bundle_id']
+                    name = bid['name'] || 'N/A'
+                    say "  • #{name}", :green
+                    say "    Identifier: #{identifier}"
+                    say ""
+                  end
+                end
+              rescue Mysigner::ClientError => e
+                error "Failed to list Bundle IDs: #{e.message}"
+                exit 1
+              end
+
+            else
+              error "Unknown action: #{action}"
+              say ""
+              say "Available actions:", :yellow
+              say "  mysigner bundleid register IDENTIFIER [NAME]", :cyan
+              say "  mysigner bundleid list", :cyan
+              exit 1
+            end
+          end
+
           # ==================== APPS (iOS + Android) ====================
 
           desc "apps", "List apps from App Store Connect and/or Google Play"
@@ -2011,7 +2174,33 @@ module Mysigner
 
                 if ios_apps.empty?
                   say "  No iOS apps found", :yellow
-                  say "  Sync with: mysigner sync ios", :yellow
+                  say ""
+                  say "  Why don't my iOS apps appear?", :cyan
+                  say "  ─────────────────────────────", :cyan
+                  say ""
+                  say "  Common reasons:", :yellow
+                  say "    • No apps registered in App Store Connect yet"
+                  say "    • Team ID not set on your credential"
+                  say "    • Bundle IDs exist but apps not created in App Store Connect"
+                  say ""
+                  say "  How to register an iOS app:", :cyan
+                  say ""
+                  say "    1. Register a Bundle ID"
+                  say "       https://developer.apple.com/account/resources/identifiers/list"
+                  say "       Click '+' → App IDs → Enter your Bundle ID (e.g., com.company.appname)"
+                  say ""
+                  say "    2. Create the app in App Store Connect"
+                  say "       https://appstoreconnect.apple.com/apps"
+                  say "       My Apps → '+' → New App → Select your Bundle ID"
+                  say ""
+                  say "    3. Sync your organization"
+                  say "       Run: ", :white
+                  say "mysigner sync ios", :green
+                  say ""
+                  say "  💡 Team ID tip:", :yellow
+                  say "     Apple's API doesn't expose Team ID. Set it manually in the web dashboard."
+                  say "     Find yours at: https://developer.apple.com/account/#!/membership/"
+                  say ""
                 else
                   ios_apps.each do |app|
                     say "  • #{app['name'] || app['bundle_id']}", :green
@@ -2050,6 +2239,334 @@ module Mysigner
               rescue Mysigner::ClientError => e
                 say "  Could not fetch Android apps: #{e.message}", :yellow
               end
+            end
+          end
+
+          # ==================== MERCHANT IDS (Apple Pay) ====================
+
+          desc "merchant-ids", "List Apple Pay Merchant IDs"
+          method_option :search, type: :string, aliases: '-q', desc: 'Search by identifier or name'
+          method_option :page, type: :numeric, default: 1, desc: 'Page number'
+          method_option :per_page, type: :numeric, default: 50, desc: 'Items per page'
+          def merchant_ids
+            config = load_config
+            client = create_client(config)
+
+            say "💳 Merchant IDs", :cyan
+            say ""
+
+            params = {
+              page: options[:page],
+              per_page: options[:per_page]
+            }
+            params[:q] = options[:search] if options[:search]
+
+            begin
+              response = client.get(
+                "/api/v1/organizations/#{config.current_organization_id}/merchant_ids",
+                params: params
+              )
+              merchant_ids = response[:data]['merchant_ids'] || []
+              pagination = response[:data]['pagination']
+
+              if merchant_ids.empty?
+                say "  No Merchant IDs found", :yellow
+                say ""
+                say "  Create one with: mysigner merchant-id create IDENTIFIER", :cyan
+              else
+                merchant_ids.each do |m|
+                  say "  • #{m['identifier']}", :green
+                  say "    Name: #{m['name']}" if m['name'] && m['name'] != m['identifier']
+                  say "    Team: #{m['team_id']}" if m['team_id']
+                  say ""
+                end
+
+                if pagination
+                  say "Page #{pagination['page']} of #{pagination['total_pages']} (#{pagination['total']} total)", :yellow
+                end
+              end
+            rescue Mysigner::ClientError => e
+              error "Failed to fetch Merchant IDs: #{e.message}"
+              exit 1
+            end
+          end
+
+          desc "merchant-id SUBCOMMAND", "Manage Apple Pay Merchant IDs"
+          long_desc <<~DESC
+            Create and delete Apple Pay Merchant IDs.
+
+            SUBCOMMANDS:
+
+              mysigner merchant-id create IDENTIFIER [--name NAME]
+              Create a new Merchant ID in App Store Connect
+
+              mysigner merchant-id delete IDENTIFIER
+              Delete a Merchant ID from App Store Connect
+
+            EXAMPLES:
+
+              mysigner merchant-id create merchant.com.company.app
+              mysigner merchant-id create merchant.com.company.app --name "My Payment"
+              mysigner merchant-id delete merchant.com.company.app
+          DESC
+          method_option :name, type: :string, aliases: '-n', desc: 'Friendly name for the Merchant ID'
+          def merchant_id(action, identifier = nil)
+            config = load_config
+            client = create_client(config)
+
+            case action
+            when 'create'
+              if identifier.nil?
+                error "Usage: mysigner merchant-id create IDENTIFIER [--name NAME]"
+                say ""
+                say "Example: mysigner merchant-id create merchant.com.company.app", :yellow
+                exit 1
+              end
+
+              unless identifier.start_with?('merchant.')
+                error "Merchant ID must start with 'merchant.'"
+                say ""
+                say "Example: merchant.com.company.app", :cyan
+                exit 1
+              end
+
+              say "💳 Creating Merchant ID...", :cyan
+              say ""
+
+              begin
+                response = client.post(
+                  "/api/v1/organizations/#{config.current_organization_id}/merchant_ids",
+                  body: {
+                    identifier: identifier,
+                    name: options[:name] || identifier
+                  }
+                )
+
+                m = response[:data]['merchant_id'] || response[:data]
+                say "✓ Merchant ID created successfully!", :green
+                say ""
+                say "  Identifier: #{m['identifier'] || identifier}", :white
+                say "  Name: #{m['name']}", :white if m['name']
+              rescue Mysigner::ClientError => e
+                if e.message.include?("already exists")
+                  say "ℹ️  Merchant ID already exists: #{identifier}", :yellow
+                else
+                  error "Failed to create Merchant ID: #{e.message}"
+                end
+                exit 1
+              end
+
+            when 'delete'
+              if identifier.nil?
+                error "Usage: mysigner merchant-id delete IDENTIFIER"
+                exit 1
+              end
+
+              say "💳 Deleting Merchant ID...", :cyan
+              say ""
+
+              begin
+                # First find the merchant ID by identifier
+                response = client.get(
+                  "/api/v1/organizations/#{config.current_organization_id}/merchant_ids",
+                  params: { q: identifier }
+                )
+                merchant_ids = response[:data]['merchant_ids'] || []
+                m = merchant_ids.find { |x| x['identifier'] == identifier }
+
+                if m.nil?
+                  error "Merchant ID not found: #{identifier}"
+                  exit 1
+                end
+
+                client.delete(
+                  "/api/v1/organizations/#{config.current_organization_id}/merchant_ids/#{m['id']}"
+                )
+
+                say "✓ Merchant ID deleted: #{identifier}", :green
+              rescue Mysigner::ClientError => e
+                error "Failed to delete Merchant ID: #{e.message}"
+                exit 1
+              end
+
+            else
+              error "Unknown action: #{action}"
+              say ""
+              say "Available actions:", :yellow
+              say "  mysigner merchant-id create IDENTIFIER [--name NAME]", :cyan
+              say "  mysigner merchant-id delete IDENTIFIER", :cyan
+              exit 1
+            end
+          end
+
+          # ==================== APP GROUPS ====================
+
+          desc "app-groups", "List App Groups"
+          method_option :search, type: :string, aliases: '-q', desc: 'Search by identifier or name'
+          method_option :page, type: :numeric, default: 1, desc: 'Page number'
+          method_option :per_page, type: :numeric, default: 50, desc: 'Items per page'
+          def app_groups
+            config = load_config
+            client = create_client(config)
+
+            say "📦 App Groups", :cyan
+            say ""
+
+            params = {
+              page: options[:page],
+              per_page: options[:per_page]
+            }
+            params[:q] = options[:search] if options[:search]
+
+            begin
+              response = client.get(
+                "/api/v1/organizations/#{config.current_organization_id}/app_groups",
+                params: params
+              )
+              app_groups = response[:data]['app_groups'] || []
+              pagination = response[:data]['pagination']
+
+              if app_groups.empty?
+                say "  No App Groups found", :yellow
+                say ""
+                say "  Register one with: mysigner app-group register IDENTIFIER", :cyan
+                say ""
+                say "  Note: App Groups must first be created in Apple Developer Portal", :yellow
+              else
+                app_groups.each do |g|
+                  say "  • #{g['identifier']}", :green
+                  say "    Name: #{g['name']}" if g['name'] && g['name'] != g['identifier']
+                  say "    Team: #{g['team_id']}" if g['team_id']
+                  say ""
+                end
+
+                if pagination
+                  say "Page #{pagination['page']} of #{pagination['total_pages']} (#{pagination['total']} total)", :yellow
+                end
+              end
+            rescue Mysigner::ClientError => e
+              error "Failed to fetch App Groups: #{e.message}"
+              exit 1
+            end
+          end
+
+          desc "app-group SUBCOMMAND", "Manage App Groups"
+          long_desc <<~DESC
+            Register and delete App Groups.
+
+            IMPORTANT: Apple does NOT provide a public API to create App Groups.
+            You must first create them in the Apple Developer Portal, then register
+            them here to track and associate with Bundle IDs.
+
+            SUBCOMMANDS:
+
+              mysigner app-group register IDENTIFIER [--name NAME]
+              Register an existing App Group from Apple Developer Portal
+
+              mysigner app-group delete IDENTIFIER
+              Remove an App Group from My Signer (does not delete from Apple)
+
+            EXAMPLES:
+
+              mysigner app-group register group.com.company.shared
+              mysigner app-group register group.com.company.shared --name "Shared Data"
+              mysigner app-group delete group.com.company.shared
+          DESC
+          method_option :name, type: :string, aliases: '-n', desc: 'Friendly name for the App Group'
+          def app_group(action, identifier = nil)
+            config = load_config
+            client = create_client(config)
+
+            case action
+            when 'register'
+              if identifier.nil?
+                error "Usage: mysigner app-group register IDENTIFIER [--name NAME]"
+                say ""
+                say "Example: mysigner app-group register group.com.company.shared", :yellow
+                say ""
+                say "Note: Create the App Group in Apple Developer Portal first!", :cyan
+                exit 1
+              end
+
+              unless identifier.start_with?('group.')
+                error "App Group identifier must start with 'group.'"
+                say ""
+                say "Example: group.com.company.shared", :cyan
+                exit 1
+              end
+
+              say "📦 Registering App Group...", :cyan
+              say ""
+
+              begin
+                response = client.post(
+                  "/api/v1/organizations/#{config.current_organization_id}/app_groups",
+                  body: {
+                    identifier: identifier,
+                    name: options[:name] || identifier
+                  }
+                )
+
+                g = response[:data]['app_group'] || response[:data]
+                say "✓ App Group registered!", :green
+                say ""
+                say "  Identifier: #{g['identifier'] || identifier}", :white
+                say "  Name: #{g['name']}", :white if g['name']
+                say ""
+                say "  Remember: This only registers the App Group in My Signer.", :yellow
+                say "  Make sure it exists in Apple Developer Portal.", :yellow
+              rescue Mysigner::ClientError => e
+                if e.message.include?("already exists")
+                  say "ℹ️  App Group already registered: #{identifier}", :yellow
+                else
+                  error "Failed to register App Group: #{e.message}"
+                end
+                exit 1
+              end
+
+            when 'delete'
+              if identifier.nil?
+                error "Usage: mysigner app-group delete IDENTIFIER"
+                exit 1
+              end
+
+              say "📦 Removing App Group...", :cyan
+              say ""
+
+              begin
+                # First find the app group by identifier
+                response = client.get(
+                  "/api/v1/organizations/#{config.current_organization_id}/app_groups",
+                  params: { q: identifier }
+                )
+                app_groups = response[:data]['app_groups'] || []
+                g = app_groups.find { |x| x['identifier'] == identifier }
+
+                if g.nil?
+                  error "App Group not found: #{identifier}"
+                  exit 1
+                end
+
+                client.delete(
+                  "/api/v1/organizations/#{config.current_organization_id}/app_groups/#{g['id']}"
+                )
+
+                say "✓ App Group removed from My Signer: #{identifier}", :green
+                say ""
+                say "  Note: The App Group still exists in Apple Developer Portal.", :yellow
+                say "  Delete it manually if needed.", :yellow
+              rescue Mysigner::ClientError => e
+                error "Failed to remove App Group: #{e.message}"
+                exit 1
+              end
+
+            else
+              error "Unknown action: #{action}"
+              say ""
+              say "Available actions:", :yellow
+              say "  mysigner app-group register IDENTIFIER [--name NAME]", :cyan
+              say "  mysigner app-group delete IDENTIFIER", :cyan
+              exit 1
             end
           end
         end

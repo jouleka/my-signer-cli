@@ -744,17 +744,31 @@ module Mysigner
                   say "    Expires: #{profile['expires_at']}", :cyan
                   say ""
                   
-                  # Download and install the profile
+                  # Download and install the profile using direct Faraday for binary data
                   say "  Downloading profile...", :cyan
-                  download_response = client.get("/api/v1/organizations/#{config.current_organization_id}/profiles/#{profile['id']}/download")
-                  
-                  # Install to Xcode's provisioning profiles directory
-                  profiles_dir = File.expand_path("~/Library/MobileDevice/Provisioning Profiles")
-                  FileUtils.mkdir_p(profiles_dir)
-                  profile_path = File.join(profiles_dir, "#{profile['uuid']}.mobileprovision")
-                  File.write(profile_path, download_response)
-                  
-                  say "  ✓ Profile installed to Xcode", :green
+                  download_url = "/api/v1/organizations/#{config.current_organization_id}/profiles/#{profile['id']}/download"
+
+                  conn = Faraday.new(url: config.api_url) do |f|
+                    f.request :authorization, 'Bearer', config.api_token
+                    f.adapter Faraday.default_adapter
+                  end
+
+                  download_response = conn.get(download_url) do |req|
+                    req.options.timeout = 30
+                    req.options.open_timeout = 10
+                  end
+
+                  if download_response.success?
+                    # Install to Xcode's provisioning profiles directory
+                    profiles_dir = File.expand_path("~/Library/MobileDevice/Provisioning Profiles")
+                    FileUtils.mkdir_p(profiles_dir)
+                    profile_path = File.join(profiles_dir, "#{profile['uuid']}.mobileprovision")
+                    File.binwrite(profile_path, download_response.body)
+
+                    say "  ✓ Profile installed to Xcode", :green
+                  else
+                    say "  ⚠️  Could not download profile: HTTP #{download_response.status}", :yellow
+                  end
                   say ""
                   true
                 else
