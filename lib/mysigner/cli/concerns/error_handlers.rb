@@ -129,6 +129,317 @@ module Mysigner
             say ""
           end
         end
+
+        # Handle Apple API errors with actionable suggestions
+        def handle_apple_api_error(error, context: {})
+          error_message = error.message.to_s
+
+          say ""
+          say "=" * 80, :red
+          say "✗ #{context[:title] || 'Apple API Error'}", :red
+          say "=" * 80, :red
+          say ""
+          say "Error: #{error_message}", :red
+          say ""
+
+          # Check for specific Apple error patterns
+          if error_message =~ /no.*build.*found|build.*not.*found|no.*processed.*build/i
+            show_build_not_found_suggestions(context)
+          elsif error_message =~ /still.*processing|processing.*build/i
+            show_build_processing_suggestions
+          elsif error_message =~ /profile.*expired|provisioning.*expired|certificate.*expired/i
+            show_expired_credential_suggestions
+          elsif error_message =~ /profile.*not.*found|no.*provisioning.*profile|missing.*profile/i
+            show_profile_not_found_suggestions
+          elsif error_message =~ /certificate.*not.*found|no.*signing.*certificate/i
+            show_certificate_not_found_suggestions
+          elsif error_message =~ /app.*with.*bundle.*id.*not.*found|app.*not.*found/i
+            show_app_not_found_suggestions(context[:bundle_id])
+          elsif error_message =~ /missing.*required.*field|what's.*new.*required|cannot.*submit.*missing/i
+            show_missing_metadata_suggestions
+          elsif error_message =~ /archive.*not.*found|no.*xcarchive/i
+            show_archive_not_found_suggestions
+          elsif error_message =~ /ipa.*not.*found|no.*ipa.*file/i
+            show_ipa_not_found_suggestions
+          else
+            show_generic_apple_suggestions
+          end
+
+          show_saved_files(context)
+          show_debug_info(error)
+        end
+
+        # Handle Google Play API errors with actionable suggestions
+        def handle_android_api_error(error, context: {})
+          error_message = error.message.to_s
+
+          say ""
+          say "=" * 80, :red
+          say "✗ #{context[:title] || 'Google Play API Error'}", :red
+          say "=" * 80, :red
+          say ""
+          say "Error: #{error_message}", :red
+          say ""
+
+          # Check for specific Google Play error patterns
+          if error_message =~ /keystore.*not.*found|no.*keystore|missing.*keystore/i
+            show_keystore_not_found_suggestions
+          elsif error_message =~ /keystore.*password|wrong.*password/i
+            show_keystore_password_suggestions
+          elsif error_message =~ /package.*not.*found|first.*build.*uploaded.*manually/i
+            show_first_upload_suggestions(context[:package_name])
+          elsif error_message =~ /version.*code.*already|already.*used/i
+            show_version_code_conflict_suggestions
+          elsif error_message =~ /service.*account.*not.*found|no.*credentials/i
+            show_service_account_missing_suggestions
+          elsif error_message =~ /not.*authorized|permission.*denied|forbidden/i
+            show_permission_denied_suggestions
+          elsif error_message =~ /precondition.*failed|track.*not.*ready/i
+            show_track_not_setup_suggestions(context[:track])
+          elsif error_message =~ /aab.*not.*found|no.*aab.*file/i
+            show_aab_not_found_suggestions
+          else
+            show_generic_android_suggestions
+          end
+
+          show_saved_files(context)
+          show_debug_info(error)
+        end
+
+        private
+
+        # iOS-specific suggestion helpers
+        def show_build_not_found_suggestions(context)
+          say "💡 Build Not Found: How to fix", :cyan
+          say ""
+          say "   → Upload a build first: mysigner ship testflight", :yellow
+          say "   → If already uploaded, wait 5-15 minutes for Apple to process", :yellow
+          say "   → Use --wait flag to poll: mysigner ship appstore --wait", :yellow
+          say "   → Sync your builds: mysigner sync ios", :yellow
+          say ""
+        end
+
+        def show_build_processing_suggestions
+          say "💡 Build Still Processing: How to fix", :cyan
+          say ""
+          say "   → Apple typically takes 5-15 minutes to process builds", :yellow
+          say "   → Use --wait flag: mysigner ship appstore --wait", :yellow
+          say "   → Increase timeout: --asc-timeout-seconds 1800", :yellow
+          say "   → Check App Store Connect for processing status", :yellow
+          say ""
+        end
+
+        def show_expired_credential_suggestions
+          say "💡 Expired Profile or Certificate: How to fix", :cyan
+          say ""
+          say "   → List profiles with expiration dates: mysigner profiles", :yellow
+          say "   → Check status in My Signer dashboard", :yellow
+          say "   → Regenerate in Apple Developer Portal", :yellow
+          say "   → Download fresh profile: mysigner profile download <ID>", :yellow
+          say ""
+        end
+
+        def show_profile_not_found_suggestions
+          say "💡 Provisioning Profile Not Found: How to fix", :cyan
+          say ""
+          say "   → List available profiles: mysigner profiles", :yellow
+          say "   → Sync from Apple: mysigner sync ios", :yellow
+          say "   → Create profile in Apple Developer Portal", :yellow
+          say "   → Check if profile matches your Bundle ID", :yellow
+          say ""
+        end
+
+        def show_certificate_not_found_suggestions
+          say "💡 Signing Certificate Not Found: How to fix", :cyan
+          say ""
+          say "   → List certificates: mysigner certificates", :yellow
+          say "   → Download and install: mysigner certificate download <ID>", :yellow
+          say "   → Check Keychain Access for installed certificates", :yellow
+          say "   → Run: mysigner doctor (diagnose signing issues)", :yellow
+          say ""
+        end
+
+        def show_app_not_found_suggestions(bundle_id = nil)
+          say "💡 App Not Found: How to fix", :cyan
+          say ""
+          say "   → Ensure app exists in App Store Connect", :yellow
+          say "   → Create app in App Store Connect first", :yellow
+          say "   → Verify Bundle ID matches your Xcode project", :yellow if bundle_id
+          say "   → Sync from App Store Connect: mysigner sync ios", :yellow
+          say ""
+        end
+
+        def show_missing_metadata_suggestions
+          say "💡 Missing App Store Metadata: How to fix", :cyan
+          say ""
+          say "   → Configure release in My Signer dashboard", :yellow
+          say "   → Provide What's New via CLI: --whats-new \"Your text\"", :yellow
+          say "   → Ensure support URL is set in App Store Connect", :yellow
+          say "   → Complete app information in App Store Connect", :yellow
+          say ""
+        end
+
+        def show_archive_not_found_suggestions
+          say "💡 Archive Not Found: How to fix", :cyan
+          say ""
+          say "   → Build first: mysigner build", :yellow
+          say "   → Or use: mysigner ship testflight (handles build)", :yellow
+          say "   → Check if Xcode build succeeded", :yellow
+          say ""
+        end
+
+        def show_ipa_not_found_suggestions
+          say "💡 IPA File Not Found: How to fix", :cyan
+          say ""
+          say "   → Export IPA: mysigner export <archive_path>", :yellow
+          say "   → Or use: mysigner ship testflight (handles export)", :yellow
+          say "   → Check export method matches profile type", :yellow
+          say ""
+        end
+
+        def show_generic_apple_suggestions
+          say "💡 General troubleshooting:", :cyan
+          say ""
+          say "   → Run 'mysigner doctor' to check your setup", :yellow
+          say "   → Sync from Apple: mysigner sync ios", :yellow
+          say "   → Check App Store Connect: https://appstoreconnect.apple.com", :yellow
+          say ""
+        end
+
+        # Android-specific suggestion helpers
+        def show_keystore_not_found_suggestions
+          say "💡 Keystore Not Found: How to fix", :cyan
+          say ""
+          say "   → Upload keystore: mysigner keystore upload <path>", :yellow
+          say "   → List keystores: mysigner keystores", :yellow
+          say "   → Download keystore: mysigner keystore download <ID>", :yellow
+          say "   → Check keystore path in build.gradle", :yellow
+          say ""
+        end
+
+        def show_keystore_password_suggestions
+          say "💡 Keystore Password Issue: How to fix", :cyan
+          say ""
+          say "   → Verify keystore password is correct", :yellow
+          say "   → Check password in My Signer dashboard", :yellow
+          say "   → Update password: mysigner keystore update <ID>", :yellow
+          say ""
+        end
+
+        def show_first_upload_suggestions(package_name = nil)
+          say "💡 First Upload Required: How to fix", :cyan
+          say ""
+          say "   Google Play requires the FIRST build to be uploaded manually:", :yellow
+          say ""
+          say "   1. Build AAB: mysigner android build", :yellow
+          say "   2. Go to Play Console → Your App → Internal testing", :yellow
+          say "   3. Click 'Create release' and upload the AAB", :yellow
+          say "   4. Save the release (no need to roll out)", :yellow
+          say ""
+          say "   After that, 'mysigner ship' will work for future uploads.", :green
+          say ""
+        end
+
+        def show_version_code_conflict_suggestions
+          say "💡 Version Code Conflict: How to fix", :cyan
+          say ""
+          say "   → Version code already exists on Google Play", :yellow
+          say "   → Run the command again - mysigner auto-increments", :yellow
+          say "   → Or manually increment versionCode in build.gradle", :yellow
+          say ""
+        end
+
+        def show_service_account_missing_suggestions
+          say "💡 Service Account Not Found: How to fix", :cyan
+          say ""
+          say "   Set up Google Play credentials in My Signer dashboard:", :yellow
+          say ""
+          say "   1. Go to Play Console → API access → Service accounts", :yellow
+          say "   2. Create a service account with Editor access", :yellow
+          say "   3. Download the JSON key", :yellow
+          say "   4. Upload to My Signer dashboard → Google Play Settings", :yellow
+          say ""
+        end
+
+        def show_permission_denied_suggestions
+          say "💡 Service Account Permission Denied: How to fix", :cyan
+          say ""
+          say "   In Play Console → API access:", :yellow
+          say ""
+          say "   1. Find your service account", :yellow
+          say "   2. Click 'Manage Play Console permissions'", :yellow
+          say "   3. Grant 'Admin' or 'Release manager' access", :yellow
+          say ""
+          say "   Note: Permission changes take ~15 minutes to propagate", :green
+          say ""
+        end
+
+        def show_track_not_setup_suggestions(track = nil)
+          track_name = track || "this track"
+          say "💡 Track Not Set Up in Play Console: How to fix", :cyan
+          say ""
+          say "   Complete track setup in Google Play Console:", :yellow
+          say ""
+          say "   For PRODUCTION:", :yellow
+          say "     • Complete store listing, content rating, pricing", :yellow
+          say ""
+          say "   For BETA/ALPHA:", :yellow
+          say "     • Create testing track and add testers", :yellow
+          say ""
+          say "   For INTERNAL:", :yellow
+          say "     • Add internal testers", :yellow
+          say ""
+          say "   ✓ Your AAB was uploaded successfully!", :green
+          say "   → Go to Play Console to finish track setup", :green
+          say ""
+        end
+
+        def show_aab_not_found_suggestions
+          say "💡 AAB File Not Found: How to fix", :cyan
+          say ""
+          say "   → Build your app first: mysigner android build", :yellow
+          say "   → Or use: mysigner ship internal (handles build)", :yellow
+          say "   → Check if Gradle build succeeded", :yellow
+          say ""
+        end
+
+        def show_generic_android_suggestions
+          say "💡 General troubleshooting:", :cyan
+          say ""
+          say "   → Run 'mysigner doctor' to check your setup", :yellow
+          say "   → List keystores: mysigner keystores", :yellow
+          say "   → Check Play Console: https://play.google.com/console", :yellow
+          say ""
+        end
+
+        # Helper to show saved file paths
+        def show_saved_files(context)
+          if context[:archive_path] && File.exist?(context[:archive_path])
+            say "📦 Archive saved at: #{context[:archive_path]}", :yellow
+          end
+          if context[:ipa_path] && File.exist?(context[:ipa_path])
+            say "📦 IPA saved at: #{context[:ipa_path]}", :yellow
+          end
+          if context[:aab_path] && File.exist?(context[:aab_path])
+            say "📦 AAB saved at: #{context[:aab_path]}", :yellow
+          end
+        end
+
+        # Helper to show debug info
+        def show_debug_info(error)
+          say ""
+          if ENV['DEBUG']
+            say "Debug info:", :yellow
+            say "  Error class: #{error.class}", :yellow
+            say "  Backtrace:", :yellow
+            error.backtrace&.first(5)&.each do |line|
+              say "    #{line}", :yellow
+            end
+          else
+            say "💡 For more details, run with DEBUG=1", :yellow
+          end
+          say ""
+        end
       end
     end
   end

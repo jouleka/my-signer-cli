@@ -187,9 +187,9 @@ RSpec.describe 'mysigner status', type: :cli do
         org_response[:data]['role'] = nil
       end
 
-      it 'defaults to member' do
+      it 'defaults to viewer' do
         output = capture_stdout { cli.status }
-        expect(output).to include('Role:    member')
+        expect(output).to include('Role:    viewer')
       end
     end
 

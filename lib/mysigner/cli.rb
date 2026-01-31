@@ -6,6 +6,7 @@ require 'time'
 require_relative 'cli/concerns/helpers'
 require_relative 'cli/concerns/api_helpers'
 require_relative 'cli/concerns/error_handlers'
+require_relative 'cli/concerns/actionable_suggestions'
 require_relative 'cli/auth_commands'
 require_relative 'cli/diagnostic_commands'
 require_relative 'cli/build_commands'
@@ -23,6 +24,7 @@ module Mysigner
     include Concerns::Helpers
     include Concerns::ApiHelpers
     include Concerns::ErrorHandlers
+    include Concerns::ActionableSuggestions
 
     # Include all command modules
     include AuthCommands

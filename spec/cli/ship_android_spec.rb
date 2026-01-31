@@ -158,7 +158,7 @@ RSpec.describe 'mysigner ship android', type: :cli do
 
       it 'shows error message' do
         output = capture_stdout { cli.ship('internal') }
-        expect(output).to include('Upload Failed')
+        expect(output).to include('Partial Upload - Track Assignment Failed')
         expect(output).to include('Precondition check failed')
       end
 

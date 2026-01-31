@@ -145,7 +145,7 @@ module Mysigner
               say "=" * 80, :green
               say ""
               say "Organization: #{org_data['name']} (ID: #{org_id})", :cyan
-              say "Role: #{org_data['role'] || 'member'}", :cyan
+              say "Role: #{org_data['role'] || 'viewer'}", :cyan
               say "Config saved to: #{Config::CONFIG_FILE}", :cyan
               say ""
               say "🔒 Security Note:", :yellow
@@ -666,7 +666,7 @@ module Mysigner
                 org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
                 org = org_response[:data]
                 
-                say "  Role:   #{org['role'] || 'member'}"
+                say "  Role:   #{org['role'] || 'viewer'}"
                 say "  Members: #{org['member_count'] || 0}"
                 say ""
                 
@@ -732,7 +732,7 @@ module Mysigner
                 say "  #{token_status} #{org_name}#{current_marker}", :green
                 
                 if api_org
-                  role = api_org['role'] || 'member'
+                  role = api_org['role'] || 'viewer'
                   say "    ID: #{org_id} | Role: #{role} | Members: #{api_org['member_count'] || 0}"
                 else
                   say "    ID: #{org_id} | #{has_token ? 'Token saved' : 'Need token to access'}"

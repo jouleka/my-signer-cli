@@ -1,6 +1,9 @@
 require 'json'
 require 'yaml'
+require 'time'
 require_relative '../upload/play_store_uploader'
+require_relative '../upload/app_store_automation'
+require_relative '../upload/app_store_submission'
 
 module Mysigner
   class CLI < Thor
@@ -59,6 +62,10 @@ module Mysigner
           method_option :package_name, type: :string, desc: 'Android package name (overrides project setting)'
           method_option :release_notes, type: :string, desc: 'Release notes for Android Play Store'
           method_option :version, type: :string, desc: 'Set version name for Android (e.g., 1.2.0)'
+          method_option :release_type, type: :string, enum: %w[AFTER_APPROVAL MANUAL SCHEDULED], 
+                        desc: 'Release type for App Store: AFTER_APPROVAL, MANUAL, or SCHEDULED'
+          method_option :scheduled_date, type: :string, banner: 'ISO8601', 
+                        desc: 'Scheduled release date (ISO 8601, e.g., 2026-02-01T10:00:00Z)'
           def ship(target)
             ios_targets = ['testflight', 'appstore']
             android_targets = ['internal', 'alpha', 'beta', 'production']
@@ -419,6 +426,51 @@ module Mysigner
                 )
 
                 # Submit the new build (use its specific build number)
+                # Build metadata overrides from CLI options
+                ship_overrides = { 'auto_submit' => true }
+                ship_override_keys = ['auto_submit']
+                
+                if options[:release_type]
+                  # Validate release_type
+                  valid_types = %w[AFTER_APPROVAL MANUAL SCHEDULED]
+                  rt = options[:release_type].upcase
+                  unless valid_types.include?(rt)
+                    error "Invalid release type: #{options[:release_type]}"
+                    say "Valid options: #{valid_types.join(', ')}", :yellow
+                    exit 1
+                  end
+                  ship_overrides['release_type'] = rt
+                  ship_override_keys << 'release_type'
+                  
+                  # Validate scheduled_date is provided when SCHEDULED
+                  if rt == 'SCHEDULED' && !options[:scheduled_date]
+                    error "Scheduled release date is required when --release-type=SCHEDULED"
+                    say "Use: --scheduled-date 2026-02-01T10:00:00Z", :yellow
+                    exit 1
+                  end
+                end
+                
+                if options[:scheduled_date]
+                  begin
+                    parsed_date = Time.parse(options[:scheduled_date])
+                    if parsed_date < Time.now + 3600  # At least 1 hour in the future
+                      error "Scheduled date must be at least 1 hour in the future"
+                      exit 1
+                    end
+                    ship_overrides['earliest_release_date'] = parsed_date.utc.iso8601
+                    ship_override_keys << 'earliest_release_date'
+                    # Auto-set release_type to SCHEDULED if not already set
+                    unless ship_overrides['release_type']
+                      ship_overrides['release_type'] = 'SCHEDULED'
+                      ship_override_keys << 'release_type'
+                    end
+                  rescue ArgumentError
+                    error "Invalid date format: #{options[:scheduled_date]}"
+                    say "Use ISO 8601 format, e.g., 2026-02-01T10:00:00Z", :yellow
+                    exit 1
+                  end
+                end
+                
                 submission = Upload::AppStoreSubmission.new(
                   client,
                   config.current_organization_id,
@@ -426,8 +478,8 @@ module Mysigner
                     bundle_id: bundle_id,
                     build_number: new_build['build_number']  # Use the specific build we found
                   },
-                  metadata_overrides: { 'auto_submit' => true },
-                  override_sources: [{ type: :inline, keys: ['auto_submit'] }]
+                  metadata_overrides: ship_overrides,
+                  override_sources: [{ type: :inline, keys: ship_override_keys }]
                 )
                 
                 submission_result = submission.submit_for_review!(automation: automation)
@@ -542,6 +594,23 @@ module Mysigner
               end
 
               exit 1
+            rescue Upload::AppStoreAutomation::AutomationError => e
+              # Use enhanced error handler for App Store automation errors
+              handle_apple_api_error(e, context: {
+                title: 'App Store Automation Failed',
+                archive_path: archive_path,
+                ipa_path: ipa_path,
+                bundle_id: defined?(bundle_id) ? bundle_id : nil
+              })
+              exit 1
+            rescue Mysigner::ClientError => e
+              # Handle API client errors with actionable suggestions
+              handle_apple_api_error(e, context: {
+                title: 'API Error',
+                archive_path: archive_path,
+                ipa_path: ipa_path
+              })
+              exit 1
             rescue => e
               say ""
               say "=" * 80, :red
@@ -551,6 +620,9 @@ module Mysigner
               say "Error: #{e.message}", :red
               say ""
 
+              # Try to show actionable suggestions for unknown errors
+              show_actionable_suggestions(e.message, platform: :ios)
+
               if archive_path && File.exist?(archive_path)
                 say "Archive saved at: #{archive_path}", :yellow
               end
@@ -558,6 +630,7 @@ module Mysigner
                 say "IPA saved at: #{ipa_path}", :yellow
               end
 
+              show_debug_info(e) if ENV['DEBUG']
               exit 1
             end
           end
@@ -854,49 +927,56 @@ module Mysigner
                 say ""
                 say "Error: #{e.message}", :red
                 say ""
-                say "Make sure you're in an Android project directory.", :yellow
+                say "💡 No Android Project Found: How to fix", :cyan
+                say ""
+                say "   → Make sure you're in an Android project directory", :yellow
+                say "   → Check for build.gradle or build.gradle.kts file", :yellow
+                say "   → For React Native: cd android && check build.gradle exists", :yellow
+                say "   → For Flutter: check android/app/build.gradle exists", :yellow
+                say ""
                 exit 1
               rescue Upload::PlayStoreUploader::PartialUploadError => e
                 # AAB was uploaded but track assignment/commit failed
                 # Save build record to prevent version conflicts on retry
                 say ""
                 say "=" * 80, :red
-                say "✗ Upload Failed", :red
+                say "✗ Partial Upload - Track Assignment Failed", :red
                 say "=" * 80, :red
                 say ""
                 say "Error: #{e.message}", :red
+                say ""
                 
                 # Save build record even on partial failure (AAB is on Play Store)
                 if e.version_code
                   save_android_build_record(client, config, package_name, e.version_code, version_name)
-                  say ""
                   say "📝 Build v#{e.version_code} recorded (prevents version conflicts on retry)", :yellow
+                  say ""
                 end
                 
-                say ""
+                # Show track setup suggestions
+                show_track_not_setup_suggestions(track)
+                
                 if aab_path && File.exist?(aab_path)
-                  say "AAB saved at: #{aab_path}", :yellow
+                  say "📦 AAB saved at: #{aab_path}", :yellow
                 end
+                say ""
                 exit 1
               rescue Upload::PlayStoreUploader::UploadError => e
-                say ""
-                say "=" * 80, :red
-                say "✗ Upload Failed", :red
-                say "=" * 80, :red
-                say ""
-                say "Error: #{e.message}", :red
-                
-                # Version code conflict - suggest running again (we auto-increment now)
-                if e.message =~ /version.*code.*already|already.*used|already.*exists/i
-                  say ""
-                  say "💡 Version code conflict detected.", :yellow
-                  say "   Run the command again - mysigner will auto-increment the version.", :cyan
-                end
-                
-                say ""
-                if aab_path && File.exist?(aab_path)
-                  say "AAB saved at: #{aab_path}", :yellow
-                end
+                # Use enhanced error handler for Google Play errors
+                handle_android_api_error(e, context: {
+                  title: 'Google Play Upload Failed',
+                  aab_path: aab_path,
+                  package_name: package_name,
+                  track: track
+                })
+                exit 1
+              rescue Mysigner::ClientError => e
+                # Handle My Signer API client errors
+                handle_android_api_error(e, context: {
+                  title: 'API Error',
+                  aab_path: aab_path,
+                  package_name: package_name
+                })
                 exit 1
               rescue => e
                 say ""
@@ -906,9 +986,15 @@ module Mysigner
                 say ""
                 say "Error: #{e.message}", :red
                 say ""
+                
+                # Try to show actionable suggestions for unknown errors
+                show_actionable_suggestions(e.message, platform: :android)
+                
                 if aab_path && File.exist?(aab_path)
-                  say "AAB saved at: #{aab_path}", :yellow
+                  say "📦 AAB saved at: #{aab_path}", :yellow
                 end
+                
+                show_debug_info(e) if ENV['DEBUG']
                 exit 1
               end
             end
@@ -1696,6 +1782,10 @@ module Mysigner
           method_option :support_url, type: :string, banner: 'URL', desc: 'Support URL (required for submission)'
           method_option :marketing_url, type: :string, banner: 'URL', desc: 'Marketing URL (optional)'
           method_option :privacy_url, type: :string, banner: 'URL', desc: 'Privacy Policy URL (optional)'
+          method_option :release_type, type: :string, enum: %w[AFTER_APPROVAL MANUAL SCHEDULED], 
+                        desc: 'Release type: AFTER_APPROVAL (auto-release), MANUAL (hold for manual release), or SCHEDULED'
+          method_option :scheduled_date, type: :string, banner: 'ISO8601', 
+                        desc: 'Scheduled release date (ISO 8601 format, e.g., 2026-02-01T10:00:00Z). Required when --release-type=SCHEDULED'
           method_option :platform, type: :string, desc: 'Platform: ios or android'
           method_option :package_name, type: :string, desc: 'Android package name'
           method_option :version_code, type: :string, desc: 'Android version code to promote'
@@ -1808,6 +1898,48 @@ module Mysigner
                 override_keys << 'privacy_policy_url'
               end
               
+              if options[:release_type]
+                # Validate release_type
+                valid_types = %w[AFTER_APPROVAL MANUAL SCHEDULED]
+                rt = options[:release_type].upcase
+                unless valid_types.include?(rt)
+                  error "Invalid release type: #{options[:release_type]}"
+                  say "Valid options: #{valid_types.join(', ')}", :yellow
+                  exit 1
+                end
+                metadata_overrides['release_type'] = rt
+                override_keys << 'release_type'
+                
+                # Validate scheduled_date is provided when SCHEDULED
+                if rt == 'SCHEDULED' && !options[:scheduled_date]
+                  error "Scheduled release date is required when --release-type=SCHEDULED"
+                  say "Use: --scheduled-date 2026-02-01T10:00:00Z", :yellow
+                  exit 1
+                end
+              end
+              
+              if options[:scheduled_date]
+                begin
+                  parsed_date = Time.parse(options[:scheduled_date])
+                  if parsed_date < Time.now + 3600  # At least 1 hour in the future
+                    error "Scheduled date must be at least 1 hour in the future"
+                    exit 1
+                  end
+                  metadata_overrides['earliest_release_date'] = parsed_date.utc.iso8601
+                  override_keys << 'earliest_release_date'
+                  
+                  # Auto-set release_type to SCHEDULED if not already set
+                  unless metadata_overrides['release_type']
+                    metadata_overrides['release_type'] = 'SCHEDULED'
+                    override_keys << 'release_type'
+                  end
+                rescue ArgumentError => e
+                  error "Invalid date format: #{options[:scheduled_date]}"
+                  say "Use ISO 8601 format, e.g., 2026-02-01T10:00:00Z", :yellow
+                  exit 1
+                end
+              end
+              
               submission = Upload::AppStoreSubmission.new(
                 client,
                 config.current_organization_id,
@@ -1834,6 +1966,19 @@ module Mysigner
               end
               say ""
               
+            rescue Upload::AppStoreAutomation::AutomationError => e
+              # Use enhanced error handler for App Store automation errors
+              handle_apple_api_error(e, context: {
+                title: 'Submission Failed',
+                bundle_id: options[:bundle_id]
+              })
+              exit 1
+            rescue Mysigner::ClientError => e
+              # Handle API client errors with actionable suggestions
+              handle_apple_api_error(e, context: {
+                title: 'API Error'
+              })
+              exit 1
             rescue => e
               say ""
               say "=" * 80, :red
@@ -1842,6 +1987,11 @@ module Mysigner
               say ""
               say "Error: #{e.message}", :red
               say ""
+              
+              # Try to show actionable suggestions for unknown errors
+              show_actionable_suggestions(e.message, platform: :ios)
+              
+              show_debug_info(e) if ENV['DEBUG']
               exit 1
             end
           end

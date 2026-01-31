@@ -647,12 +647,33 @@ module Mysigner
                 say "File size: #{response.body.bytesize} bytes", :yellow
               rescue Mysigner::NotFoundError
                 error "Profile not found with ID: #{profile_id}"
+                say ""
+                say "💡 Profile Not Found: How to fix", :cyan
+                say ""
+                say "   → List available profiles: mysigner profiles", :yellow
+                say "   → Sync from Apple: mysigner sync ios", :yellow
+                say "   → Check ID is correct (IDs are numeric)", :yellow
+                say ""
                 exit 1
               rescue Mysigner::ClientError => e
                 error "Failed to download profile: #{e.message}"
+                say ""
+                say "💡 Download Failed: Try these steps", :cyan
+                say ""
+                say "   → Check your network connection", :yellow
+                say "   → Verify API token is valid: mysigner status", :yellow
+                say "   → Re-authenticate if needed: mysigner login", :yellow
+                say ""
                 exit 1
               rescue => e
                 error "Failed to save file: #{e.message}"
+                say ""
+                say "💡 File Save Failed: Check these", :cyan
+                say ""
+                say "   → Verify you have write permissions to the directory", :yellow
+                say "   → Check disk space is available", :yellow
+                say "   → Try specifying a different output path with --output", :yellow
+                say ""
                 exit 1
               end
             when 'delete'
@@ -954,12 +975,33 @@ module Mysigner
                 say "File size: #{response.body.bytesize} bytes", :yellow
               rescue Mysigner::NotFoundError
                 error "Certificate not found with ID: #{certificate_id}"
+                say ""
+                say "💡 Certificate Not Found: How to fix", :cyan
+                say ""
+                say "   → List available certificates: mysigner certificates", :yellow
+                say "   → Sync from Apple: mysigner sync ios", :yellow
+                say "   → Check the ID is correct (IDs are numeric)", :yellow
+                say ""
                 exit 1
               rescue Mysigner::ClientError => e
                 error "Failed to download certificate: #{e.message}"
+                say ""
+                say "💡 Download Failed: Try these steps", :cyan
+                say ""
+                say "   → Check your network connection", :yellow
+                say "   → Verify API token is valid: mysigner status", :yellow
+                say "   → Re-authenticate if needed: mysigner login", :yellow
+                say ""
                 exit 1
               rescue => e
                 error "Failed to save file: #{e.message}"
+                say ""
+                say "💡 File Save Failed: Check these", :cyan
+                say ""
+                say "   → Verify you have write permissions to the directory", :yellow
+                say "   → Check disk space is available", :yellow
+                say "   → Try specifying a different output path with --output", :yellow
+                say ""
                 exit 1
               end
             when 'help'
@@ -1110,9 +1152,26 @@ module Mysigner
 
               rescue Signing::KeystoreManager::KeystoreError => e
                 error "Upload failed: #{e.message}"
+                say ""
+                say "💡 Keystore Upload Failed: Common issues", :cyan
+                say ""
+                say "   → Verify the keystore file is valid (.jks or .keystore)", :yellow
+                say "   → Check keystore password is correct", :yellow
+                say "   → Check key alias exists in the keystore", :yellow
+                say "   → Verify key password is correct", :yellow
+                say ""
+                say "   Test with: keytool -list -keystore #{keystore_path}", :green
+                say ""
                 exit 1
               rescue Mysigner::ClientError => e
                 error "API error: #{e.message}"
+                say ""
+                say "💡 API Error: Try these steps", :cyan
+                say ""
+                say "   → Check your network connection", :yellow
+                say "   → Verify API token is valid: mysigner status", :yellow
+                say "   → Re-authenticate if needed: mysigner login", :yellow
+                say ""
                 exit 1
               end
 
@@ -1149,9 +1208,23 @@ module Mysigner
 
               rescue Signing::KeystoreManager::KeystoreNotFoundError => e
                 error "Keystore not found: #{e.message}"
+                say ""
+                say "💡 Keystore Not Found: How to fix", :cyan
+                say ""
+                say "   → List available keystores: mysigner keystores", :yellow
+                say "   → Upload a keystore: mysigner keystore upload <path>", :yellow
+                say "   → Check the ID is correct (IDs are numeric)", :yellow
+                say ""
                 exit 1
               rescue Signing::KeystoreManager::DownloadError => e
                 error "Download failed: #{e.message}"
+                say ""
+                say "💡 Download Failed: Try these steps", :cyan
+                say ""
+                say "   → Check your network connection", :yellow
+                say "   → Verify API token is valid: mysigner status", :yellow
+                say "   → Re-authenticate if needed: mysigner login", :yellow
+                say ""
                 exit 1
               end
 
@@ -1169,6 +1242,12 @@ module Mysigner
               
               unless keystore
                 error "Keystore not found with ID: #{keystore_id}"
+                say ""
+                say "💡 Keystore Not Found: How to fix", :cyan
+                say ""
+                say "   → List available keystores: mysigner keystores", :yellow
+                say "   → Upload a keystore: mysigner keystore upload <path>", :yellow
+                say ""
                 exit 1
               end
 
@@ -1205,8 +1284,23 @@ module Mysigner
                 say "✓ Keystore activated!", :green
                 say ""
                 say "#{result['name']} is now the default keystore", :cyan
+              rescue Mysigner::NotFoundError
+                error "Keystore not found with ID: #{keystore_id}"
+                say ""
+                say "💡 Keystore Not Found: How to fix", :cyan
+                say ""
+                say "   → List available keystores: mysigner keystores", :yellow
+                say "   → Upload a keystore: mysigner keystore upload <path>", :yellow
+                say ""
+                exit 1
               rescue Mysigner::ClientError => e
                 error "Activation failed: #{e.message}"
+                say ""
+                say "💡 Activation Failed: Try these steps", :cyan
+                say ""
+                say "   → Verify keystore ID is correct: mysigner keystores", :yellow
+                say "   → Check API token is valid: mysigner status", :yellow
+                say ""
                 exit 1
               end
 

@@ -46,8 +46,9 @@ module Mysigner
           # Optionally wait for processing
           if wait_for_processing
             say_waiting_for_processing
-            # TODO: Poll App Store Connect API for build status
-            # This requires the App Store Connect API integration
+            # Note: Build processing status is polled via the dashboard's sync API
+            # in build_commands.rb, not directly here. This flag is reserved for
+            # future use or manual uploads outside the `ship` command flow.
           end
           
           {

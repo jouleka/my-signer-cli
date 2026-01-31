@@ -149,7 +149,7 @@ RSpec.describe 'mysigner switch', type: :cli do
             {
               'id' => '456',
               'name' => 'Another Org',
-              'role' => 'member',
+              'role' => 'developer',
               'member_count' => 10
             },
             {
@@ -200,7 +200,7 @@ RSpec.describe 'mysigner switch', type: :cli do
       output = capture_stdout { cli.switch }
       expect(output).to include('Available organizations:')
       expect(output).to include('1. Current Org (current) (admin)')
-      expect(output).to include('2. Another Org (member)')
+      expect(output).to include('2. Another Org (developer)')
       expect(output).to include('3. Third Org (owner)')
     end
 
@@ -277,9 +277,9 @@ RSpec.describe 'mysigner switch', type: :cli do
         allow(config).to receive(:save)
       end
 
-      it 'defaults to member' do
+      it 'defaults to viewer' do
         output = capture_stdout { cli.switch }
-        expect(output).to include('2. Another Org (member)')
+        expect(output).to include('2. Another Org (viewer)')
       end
     end
   end

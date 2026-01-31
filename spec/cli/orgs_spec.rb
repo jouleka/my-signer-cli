@@ -177,7 +177,7 @@ RSpec.describe 'mysigner orgs', type: :cli do
             {
               'id' => '456',
               'name' => 'Another Org',
-              'role' => 'member',
+              'role' => 'developer',
               'member_count' => 10
             },
             {
@@ -225,7 +225,7 @@ RSpec.describe 'mysigner orgs', type: :cli do
     it 'displays all roles' do
       output = capture_stdout { cli.orgs }
       expect(output).to include('Role: admin')
-      expect(output).to include('Role: member')
+      expect(output).to include('Role: developer')
       expect(output).to include('Role: owner')
     end
 
@@ -271,9 +271,9 @@ RSpec.describe 'mysigner orgs', type: :cli do
       allow(client).to receive(:get).with('/api/v1/organizations').and_return(api_response)
     end
 
-    it 'defaults role to member' do
+    it 'defaults role to viewer' do
       output = capture_stdout { cli.orgs }
-      expect(output).to include('Role: member')
+      expect(output).to include('Role: viewer')
     end
 
     it 'defaults member_count to 0' do
@@ -302,7 +302,7 @@ RSpec.describe 'mysigner orgs', type: :cli do
             {
               'id' => '456',
               'name' => 'Org Two',
-              'role' => 'member',
+              'role' => 'developer',
               'member_count' => 3
             }
           ]

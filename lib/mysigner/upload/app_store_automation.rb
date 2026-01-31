@@ -98,7 +98,7 @@ module Mysigner
         )
 
         Array(response[:data]['data']['apps']).first
-      rescue => e
+      rescue StandardError => e
         raise AutomationError, "Failed to fetch app: #{e.message}"
       end
 
@@ -159,16 +159,28 @@ module Mysigner
           params[:build_number] = build_info[:build_number] if build_info[:build_number]
         end
         
+        # Apply min_build_number filter if set in release config
+        if build_info[:min_build_number]
+          params[:min_build_number] = build_info[:min_build_number]
+        end
+        
         response = @client.get(
           "/api/v1/organizations/#{@organization_id}/builds",
           params: params.compact
         )
 
         builds = Array(response[:data]['data']['builds'])
+        
+        # Smart build selection: filter by min_build_number client-side if API doesn't support it
+        if build_info[:min_build_number] && builds.any?
+          min_bn = build_info[:min_build_number].to_i
+          builds = builds.select { |b| b['build_number'].to_i >= min_bn }
+        end
+        
         builds.first  # Already ordered by uploaded_date desc
       rescue Mysigner::NotFoundError
         nil
-      rescue => e
+      rescue StandardError => e
         raise AutomationError, "Failed to fetch build: #{e.message}"
       end
 
@@ -212,7 +224,7 @@ module Mysigner
         )
 
         Array(response[:data]['data']['versions']).first
-      rescue => e
+      rescue StandardError => e
         raise AutomationError, "Failed to fetch App Store versions: #{e.message}"
       end
 
@@ -235,8 +247,9 @@ module Mysigner
             app_id: app_id,
             version_string: version_string,
             release_type: determine_release_type(metadata, overrides),
+            earliest_release_date: determine_earliest_release_date(metadata, overrides),
             attributes: extract_version_attributes(metadata, overrides)
-          }
+          }.compact
         }
 
         response = @client.post(
@@ -245,8 +258,16 @@ module Mysigner
         )
 
         response[:data]['data']
-      rescue => e
+      rescue StandardError => e
         raise AutomationError, "Failed to create App Store version: #{e.message}"
+      end
+
+      def determine_earliest_release_date(metadata, overrides)
+        date = overrides['earliest_release_date'] || metadata['earliest_release_date']
+        return nil unless date
+        
+        # Convert to ISO 8601 if not already
+        date.respond_to?(:iso8601) ? date.iso8601 : date.to_s
       end
 
       def update_version(version_id, metadata, overrides)
@@ -260,12 +281,24 @@ module Mysigner
           "/api/v1/organizations/#{@organization_id}/app_store_versions/#{version_id}",
           body: payload
         )
-      rescue => e
+      rescue StandardError => e
         raise AutomationError, "Failed to update App Store version: #{e.message}"
       end
 
       def determine_release_type(metadata, overrides)
-        overrides['release_type'] || metadata['release_type'] || 'MANUAL'
+        result = overrides['release_type'] || metadata['release_type']
+        
+        # FIX v7: Changed default from MANUAL to AFTER_APPROVAL
+        # Log deprecation notice if no explicit release_type is set
+        if result.nil?
+          if ENV['MYSIGNER_DEBUG'] || @deprecation_warned.nil?
+            puts "   Note: Using default release_type AFTER_APPROVAL (was MANUAL in older versions)"
+            @deprecation_warned = true
+          end
+          result = 'AFTER_APPROVAL'
+        end
+        
+        result
       end
 
       def extract_version_attributes(metadata, overrides)
@@ -287,7 +320,7 @@ module Mysigner
         )
 
         puts "✓ Attached build to App Store version"
-      rescue => e
+      rescue StandardError => e
         raise AutomationError, "Failed to attach build to version: #{e.message}"
       end
 
@@ -344,7 +377,7 @@ module Mysigner
         )
       rescue AutomationError
         raise
-      rescue => e
+      rescue StandardError => e
         raise AutomationError, "Failed to submit for review: #{e.message}"
       end
 

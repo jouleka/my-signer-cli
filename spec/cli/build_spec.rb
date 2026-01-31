@@ -475,7 +475,7 @@ RSpec.describe 'mysigner build', type: :cli do
   describe 'help text' do
     it 'has description' do
       help_output = capture_stdout { Mysigner::CLI.start(['help', 'build']) }
-      expect(help_output).to include('Build iOS archive')
+      expect(help_output).to include('Build .xcarchive only')
     end
 
     it 'shows options' do

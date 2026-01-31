@@ -30,45 +30,52 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
   describe 'when not logged in' do
     before do
       allow(config).to receive(:exists?).and_return(false)
-      allow(config).to receive(:load)
-      allow(config).to receive(:api_url).and_return(nil)
-      allow(config).to receive(:api_token).and_return(nil)
-      allow(config).to receive(:organization_id).and_return(nil)
+      # Make exit actually stop execution
+      allow(cli).to receive(:exit) { throw :system_exit }
     end
 
     it 'shows error message' do
-      output = capture_stdout { cli.ship('testflight') }
+      output = capture_stdout do
+        catch(:system_exit) { cli.ship('testflight') }
+      end
       expect(output).to include('Not logged in')
     end
 
     it 'suggests login command' do
-      output = capture_stdout { cli.ship('testflight') }
+      output = capture_stdout do
+        catch(:system_exit) { cli.ship('testflight') }
+      end
       expect(output).to include('mysigner login')
     end
 
     it 'exits with code 1' do
-      expect(cli).to receive(:exit).with(1)
-      cli.ship('testflight')
+      expect(cli).to receive(:exit).with(1) { throw :system_exit }
+      catch(:system_exit) { cli.ship('testflight') }
     end
   end
 
-  describe 'when target is not testflight' do
+  describe 'when target is invalid' do
     before do
       allow(config).to receive(:exists?).and_return(true)
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return('test@example.com')
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(cli).to receive(:exit) { throw :system_exit }
     end
 
-    it 'shows error message' do
-      output = capture_stdout { cli.ship('appstore') }
-      expect(output).to include("Only 'testflight' target is supported")
+    it 'shows error message for invalid target' do
+      output = capture_stdout do
+        catch(:system_exit) { cli.ship('invalid_target') }
+      end
+      expect(output).to include("Invalid target")
     end
 
     it 'exits with code 1' do
-      expect(cli).to receive(:exit).with(1)
-      cli.ship('appstore')
+      expect(cli).to receive(:exit).with(1) { throw :system_exit }
+      catch(:system_exit) { cli.ship('invalid_target') }
     end
   end
 
@@ -106,6 +113,8 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return('test@example.com')
+      allow(config).to receive(:current_organization_id).and_return(org_id)
       
       # Set default options
       cli.options = { configuration: 'Release', scheme: nil, wait: false, team: nil }
@@ -268,24 +277,30 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return('test@example.com')
+      allow(config).to receive(:current_organization_id).and_return(org_id)
       cli.options = { configuration: 'Release', scheme: nil, wait: false, team: nil }
     end
 
     context 'when project detection fails' do
       before do
+        allow(client).to receive(:get).and_return({ data: {} })
         allow(Mysigner::Build::Detector).to receive(:detect).and_raise(
           Mysigner::Build::Detector::NoProjectError.new('No project found')
         )
+        allow(cli).to receive(:exit) { throw :system_exit }
       end
 
       it 'shows error message' do
-        output = capture_stdout { cli.ship('testflight') }
+        output = capture_stdout do
+          catch(:system_exit) { cli.ship('testflight') }
+        end
         expect(output).to include('No project found')
       end
 
       it 'exits with code 1' do
-        expect(cli).to receive(:exit).with(1)
-        cli.ship('testflight')
+        expect(cli).to receive(:exit).with(1) { throw :system_exit }
+        catch(:system_exit) { cli.ship('testflight') }
       end
     end
 
@@ -347,16 +362,20 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
           Mysigner::Export::Exporter::ExportError.new('Export failed')
         )
         allow(client).to receive(:get) # Stub API calls
+        allow(File).to receive(:exist?).and_return(true)
+        allow(cli).to receive(:exit) { throw :system_exit }
       end
 
       it 'shows error message' do
-        output = capture_stdout { cli.ship('testflight') }
+        output = capture_stdout do
+          catch(:system_exit) { cli.ship('testflight') }
+        end
         expect(output).to include('Export failed')
       end
 
       it 'exits with code 1' do
-        expect(cli).to receive(:exit).with(1)
-        cli.ship('testflight')
+        expect(cli).to receive(:exit).with(1) { throw :system_exit }
+        catch(:system_exit) { cli.ship('testflight') }
       end
     end
 
@@ -389,16 +408,21 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
         allow(Mysigner::Export::Exporter).to receive(:new).and_return(exporter)
         allow(exporter).to receive(:export!).and_return('/path/to/app.ipa')
         allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
+        allow(File).to receive(:exist?).and_return(true)
+        allow(File).to receive(:size).and_return(10_000_000)
+        allow(cli).to receive(:exit) { throw :system_exit }
       end
 
       it 'shows error message' do
-        output = capture_stdout { cli.ship('testflight') }
+        output = capture_stdout do
+          catch(:system_exit) { cli.ship('testflight') }
+        end
         expect(output).to include('App Store Connect credentials not configured')
       end
 
       it 'exits with code 1' do
-        expect(cli).to receive(:exit).with(1)
-        cli.ship('testflight')
+        expect(cli).to receive(:exit).with(1) { throw :system_exit }
+        catch(:system_exit) { cli.ship('testflight') }
       end
     end
   end
@@ -406,8 +430,7 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
   describe 'help text' do
     it 'has description' do
       help_output = capture_stdout { Mysigner::CLI.start(['help', 'ship']) }
-      expect(help_output).to include('Build, export, and upload to TestFlight')
-      expect(help_output).to include('one command')
+      expect(help_output).to include('Build your project, sign it, and upload')
     end
 
     it 'shows options' do

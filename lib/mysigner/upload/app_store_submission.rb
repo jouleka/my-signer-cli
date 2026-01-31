@@ -35,10 +35,23 @@ module Mysigner
             puts ""
           end
           
+          # Enrich build_info with config values for smart build selection
+          enriched_build_info = symbolize_keys(@build_info)
+          if metadata
+            # min_build_number: skip builds below this number
+            if metadata['build_number'] && !enriched_build_info[:build_number]
+              enriched_build_info[:min_build_number] = metadata['build_number'].to_i
+            end
+            # Use version_string from config if not specified
+            if metadata['version_string'] && !enriched_build_info[:version]
+              enriched_build_info[:version] = metadata['version_string']
+            end
+          end
+          
           automation_result = if automation
             automation.perform!(
               metadata: metadata,
-              build_info: symbolize_keys(@build_info),
+              build_info: enriched_build_info,
               metadata_overrides: @metadata_overrides
             )
           else
@@ -64,17 +77,38 @@ module Mysigner
           )
           
           if response[:success]
-            response[:data]
+            data = response[:data]
+            # API returns { app_store_releases: [...] } - extract first release
+            if data.is_a?(Hash) && data['app_store_releases'].is_a?(Array)
+              data['app_store_releases'].first
+            elsif data.is_a?(Hash) && data['app_store_release']
+              # Single release format
+              data['app_store_release']
+            else
+              data
+            end
           else
             nil
           end
         rescue Mysigner::NotFoundError
           # No configuration found - that's okay
           nil
-        rescue => e
+        rescue StandardError => e
           puts "⚠️  Could not fetch release metadata: #{e.message}"
           nil
         end
+      end
+
+      # Fetch release config and extract min_build_number for smart build selection
+      def fetch_release_config
+        metadata = fetch_release_metadata
+        return {} unless metadata
+        
+        config = {}
+        config[:min_build_number] = metadata['build_number'].to_i if metadata['build_number']
+        config[:release_type] = metadata['release_type'] if metadata['release_type']
+        config[:earliest_release_date] = metadata['earliest_release_date'] if metadata['earliest_release_date']
+        config
       end
 
       def merge_metadata(api_metadata)
@@ -118,16 +152,32 @@ module Mysigner
         puts "📝 Release Configuration:"
         print_metadata_line('Bundle ID', metadata['bundle_identifier'], 'bundle_identifier')
         print_metadata_line('App Name', metadata['app_name'], 'app_name') if metadata['app_name']
+        
+        # Version info from config
+        print_metadata_line('Version String', metadata['version_string'], 'version_string') if metadata['version_string']
+        print_metadata_line('Min Build #', metadata['build_number'], 'build_number') if metadata['build_number']
 
         if metadata['whats_new'] && !metadata['whats_new'].to_s.strip.empty?
           puts "   What's New: #{truncate(metadata['whats_new'])}#{override_suffix('whats_new')}"
         else
           puts "   What's New: —#{override_suffix('whats_new')}"
         end
+        
+        if metadata['promotional_text'] && !metadata['promotional_text'].to_s.strip.empty?
+          puts "   Promo Text: #{truncate(metadata['promotional_text'])}#{override_suffix('promotional_text')}"
+        end
 
         print_metadata_line('Support URL', metadata['support_url'], 'support_url')
         print_metadata_line('Marketing URL', metadata['marketing_url'], 'marketing_url')
         print_metadata_line('Privacy URL', metadata['privacy_policy_url'], 'privacy_policy_url')
+        
+        # Release settings
+        release_type_label = format_release_type(metadata['release_type'])
+        print_metadata_line('Release Type', release_type_label, 'release_type')
+        if metadata['release_type'] == 'SCHEDULED' && metadata['earliest_release_date']
+          print_metadata_line('Scheduled Date', metadata['earliest_release_date'], 'earliest_release_date')
+        end
+        
         print_metadata_toggle('Auto-submit', metadata['auto_submit'], 'auto_submit')
         print_metadata_toggle('Phased Release', metadata['phased_release'], 'phased_release')
 
@@ -139,6 +189,15 @@ module Mysigner
 
         warn_missing_submission_fields(metadata)
         puts ""
+      end
+      
+      def format_release_type(release_type)
+        case release_type
+        when 'AFTER_APPROVAL' then 'After Approval (auto-release)'
+        when 'MANUAL' then 'Manual (hold for manual release)'
+        when 'SCHEDULED' then 'Scheduled'
+        else release_type || 'After Approval (default)'
+        end
       end
 
       def deep_merge(base, overrides)
