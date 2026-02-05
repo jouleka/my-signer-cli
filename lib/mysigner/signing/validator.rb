@@ -21,7 +21,7 @@ module Mysigner
           result[:errors] << "No development team set for target '#{@target_name}'"
           result[:errors] << ""
           result[:errors] << "Fix Option 1: Add team to My Signer"
-          result[:errors] << "  1. Open https://app.mysigner.app"
+          result[:errors] << "  1. Open https://mysigner.dev"
           result[:errors] << "  2. Go to Settings → App Store Connect"
           result[:errors] << "  3. Add your Team ID"
           result[:errors] << "  4. Run: mysigner build (team will auto-fetch)"

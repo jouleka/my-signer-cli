@@ -272,7 +272,7 @@ module Mysigner
             puts ""
             puts "You can either:"
             puts "  1. Keep your current Xcode team (go back and select option 1)"
-            puts "  2. Add it to My Signer web: https://app.mysigner.app"
+            puts "  2. Add it to My Signer web: https://mysigner.dev"
             puts "     → Open your organization → App Store Connect → Edit/Add credentials → Team ID field"
             puts "  3. Enter it manually (go back and select option 3)"
             puts ""
@@ -594,7 +594,7 @@ module Mysigner
             puts "Current My Signer org:            #{org_name} (No team configured)"
             puts ""
             puts "You can continue, but the wizard won't be able to fetch the team from My Signer."
-            puts "Consider adding Team ID to this org at: https://app.mysigner.app"
+            puts "Consider adding Team ID to this org at: https://mysigner.dev"
             puts ""
             print "Continue? (Y/n): "
             answer = get_input.downcase

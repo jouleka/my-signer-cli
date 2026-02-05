@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
 
   spec.summary       = %q{CLI tool for iOS and Android code signing automation via My Signer API}
   spec.description   = %q{Command-line interface for managing iOS certificates, devices, provisioning profiles, and Android keystores. Build, sign, and upload to App Store Connect and Google Play with simple commands like 'mysigner ship testflight' and 'mysigner ship internal --platform android'.}
-  spec.homepage      = "https://github.com/jurgenleka/my-signer-cli"
+  spec.homepage      = "https://mysigner.dev"
   spec.license       = "Apache-2.0"
 
   spec.required_ruby_version = ">= 3.2.0"
@@ -22,8 +22,8 @@ Gem::Specification.new do |spec|
     spec.metadata["allowed_push_host"] = "https://rubygems.org"
 
     spec.metadata["homepage_uri"] = spec.homepage
-    spec.metadata["source_code_uri"] = "https://github.com/jurgenleka/my-signer-cli"
-    spec.metadata["changelog_uri"] = "https://github.com/jurgenleka/my-signer-cli/blob/main/CHANGELOG.md"
+    spec.metadata["changelog_uri"] = "https://mysigner.dev/docs/changelog"
+    spec.metadata["documentation_uri"] = "https://mysigner.dev/docs/commands"
   else
     raise "RubyGems 2.0 or newer is required to protect against " \
       "public gem pushes."
@@ -45,7 +45,7 @@ Gem::Specification.new do |spec|
     \e[35miOS:\e[0m        mysigner ship testflight
     \e[35mAndroid:\e[0m    mysigner ship internal --platform android
 
-    \e[36mNeed docs?\e[0m https://github.com/jurgenleka/my-signer-cli
+    \e[36mDocs:\e[0m https://mysigner.dev/docs/commands
   MSG
 
   # Specify which files should be added to the gem when it is released.

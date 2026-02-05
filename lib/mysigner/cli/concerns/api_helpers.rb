@@ -18,7 +18,7 @@ module Mysigner
           end
           
           # Default to production
-          'https://api.mysigner.app'
+          'https://mysigner.dev'
         end
 
         def localhost_accessible?(url)

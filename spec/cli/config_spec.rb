@@ -58,7 +58,7 @@ RSpec.describe 'mysigner config', type: :cli do
   describe 'when logged in with full config' do
     let(:display_config) {
       {
-        api_url: 'https://api.mysigner.app',
+        api_url: 'https://mysigner.dev',
         user_email: 'test@example.com',
         current_organization: 'Test Org (ID: 123)',
         current_token: 'sk_test_...xyz'
@@ -79,7 +79,7 @@ RSpec.describe 'mysigner config', type: :cli do
     it 'displays API URL' do
       output = capture_stdout { cli.config }
       expect(output).to include('api_url')
-      expect(output).to include('https://api.mysigner.app')
+      expect(output).to include('https://mysigner.dev')
     end
 
     it 'displays user email' do
@@ -124,7 +124,7 @@ RSpec.describe 'mysigner config', type: :cli do
   describe 'when logged in without org_id' do
     let(:display_config) {
       {
-        api_url: 'https://api.mysigner.app',
+        api_url: 'https://mysigner.dev',
         user_email: 'test@example.com',
         current_organization: '(not set)',
         current_token: '(not set)'
@@ -144,7 +144,7 @@ RSpec.describe 'mysigner config', type: :cli do
 
     it 'displays API URL' do
       output = capture_stdout { cli.config }
-      expect(output).to include('https://api.mysigner.app')
+      expect(output).to include('https://mysigner.dev')
     end
 
     it 'shows not set message for organization' do
@@ -218,7 +218,7 @@ RSpec.describe 'mysigner config', type: :cli do
     context 'when display has extra keys' do
       let(:display_config) {
         {
-          api_url: 'https://api.mysigner.app',
+          api_url: 'https://mysigner.dev',
           user_email: 'test@example.com',
           current_organization: 'Test Org (ID: 123)',
           current_token: 'sk_test_...xyz',

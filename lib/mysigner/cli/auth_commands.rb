@@ -11,8 +11,8 @@ module Mysigner
             say "Install:     #{File.expand_path('../../../..', __FILE__)}", :white
             say "Config:      #{Config::CONFIG_FILE}", :white
             say ""
-            say "Repository:  https://github.com/yourusername/my-signer-cli", :white
-            say "Issues:      https://github.com/yourusername/my-signer-cli/issues", :white
+            say "Docs:        https://mysigner.dev/docs/commands", :white
+            say "Support:     https://mysigner.dev/landing#contact", :white
           end
 
           desc "login", "Log in with existing API token (⭐ first-timers: use 'onboard' instead)"

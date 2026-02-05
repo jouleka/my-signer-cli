@@ -11,7 +11,7 @@ RSpec.describe 'mysigner ship android', type: :cli do
   let(:cli) { Mysigner::CLI.new }
   let(:config) { instance_double(Mysigner::Config) }
   let(:client) { instance_double(Mysigner::Client) }
-  let(:api_url) { 'https://api.mysigner.app' }
+  let(:api_url) { 'https://mysigner.dev' }
   let(:api_token) { 'sk_test_abc123xyz' }
   let(:org_id) { '123' }
 

@@ -1,30 +1,32 @@
 # My Signer CLI
 
-**One command from code to TestFlight. No provisioning hell, no manual certificate wrangling.**
+**One command from code to TestFlight or Google Play. No provisioning hell, no manual certificate wrangling.**
 
-Command-line interface for [My Signer](https://github.com/jurgenleka/my-signer) - the modern iOS code signing automation tool.
+Command-line interface for [My Signer](https://github.com/jurgenleka/my-signer) - the modern mobile app signing and deployment automation tool for iOS and Android.
 
 ---
 
 ## What is My Signer CLI?
 
-My Signer CLI is a command-line tool that connects to the My Signer API to manage iOS certificates, devices, and provisioning profiles directly from your terminal or CI/CD pipeline.
+My Signer CLI is a command-line tool that connects to the My Signer API to manage iOS/Android signing assets and deploy apps directly from your terminal or CI/CD pipeline.
 
 ### The Problem We Solve
 
-iOS developers spend hours dealing with:
+Mobile developers spend hours dealing with:
 - ❌ Manual device registration through Apple Developer Portal
 - ❌ Downloading and installing provisioning profiles
-- ❌ Certificate management and renewal
-- ❌ Complex Xcode build configurations
-- ❌ TestFlight upload processes
+- ❌ Certificate and keystore management
+- ❌ Complex Xcode/Gradle build configurations
+- ❌ TestFlight and Google Play upload processes
+- ❌ Version code conflicts on Play Store
 
 ### Our Solution
 
-✅ **Simple Commands** - `mysigner device add`, `mysigner profile download`  
+✅ **One Command Deploy** - `mysigner ship testflight` or `mysigner ship production --platform android`  
+✅ **iOS + Android** - Full support for both platforms  
 ✅ **CI/CD Ready** - Automate builds in GitHub Actions, GitLab CI, etc.  
 ✅ **API-Powered** - Backed by My Signer API for team collaboration  
-✅ **Fast** - No GUI overhead, pure command-line efficiency  
+✅ **Smart Version Handling** - Auto-increment version codes for Android  
 ✅ **Secure** - Token-based authentication, credentials stored locally
 
 ---
@@ -72,7 +74,23 @@ mysigner login
 # Select your organization
 ```
 
-### 3. Start Managing Your iOS Signing
+### 3. Ship Your App
+
+```bash
+# iOS: Build and upload to TestFlight
+mysigner ship testflight
+
+# iOS: Build and submit to App Store
+mysigner ship appstore
+
+# Android: Build and upload to internal testing
+mysigner ship internal --platform android
+
+# Android: Build and upload to production
+mysigner ship production --platform android
+```
+
+### 4. Manage Signing Assets
 
 ```bash
 # List devices
@@ -95,12 +113,64 @@ mysigner status
 
 ## Commands
 
+### Build & Ship (Main Workflow)
+
+```bash
+# iOS
+mysigner ship testflight                   # Build + upload to TestFlight
+mysigner ship appstore                     # Build + submit to App Store
+mysigner ship appstore --submit-for-review # Auto-submit for review
+
+# Android
+mysigner ship internal --platform android  # Build + upload to internal testing
+mysigner ship alpha --platform android     # Build + upload to closed testing
+mysigner ship beta --platform android      # Build + upload to open testing
+mysigner ship production --platform android # Build + upload to production
+
+# Advanced options
+mysigner ship testflight --wait            # Wait for Apple to process build
+mysigner ship appstore --release-type SCHEDULED --scheduled-date 2026-02-01T10:00:00Z
+mysigner ship internal --platform android --release-notes "Bug fixes"
+```
+
+### Submit Existing Builds
+
+```bash
+# Submit already-uploaded iOS build
+mysigner submit                            # Submit latest build
+mysigner submit --bundle-id com.app.id     # Specify bundle ID
+mysigner submit --build-number 42          # Submit specific build
+
+# Promote Android build to different track
+mysigner submit production --platform android
+mysigner submit beta --platform android --version-code 123
+```
+
+### Build & Export (Advanced)
+
+```bash
+mysigner build                             # Build .xcarchive only
+mysigner build --configuration Debug       # Specify configuration
+mysigner build --target MyApp              # Specify target
+mysigner export ARCHIVE_PATH               # Export archive to IPA
+mysigner upload testflight IPA_PATH        # Upload existing IPA
+```
+
+### Diagnostics
+
+```bash
+mysigner doctor                            # Run health check (fixes common issues)
+mysigner doctor --platform ios             # Check iOS setup only
+mysigner doctor --platform android         # Check Android setup only
+mysigner status                            # Check connection and show stats
+```
+
 ### Authentication
 
 ```bash
 mysigner login              # Authenticate with API token
 mysigner logout             # Clear stored credentials
-mysigner status             # Check connection and show stats
+mysigner onboard            # Guided setup wizard
 ```
 
 ### Organizations
@@ -149,11 +219,31 @@ mysigner bundle-ids --search "com.example" # Search bundle IDs
 mysigner bundle-id show ID                 # Show bundle ID details
 ```
 
+### Android Keystores
+
+```bash
+mysigner keystore list                     # List all keystores
+mysigner keystore upload PATH              # Upload keystore file
+mysigner keystore download ID              # Download keystore
+mysigner keystore activate ID              # Set as active keystore
+mysigner keystore delete ID                # Delete keystore
+```
+
 ### Sync
 
 ```bash
-mysigner sync               # Trigger App Store Connect sync
-mysigner sync:status        # Check sync status
+mysigner sync                # Sync from App Store Connect (iOS)
+mysigner sync android        # Sync from Google Play
+mysigner sync all            # Sync both platforms
+mysigner sync --force        # Force sync even if recently synced
+```
+
+### Signing Configuration
+
+```bash
+mysigner signing configure                 # Interactive signing setup wizard
+mysigner signing configure --target Widget # Configure specific target
+mysigner signing configure --all-targets   # Configure all targets
 ```
 
 ---
@@ -179,32 +269,30 @@ mysigner config set KEY VAL # Update configuration value
 
 ## Development Status
 
-**Current Version**: 0.1.0 (Alpha - Functional)
+**Current Version**: 0.1.0
 
 ✅ **Complete**:
-- ✅ Gem structure and dependencies (Thor, Faraday, Reline, Base64)
+- ✅ Gem structure and dependencies (Thor, Faraday, Reline, Google APIs)
 - ✅ Config management (`~/.mysigner/config.yml`)
 - ✅ API client (Faraday with retry & error handling)
-- ✅ Core commands (login, logout, config, status, orgs, switch)
-- ✅ Resource commands (devices, profiles, certificates)
-- ✅ 90 RSpec tests (100% passing)
-- ✅ Interactive prompts and confirmations
-- ✅ Binary file downloads
-
-📅 **Next Up**:
-- v0.1.0 Polish & Release
-- OR Phase 6: Build & Ship
-  - `mysigner build` - Xcode build wrapper
-  - `mysigner upload testflight` - TestFlight upload
-- `mysigner ship` - One-command deploy (TestFlight & App Store)
+- ✅ Core commands (login, logout, config, status, orgs, switch, onboard)
+- ✅ Resource commands (devices, profiles, certificates, bundle-ids)
+- ✅ **iOS Build & Ship** (`mysigner ship testflight`, `mysigner ship appstore`)
+- ✅ **Android Build & Ship** (`mysigner ship internal/alpha/beta/production`)
+- ✅ Android keystore management (`mysigner keystore upload/download/activate`)
+- ✅ Automatic version code increment for Android
+- ✅ App Store submission with release types (AFTER_APPROVAL, MANUAL, SCHEDULED)
+- ✅ Project detection (Native iOS/Android, React Native, Flutter, Capacitor/Ionic)
+- ✅ `mysigner doctor` health check with auto-fix capabilities
+- ✅ 90+ RSpec tests
+- ✅ Interactive prompts and wizards
 
 📅 **Future**:
 - Pretty tables (TTY::Table)
 - Progress spinners (TTY::Spinner)
 - `--json` flag for scripting
-- Xcode project detection
-- Interactive wizards
-- CI/CD templates
+- CI/CD templates (GitHub Actions, GitLab CI)
+- Phased release support
 
 See the [main project roadmap](https://github.com/jurgenleka/my-signer/blob/main/ROADMAP.md) for detailed plans.
 
@@ -245,23 +333,26 @@ bundle exec rake install
 My Signer CLI is a **standalone Ruby gem** that communicates with the My Signer API via HTTP:
 
 ```
-┌─────────────────┐
-│  mysigner CLI   │
-│   (This Repo)   │
-└────────┬────────┘
-         │ HTTP REST API
-         │ Bearer Token Auth
-         ▼
-┌─────────────────┐
-│ My Signer API   │
-│  (Rails App)    │
-└────────┬────────┘
-         │ JWT Auth
-         ▼
-┌─────────────────┐
-│  App Store      │
-│  Connect API    │
-└─────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                      mysigner CLI                            │
+│                       (This Repo)                            │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────────────┐ │
+│  │ Auth/Config │  │ Build/Export │  │   Upload/Submit     │ │
+│  └─────────────┘  └──────────────┘  └─────────────────────┘ │
+└────────────────────────┬────────────────────────────────────┘
+                         │ HTTP REST API
+                         │ Bearer Token Auth
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     My Signer API                            │
+│                      (Rails App)                             │
+└───────┬─────────────────────────────────────┬───────────────┘
+        │ JWT Auth                            │ Service Account
+        ▼                                     ▼
+┌─────────────────┐                   ┌─────────────────┐
+│  App Store      │                   │  Google Play    │
+│  Connect API    │                   │  Developer API  │
+└─────────────────┘                   └─────────────────┘
 ```
 
 **Why Separate Repositories?**
@@ -269,6 +360,93 @@ My Signer CLI is a **standalone Ruby gem** that communicates with the My Signer 
 - ✅ Independent versioning
 - ✅ CLI can be open-sourced while API stays private
 - ✅ Standard approach (Stripe, Heroku, GitHub use this model)
+
+---
+
+## Troubleshooting
+
+### Run the Doctor
+
+The fastest way to diagnose and fix issues:
+
+```bash
+mysigner doctor
+```
+
+This checks your entire setup and offers to fix common problems automatically.
+
+### Common Issues
+
+#### "Build not found" after upload
+
+Apple takes 5-15 minutes to process builds. Run sync to fetch the latest:
+
+```bash
+mysigner sync
+```
+
+#### "Profile expired" or signing errors
+
+Re-sync to refresh profiles, or check in the dashboard:
+
+```bash
+mysigner sync --force
+mysigner profiles
+```
+
+#### "Keystore not found" (Android)
+
+Upload your keystore and activate it:
+
+```bash
+mysigner keystore upload /path/to/keystore.jks
+mysigner keystore activate ID
+```
+
+#### "No signing identity for team"
+
+Your certificate isn't in the keychain. Open Xcode:
+1. Xcode → Settings → Accounts
+2. Select your team
+3. Click "Download Manual Profiles" or "Manage Certificates"
+
+#### Version code conflict (Android)
+
+My Signer auto-increments version codes. Just run the command again:
+
+```bash
+mysigner ship internal --platform android
+```
+
+#### "App Store Connect credentials not configured"
+
+Run the doctor to set up credentials interactively:
+
+```bash
+mysigner doctor
+```
+
+Or re-run onboarding:
+
+```bash
+mysigner onboard
+```
+
+#### JAVA_HOME issues (Android)
+
+The doctor can auto-detect and fix JAVA_HOME:
+
+```bash
+mysigner doctor --platform android
+```
+
+### Debug Mode
+
+For verbose output, set the DEBUG environment variable:
+
+```bash
+DEBUG=1 mysigner ship testflight
+```
 
 ---
 
@@ -313,14 +491,3 @@ limitations under the License.
 ---
 
 **Built with ❤️ by developers who hate provisioning profile hell.**
-
-### Ship to App Store
-
-```bash
-mysigner ship appstore --submit-for-review
-mysigner ship appstore --release-notes "Bug fixes"         # Inline release notes override
-mysigner ship appstore --metadata-file metadata.json        # Merge custom metadata (JSON/YAML)
-mysigner ship appstore --no-wait                           # Skip build-processing wait (manual submission)
-mysigner ship appstore --asc-poll-seconds 30               # Custom ASC polling cadence
-mysigner ship appstore --no-auto-submit                    # Run automation but skip final submission
-```
