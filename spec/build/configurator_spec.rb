@@ -112,7 +112,7 @@ RSpec.describe Mysigner::Build::Configurator do
         # Fallback to /profiles also fails
         allow(client).to receive(:get).with(
           "/api/v1/organizations/#{org_id}/profiles",
-          params: { bundle_id: bundle_id, type: 'APPSTORE', status: 'ACTIVE' }
+          params: { bundle_id: bundle_id, type: 'APPSTORE', state: 'ACTIVE' }
         ).and_raise(Mysigner::NotFoundError.new("Not found"))
         
         expect {
@@ -132,7 +132,7 @@ RSpec.describe Mysigner::Build::Configurator do
         # Fallback to /profiles returns empty
         allow(client).to receive(:get).with(
           "/api/v1/organizations/#{org_id}/profiles",
-          params: { bundle_id: bundle_id, type: 'APPSTORE', status: 'ACTIVE' }
+          params: { bundle_id: bundle_id, type: 'APPSTORE', state: 'ACTIVE' }
         ).and_return({ profiles: [] })
         
         expect {

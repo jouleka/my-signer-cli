@@ -50,10 +50,12 @@ module Mysigner
               end
 
               # Show pagination
-              say "Page #{pagination['page']} of #{pagination['total_pages']} (#{pagination['total']} total)", :yellow
-              
-              if pagination['page'] < pagination['total_pages']
-                say "Run with --page #{pagination['page'] + 1} to see more", :yellow
+              if pagination
+                say "Page #{pagination['page']} of #{pagination['total_pages']} (#{pagination['total']} total)", :yellow
+
+                if pagination['page'] < pagination['total_pages']
+                  say "Run with --page #{pagination['page'] + 1} to see more", :yellow
+                end
               end
             rescue Mysigner::ClientError => e
               error "Failed to fetch devices: #{e.message}"
@@ -172,6 +174,7 @@ module Mysigner
                 else
                   say "  #{e.message}", :red
                 end
+                say "  Suggestion: #{e.suggestion}", :yellow if e.suggestion
                 exit 1
               rescue Mysigner::ClientError => e
                 if e.message.include?("already exists")
@@ -465,13 +468,13 @@ module Mysigner
 
               # Display profiles
               profiles.each do |profile|
-                status_icon = profile['status'] == 'ACTIVE' ? '✓' : '✗'
-                status_color = profile['status'] == 'ACTIVE' ? :green : :red
-                
+                status_icon = profile['state'] == 'ACTIVE' ? '✓' : '✗'
+                status_color = profile['state'] == 'ACTIVE' ? :green : :red
+
                 say "  #{status_icon} #{profile['name']}", status_color
                 say "    ID: #{profile['id']} | Type: #{profile['profile_type'] || 'N/A'}"
-                say "    Bundle ID: #{profile['bundle_id'] || 'N/A'}"
-                say "    Status: #{profile['status'] || 'UNKNOWN'}"
+                say "    Bundle ID: #{profile['bundle_id_identifier'] || 'N/A'}"
+                say "    Status: #{profile['state'] || 'UNKNOWN'}"
                 
                 if profile['expires_at']
                   expires = Time.parse(profile['expires_at']).strftime('%Y-%m-%d')
@@ -482,10 +485,12 @@ module Mysigner
               end
 
               # Show pagination
-              say "Page #{pagination['page']} of #{pagination['total_pages']} (#{pagination['total']} total)", :yellow
-              
-              if pagination['page'] < pagination['total_pages']
-                say "Run with --page #{pagination['page'] + 1} to see more", :yellow
+              if pagination
+                say "Page #{pagination['page']} of #{pagination['total_pages']} (#{pagination['total']} total)", :yellow
+
+                if pagination['page'] < pagination['total_pages']
+                  say "Run with --page #{pagination['page'] + 1} to see more", :yellow
+                end
               end
             rescue Mysigner::ClientError => e
               error "Failed to fetch profiles: #{e.message}"
@@ -609,6 +614,7 @@ module Mysigner
                 # Use Faraday directly with proper auth for binary download
                 conn = Faraday.new(url: config.api_url) do |f|
                   f.request :authorization, 'Bearer', config.api_token
+                  f.headers['X-User-Email'] = config.user_email if config.user_email
                   f.adapter Faraday.default_adapter
                 end
                 
@@ -780,10 +786,12 @@ module Mysigner
               end
 
               # Show pagination
-              say "Page #{pagination['page']} of #{pagination['total_pages']} (#{pagination['total']} total)", :yellow
-              
-              if pagination['page'] < pagination['total_pages']
-                say "Run with --page #{pagination['page'] + 1} to see more", :yellow
+              if pagination
+                say "Page #{pagination['page']} of #{pagination['total_pages']} (#{pagination['total']} total)", :yellow
+
+                if pagination['page'] < pagination['total_pages']
+                  say "Run with --page #{pagination['page'] + 1} to see more", :yellow
+                end
               end
             rescue Mysigner::ClientError => e
               error "Failed to fetch certificates: #{e.message}"
@@ -937,6 +945,7 @@ module Mysigner
                 # Use Faraday directly with proper auth for binary download
                 conn = Faraday.new(url: config.api_url) do |f|
                   f.request :authorization, 'Bearer', config.api_token
+                  f.headers['X-User-Email'] = config.user_email if config.user_email
                   f.adapter Faraday.default_adapter
                 end
                 
@@ -1472,10 +1481,10 @@ module Mysigner
             begin
               response = client.post(
                 "/api/v1/organizations/#{config.current_organization_id}/android_apps",
-                body: {
+                body: { android_app: {
                   package_name: package_name,
                   name: app_name
-                }
+                } }
               )
 
               app = response[:data]['android_app'] || response[:data]
@@ -1501,6 +1510,7 @@ module Mysigner
               else
                 say "  #{e.message}", :red
               end
+              say "  Suggestion: #{e.suggestion}", :yellow if e.suggestion
               exit 1
             rescue Mysigner::ClientError => e
               error "Failed to register app: #{e.message}"
@@ -1518,10 +1528,10 @@ module Mysigner
             begin
               response = client.post(
                 "/api/v1/organizations/#{config.current_organization_id}/android_apps",
-                body: {
+                body: { android_app: {
                   package_name: package_name,
                   name: name
-                }.compact
+                }.compact }
               )
 
               app = response[:data]['android_app'] || response[:data]
@@ -1551,6 +1561,7 @@ module Mysigner
               else
                 say "  #{e.message}", :red
               end
+              say "  Suggestion: #{e.suggestion}", :yellow if e.suggestion
               exit 1
             rescue Mysigner::ClientError => e
               if e.message.include?("already exists") || e.message.include?("taken")
@@ -1840,8 +1851,8 @@ module Mysigner
             config.load
             return nil unless config.api_token && config.organization_id
 
-            client = Mysigner::Client.new(api_url: config.api_url, api_token: config.api_token)
-            
+            client = Mysigner::Client.new(api_url: config.api_url, api_token: config.api_token, user_email: config.user_email)
+
             # Find app by package name
             response = client.get("/api/v1/organizations/#{config.organization_id}/android_apps")
             apps = response[:data]['android_apps'] || []
@@ -1860,7 +1871,7 @@ module Mysigner
             config.load
             return nil unless config.api_token && config.organization_id
 
-            client = Mysigner::Client.new(api_url: config.api_url, api_token: config.api_token)
+            client = Mysigner::Client.new(api_url: config.api_url, api_token: config.api_token, user_email: config.user_email)
             keystore_manager = Signing::KeystoreManager.new(client, config.organization_id)
 
             # Find app by package name to get its keystore
@@ -2163,6 +2174,7 @@ module Mysigner
                 else
                   say "  #{e.message}", :red
                 end
+                say "  Suggestion: #{e.suggestion}", :yellow if e.suggestion
                 exit 1
               rescue Mysigner::ClientError => e
                 if e.message.include?("already exists") || e.message.include?("ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE")
@@ -2489,6 +2501,178 @@ module Mysigner
               say "Available actions:", :yellow
               say "  mysigner merchant-id create IDENTIFIER [--name NAME]", :cyan
               say "  mysigner merchant-id delete IDENTIFIER", :cyan
+              exit 1
+            end
+          end
+
+          # ==================== ANDROID TRACKS ====================
+
+          desc "tracks PACKAGE_NAME", "List Google Play tracks for an Android app"
+          method_option :sort, type: :boolean, desc: 'Sort by track name'
+          def tracks(package_name = nil)
+            config = load_config
+            client = create_client(config)
+
+            if package_name.nil?
+              error "Usage: mysigner tracks PACKAGE_NAME"
+              say ""
+              say "Example: mysigner tracks com.example.myapp", :yellow
+              say ""
+              say "💡 To see your registered Android apps:", :cyan
+              say "   mysigner apps --platform android", :cyan
+              exit 1
+            end
+
+            say "🎯 Google Play Tracks for #{package_name}", :cyan
+            say ""
+
+            begin
+              response = client.get("/api/v1/organizations/#{config.current_organization_id}/android_apps/package/#{package_name}/tracks")
+              tracks = response[:data]['tracks'] || []
+
+              if tracks.empty?
+                say "No tracks found", :yellow
+                say ""
+                say "Tracks appear after you upload your app to Google Play Console", :cyan
+                say "and sync with: mysigner sync android --package #{package_name}", :cyan
+                return
+              end
+
+              # Sort by track name if requested
+              tracks = tracks.sort_by { |t| t['track_name'] } if options[:sort]
+
+              tracks.each do |track|
+                status_color = track['status'] == 'completed' ? :green : :yellow
+                say "  📍 #{track['track_name']}", :white
+                say "    Status: #{track['status'] || 'unknown'}", status_color
+
+                # Show releases info if available
+                if track['releases'].is_a?(Array) && track['releases'].any?
+                  releases = track['releases']
+                  latest = releases.first
+                  version_codes = latest['versionCodes'] || latest['version_codes'] || []
+                  say "    Version codes: #{version_codes.join(', ')}" if version_codes.any?
+                  say "    Release status: #{latest['status']}" if latest['status']
+                end
+
+                if track['updated_at']
+                  updated = Time.parse(track['updated_at']).strftime('%Y-%m-%d %H:%M')
+                  say "    Updated: #{updated}"
+                end
+                say ""
+              end
+
+              say "Total: #{tracks.count} track(s)", :yellow
+            rescue Mysigner::NotFoundError => e
+              if e.message.include?("Android app")
+                error "Android app not found: #{package_name}"
+                say ""
+                say "💡 App not found:", :cyan
+                say "   → Check the package name is correct", :yellow
+                say "   → List your apps: mysigner apps --platform android", :yellow
+                say "   → Register the app: mysigner android add #{package_name}", :yellow
+              else
+                error "Not found: #{e.message}"
+              end
+              exit 1
+            rescue Mysigner::ClientError => e
+              error "Failed to fetch tracks: #{e.message}"
+              exit 1
+            end
+          end
+
+          desc "track PACKAGE_NAME TRACK_NAME", "Show details for a specific Google Play track"
+          def track(package_name = nil, track_name = nil)
+            config = load_config
+            client = create_client(config)
+
+            if package_name.nil? || track_name.nil?
+              error "Usage: mysigner track PACKAGE_NAME TRACK_NAME"
+              say ""
+              say "Example: mysigner track com.example.myapp production", :yellow
+              say "         mysigner track com.example.myapp beta", :yellow
+              say ""
+              say "Common track names: production, beta, alpha, internal", :cyan
+              say ""
+              say "💡 To see available tracks:", :cyan
+              say "   mysigner tracks com.example.myapp", :cyan
+              exit 1
+            end
+
+            say "🎯 Track: #{track_name}", :cyan
+            say "   Package: #{package_name}", :white
+            say ""
+
+            begin
+              response = client.get("/api/v1/organizations/#{config.current_organization_id}/android_apps/package/#{package_name}/tracks/#{track_name}")
+              track = response[:data]
+
+              say "Details:", :bold
+              say "  Track Name: #{track['track_name']}"
+              say "  Status: #{track['status'] || 'unknown'}"
+
+              if track['updated_at']
+                updated = Time.parse(track['updated_at']).strftime('%Y-%m-%d %H:%M')
+                say "  Last Updated: #{updated}"
+              end
+
+              # Show releases info
+              if track['releases'].is_a?(Array) && track['releases'].any?
+                say ""
+                say "Releases:", :bold
+                track['releases'].each_with_index do |release, idx|
+                  say "  Release #{idx + 1}:", :white
+                  say "    Status: #{release['status']}" if release['status']
+
+                  version_codes = release['versionCodes'] || release['version_codes'] || []
+                  say "    Version Codes: #{version_codes.join(', ')}" if version_codes.any?
+
+                  if release['name']
+                    say "    Name: #{release['name']}"
+                  end
+
+                  if release['releaseNotes'] || release['release_notes']
+                    notes = release['releaseNotes'] || release['release_notes']
+                    if notes.is_a?(Array) && notes.any?
+                      say "    Release Notes:"
+                      notes.each do |note|
+                        lang = note['language'] || 'en-US'
+                        text = note['text'] || ''
+                        say "      [#{lang}] #{text.slice(0, 80)}#{'...' if text.length > 80}"
+                      end
+                    end
+                  end
+
+                  if release['userFraction'] || release['user_fraction']
+                    fraction = release['userFraction'] || release['user_fraction']
+                    say "    Rollout: #{(fraction * 100).round(1)}%"
+                  end
+                end
+              else
+                say ""
+                say "No releases found in this track", :yellow
+              end
+
+            rescue Mysigner::NotFoundError => e
+              if e.message.include?("Android app")
+                error "Android app not found: #{package_name}"
+                say ""
+                say "💡 App not found:", :cyan
+                say "   → Check the package name is correct", :yellow
+                say "   → List your apps: mysigner apps --platform android", :yellow
+              elsif e.message.include?("Track")
+                error "Track not found: #{track_name}"
+                say ""
+                say "💡 Track not found:", :cyan
+                say "   → Check the track name is correct", :yellow
+                say "   → List available tracks: mysigner tracks #{package_name}", :yellow
+                say "   → Common tracks: production, beta, alpha, internal", :yellow
+              else
+                error "Not found: #{e.message}"
+              end
+              exit 1
+            rescue Mysigner::ClientError => e
+              error "Failed to fetch track: #{e.message}"
               exit 1
             end
           end

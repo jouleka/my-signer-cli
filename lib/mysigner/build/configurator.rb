@@ -105,7 +105,7 @@ module Mysigner
           params: {
             bundle_id: bundle_id,
             type: profile_type.upcase,
-            status: 'ACTIVE'
+            state: 'ACTIVE'
           }
         )
 

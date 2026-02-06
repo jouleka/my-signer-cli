@@ -225,7 +225,7 @@ module Mysigner
               
               # Check App Store Connect status
               begin
-                client = Client.new(api_url: config.api_url, api_token: config.api_token)
+                client = Client.new(api_url: config.api_url, api_token: config.api_token, user_email: config.user_email)
                 org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
                 org_data = org_response[:data]
                 

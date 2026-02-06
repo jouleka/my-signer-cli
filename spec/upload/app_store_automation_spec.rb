@@ -56,23 +56,28 @@ RSpec.describe Mysigner::Upload::AppStoreAutomation do
     let(:version) { { 'id' => 'ver-1', 'versionString' => '1.2.0' } }
 
     before do
+      # Mock apple_apps endpoint
       allow(client).to receive(:get).with(
-        "/api/v1/organizations/#{organization_id}/apps",
+        "/api/v1/organizations/#{organization_id}/apple_apps",
         params: { bundle_id: build_info[:bundle_id] }
-      ).and_return({ data: { 'apps' => [app] } })
+      ).and_return({ data: { 'data' => { 'apps' => [app] } } })
 
+      # Mock app_store_versions POST (create version)
       allow(client).to receive(:post).with(
         "/api/v1/organizations/#{organization_id}/app_store_versions",
         hash_including(:body)
-      ).and_return({ data: version })
+      ).and_return({ data: { 'data' => version } })
 
+      # Mock attaching build to version
       allow(client).to receive(:post).with(
         "/api/v1/organizations/#{organization_id}/app_store_versions/#{version['id']}/build",
         body: { build_id: build_ready['id'] }
       )
 
+      # Mock submit endpoint (now receives body with payload)
       allow(client).to receive(:post).with(
-        "/api/v1/organizations/#{organization_id}/app_store_versions/#{version['id']}/submit"
+        "/api/v1/organizations/#{organization_id}/app_store_versions/#{version['id']}/submit",
+        hash_including(:body)
       )
 
       allow(client).to receive(:patch)
@@ -81,10 +86,12 @@ RSpec.describe Mysigner::Upload::AppStoreAutomation do
     context 'when wait is enabled and build processes before timeout' do
       before do
         calls = 0
+        # When wait is enabled, processed_only is false
         allow(client).to receive(:get).with(
           "/api/v1/organizations/#{organization_id}/builds",
           params: {
             app_id: app['id'],
+            processed_only: false,
             version: build_info[:version],
             build_number: build_info[:build_number]
           }
@@ -92,17 +99,17 @@ RSpec.describe Mysigner::Upload::AppStoreAutomation do
           calls += 1
           if calls < 3
             advance(poll_interval)
-            { data: { 'builds' => [{ 'id' => 'build-1', 'processing_state' => 'PROCESSING' }] } }
+            { data: { 'data' => { 'builds' => [{ 'id' => 'build-1', 'processing_state' => 'PROCESSING' }] } } }
           else
             advance(poll_interval)
-            { data: { 'builds' => [build_ready] } }
+            { data: { 'data' => { 'builds' => [build_ready] } } }
           end
         end
 
         allow(client).to receive(:get).with(
           "/api/v1/organizations/#{organization_id}/app_store_versions",
           params: { app_id: app['id'], editable: true }
-        ).and_return({ data: { 'versions' => [] } })
+        ).and_return({ data: { 'data' => { 'versions' => [] } } })
       end
 
       it 'waits for the build, creates version, attaches build, and submits with telemetry' do
@@ -112,7 +119,8 @@ RSpec.describe Mysigner::Upload::AppStoreAutomation do
         )
 
         expect(client).to receive(:post).with(
-          "/api/v1/organizations/#{organization_id}/app_store_versions/#{version['id']}/submit"
+          "/api/v1/organizations/#{organization_id}/app_store_versions/#{version['id']}/submit",
+          hash_including(:body)
         )
 
         result = automation.perform!(metadata: metadata, build_info: build_info, metadata_overrides: {})
@@ -132,16 +140,18 @@ RSpec.describe Mysigner::Upload::AppStoreAutomation do
       let(:timeout) { 10 }
 
       before do
+        # When wait is enabled, processed_only is false
         allow(client).to receive(:get).with(
           "/api/v1/organizations/#{organization_id}/builds",
           params: {
             app_id: app['id'],
+            processed_only: false,
             version: build_info[:version],
             build_number: build_info[:build_number]
           }
         ) do
           advance(poll_interval)
-          { data: { 'builds' => [{ 'id' => 'build-1', 'processing_state' => 'PROCESSING' }] } }
+          { data: { 'data' => { 'builds' => [{ 'id' => 'build-1', 'processing_state' => 'PROCESSING' }] } } }
         end
       end
 
@@ -156,19 +166,21 @@ RSpec.describe Mysigner::Upload::AppStoreAutomation do
       let(:wait) { false }
 
       before do
+        # When wait is disabled, processed_only is true
         allow(client).to receive(:get).with(
           "/api/v1/organizations/#{organization_id}/builds",
           params: {
             app_id: app['id'],
+            processed_only: true,
             version: build_info[:version],
             build_number: build_info[:build_number]
           }
-        ).and_return({ data: { 'builds' => [build_ready] } })
+        ).and_return({ data: { 'data' => { 'builds' => [build_ready] } } })
 
         allow(client).to receive(:get).with(
           "/api/v1/organizations/#{organization_id}/app_store_versions",
           params: { app_id: app['id'], editable: true }
-        ).and_return({ data: { 'versions' => [] } })
+        ).and_return({ data: { 'data' => { 'versions' => [] } } })
       end
 
       it 'performs automation without polling' do
@@ -182,24 +194,27 @@ RSpec.describe Mysigner::Upload::AppStoreAutomation do
       let(:no_submit) { true }
 
       before do
+        # When wait is enabled, processed_only is false
         allow(client).to receive(:get).with(
           "/api/v1/organizations/#{organization_id}/builds",
           params: {
             app_id: app['id'],
+            processed_only: false,
             version: build_info[:version],
             build_number: build_info[:build_number]
           }
-        ).and_return({ data: { 'builds' => [build_ready] } })
+        ).and_return({ data: { 'data' => { 'builds' => [build_ready] } } })
 
         allow(client).to receive(:get).with(
           "/api/v1/organizations/#{organization_id}/app_store_versions",
           params: { app_id: app['id'], editable: true }
-        ).and_return({ data: { 'versions' => [] } })
+        ).and_return({ data: { 'data' => { 'versions' => [] } } })
       end
 
       it 'skips submission step' do
         expect(client).not_to receive(:post).with(
-          "/api/v1/organizations/#{organization_id}/app_store_versions/#{version['id']}/submit"
+          "/api/v1/organizations/#{organization_id}/app_store_versions/#{version['id']}/submit",
+          anything
         )
 
         automation.perform!(metadata: metadata, build_info: build_info, metadata_overrides: {})

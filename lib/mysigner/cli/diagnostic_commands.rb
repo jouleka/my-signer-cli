@@ -80,7 +80,7 @@ module Mysigner
               say "  ✓ Logged in", :green
               
               begin
-                client = Client.new(api_url: config.api_url, api_token: config.api_token)
+                client = Client.new(api_url: config.api_url, api_token: config.api_token, user_email: config.user_email)
                 client.test_connection
                 say "  ✓ API connection working", :green
                 
@@ -891,14 +891,14 @@ module Mysigner
                 )
 
                 if response[:success]
-                  data = response[:data]
+                  data = response[:data]['data'] || response[:data]
                   say "✓ iOS sync completed!", :green
                   say ""
-                  
+
                   if data['synced_at']
                     say "Last synced: #{data['synced_at']}", :cyan
                   end
-                  
+
                   if data['summary']
                     say ""
                     say "📊 Summary:", :cyan

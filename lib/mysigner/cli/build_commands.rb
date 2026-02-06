@@ -268,11 +268,11 @@ module Mysigner
                 
                 begin
                   app_response = client.get("/api/v1/organizations/#{config.current_organization_id}/apple_apps", params: { bundle_id: bundle_id })
-                  app = Array(app_response[:data]['data']['apps']).first
-                  
+                  app = Array(app_response.dig(:data, 'data', 'apps')).first
+
                   if app
                     builds_response = client.get("/api/v1/organizations/#{config.current_organization_id}/builds", params: { app_id: app['id'] })
-                    latest = Array(builds_response[:data]['data']['builds']).first
+                    latest = Array(builds_response.dig(:data, 'data', 'builds')).first
                     if latest
                       latest_build_before_upload = latest['build_number'].to_i
                       say "✓ Current latest build: ##{latest_build_before_upload}", :green
@@ -375,11 +375,11 @@ module Mysigner
                   # Check for new build
                   begin
                     app_response = client.get("/api/v1/organizations/#{config.current_organization_id}/apple_apps", params: { bundle_id: bundle_id })
-                    app = Array(app_response[:data]['data']['apps']).first
-                    
+                    app = Array(app_response.dig(:data, 'data', 'apps')).first
+
                     if app
                       builds_response = client.get("/api/v1/organizations/#{config.current_organization_id}/builds", params: { app_id: app['id'] })
-                      latest = Array(builds_response[:data]['data']['builds']).first
+                      latest = Array(builds_response.dig(:data, 'data', 'builds')).first
                       
                       current_build_num = latest ? latest['build_number'].to_i : 0
                       
@@ -864,7 +864,7 @@ module Mysigner
                   begin
                     client.post(
                       "/api/v1/organizations/#{config.current_organization_id}/android_keystores/#{active_keystore['id']}/link_to_app",
-                      { package_name: package_name }
+                      body: { package_name: package_name }
                     )
                   rescue => e
                     # Non-fatal, continue
@@ -1024,15 +1024,15 @@ module Mysigner
                 friendly_name = generate_app_name_from_package(package_name)
                 create_response = client.post(
                   "/api/v1/organizations/#{config.current_organization_id}/android_apps",
-                  { android_app: { package_name: package_name, name: friendly_name } }
+                  body: { android_app: { package_name: package_name, name: friendly_name } }
                 )
-                app = create_response[:data]
+                app = create_response[:data]['android_app']
               end
 
               # Now save the build record
               client.post(
                 "/api/v1/organizations/#{config.current_organization_id}/android_apps/#{app['id']}/android_builds",
-                { android_build: { version_code: version_code, version_name: version_name, status: 'completed' } }
+                body: { android_build: { version_code: version_code, version_name: version_name, status: 'completed' } }
               )
             rescue => e
               # Non-fatal - just log for debugging

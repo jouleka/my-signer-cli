@@ -24,6 +24,8 @@ RSpec.describe 'mysigner profiles', type: :cli do
   before do
     allow(Mysigner::Config).to receive(:new).and_return(config)
     allow(Mysigner::Client).to receive(:new).and_return(client)
+    allow(config).to receive(:user_email).and_return('test@example.com')
+    allow(config).to receive(:current_organization_id).and_return(org_id)
     allow(cli).to receive(:exit) # Stub exit
   end
 
@@ -115,16 +117,16 @@ RSpec.describe 'mysigner profiles', type: :cli do
               'id' => 'prof_1',
               'name' => 'iOS App Store Profile',
               'profile_type' => 'APP_STORE',
-              'bundle_id' => 'com.example.app',
-              'status' => 'ACTIVE',
+              'bundle_id_identifier' => 'com.example.app',
+              'state' => 'ACTIVE',
               'expires_at' => '2025-12-31T23:59:59Z'
             },
             {
               'id' => 'prof_2',
               'name' => 'iOS Development Profile',
               'profile_type' => 'DEVELOPMENT',
-              'bundle_id' => 'com.example.app',
-              'status' => 'EXPIRED',
+              'bundle_id_identifier' => 'com.example.app',
+              'state' => 'EXPIRED',
               'expires_at' => '2024-01-01T00:00:00Z'
             }
           ],
@@ -228,8 +230,8 @@ RSpec.describe 'mysigner profiles', type: :cli do
               'id' => 'prof_1',
               'name' => 'App Store Profile',
               'profile_type' => 'APP_STORE',
-              'bundle_id' => 'com.example.app',
-              'status' => 'ACTIVE',
+              'bundle_id_identifier' => 'com.example.app',
+              'state' => 'ACTIVE',
               'expires_at' => '2025-12-31T23:59:59Z'
             }
           ],
@@ -250,7 +252,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_return(profiles_response)
-      
+
       cli.options = { page: 1, per_page: 50, type: 'app_store' }
     end
 
@@ -278,8 +280,8 @@ RSpec.describe 'mysigner profiles', type: :cli do
               'id' => 'prof_1',
               'name' => 'Active Profile',
               'profile_type' => 'DEVELOPMENT',
-              'bundle_id' => 'com.example.app',
-              'status' => 'ACTIVE',
+              'bundle_id_identifier' => 'com.example.app',
+              'state' => 'ACTIVE',
               'expires_at' => '2025-12-31T23:59:59Z'
             }
           ],
@@ -300,7 +302,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_return(profiles_response)
-      
+
       cli.options = { page: 1, per_page: 50, status: 'active' }
     end
 
@@ -328,8 +330,8 @@ RSpec.describe 'mysigner profiles', type: :cli do
               'id' => 'prof_1',
               'name' => 'Example App Profile',
               'profile_type' => 'DEVELOPMENT',
-              'bundle_id' => 'com.example.app',
-              'status' => 'ACTIVE',
+              'bundle_id_identifier' => 'com.example.app',
+              'state' => 'ACTIVE',
               'expires_at' => '2025-12-31T23:59:59Z'
             }
           ],
@@ -350,7 +352,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_return(profiles_response)
-      
+
       cli.options = { page: 1, per_page: 50, search: 'Example' }
     end
 
@@ -377,8 +379,8 @@ RSpec.describe 'mysigner profiles', type: :cli do
               'id' => 'prof_1',
               'name' => 'Profile 1',
               'profile_type' => 'DEVELOPMENT',
-              'bundle_id' => 'com.example.app',
-              'status' => 'ACTIVE'
+              'bundle_id_identifier' => 'com.example.app',
+              'state' => 'ACTIVE'
             }
           ],
           'pagination' => {
@@ -445,7 +447,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
   describe 'help text' do
     it 'has description' do
       help_output = capture_stdout { Mysigner::CLI.start(['help', 'profiles']) }
-      expect(help_output).to include('List provisioning profiles')
+      expect(help_output).to include('List all provisioning profiles')
     end
 
     it 'shows type option' do

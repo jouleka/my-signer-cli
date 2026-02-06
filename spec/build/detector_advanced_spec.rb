@@ -25,7 +25,7 @@ RSpec.describe Mysigner::Build::Detector do
       it 'raises NoProjectError with helpful Expo message' do
         expect {
           described_class.detect(test_dir)
-        }.to raise_error(Mysigner::Build::Detector::NoProjectError, /Expo managed workflow/)
+        }.to raise_error(Mysigner::Build::Detector::NoProjectError, /Failed to generate iOS project with expo prebuild/)
       end
 
       it 'suggests using expo prebuild' do

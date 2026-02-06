@@ -71,7 +71,7 @@ module Mysigner
         if should_submit
           submit_for_review(
             version_id: version['id'], 
-            version_string: version['versionString'],
+            version_string: version['version_string'],
             metadata: metadata, 
             overrides: metadata_overrides
           )
@@ -202,12 +202,12 @@ module Mysigner
 
       def ensure_app_store_version(app_id:, metadata:, overrides: {})
         desired_version = overrides['version_string'] || metadata['version_string'] || metadata['version']
-        desired_version ||= metadata.dig('localizations', 0, 'versionString')
+        desired_version ||= metadata.dig('localizations', 0, 'version_string')
 
         current_version = fetch_editable_version(app_id)
 
         if current_version && version_matches?(current_version, desired_version)
-          puts "✓ Reusing existing App Store version #{current_version['versionString']}"
+          puts "✓ Reusing existing App Store version #{current_version['version_string']}"
           update_version(current_version['id'], metadata, overrides)
           current_version
         else
@@ -234,7 +234,7 @@ module Mysigner
         normalized = desired.to_s.strip
         return false if normalized.empty?
 
-        version['versionString'] == normalized || version.dig('attributes', 'versionString') == normalized
+        version['version_string'] == normalized || version.dig('attributes', 'versionString') == normalized
       end
 
       def build_default_version
@@ -247,8 +247,7 @@ module Mysigner
             app_id: app_id,
             version_string: version_string,
             release_type: determine_release_type(metadata, overrides),
-            earliest_release_date: determine_earliest_release_date(metadata, overrides),
-            attributes: extract_version_attributes(metadata, overrides)
+            earliest_release_date: determine_earliest_release_date(metadata, overrides)
           }.compact
         }
 
@@ -273,8 +272,9 @@ module Mysigner
       def update_version(version_id, metadata, overrides)
         payload = {
           app_store_version: {
-            attributes: extract_version_attributes(metadata, overrides)
-          }
+            release_type: determine_release_type(metadata, overrides),
+            earliest_release_date: determine_earliest_release_date(metadata, overrides)
+          }.compact
         }
 
         @client.patch(
@@ -299,18 +299,6 @@ module Mysigner
         end
         
         result
-      end
-
-      def extract_version_attributes(metadata, overrides)
-        localizations = overrides['localizations'] || metadata['localizations'] || []
-        {
-          whats_new: overrides['whats_new'] || metadata['whats_new'],
-          support_url: overrides['support_url'] || metadata['support_url'],
-          marketing_url: overrides['marketing_url'] || metadata['marketing_url'],
-          privacy_policy_url: overrides['privacy_policy_url'] || metadata['privacy_policy_url'],
-          phased_release: overrides.fetch('phased_release', metadata['phased_release']),
-          localizations: localizations
-        }.compact
       end
 
       def attach_build_to_version(version_id:, build_id:)

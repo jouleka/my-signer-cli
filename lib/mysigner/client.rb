@@ -79,7 +79,7 @@ module Mysigner
           interval: 0.5,
           interval_randomness: 0.5,
           backoff_factor: 2,
-          retry_statuses: [429, 500, 502, 503, 504],
+          retry_statuses: [429, 502, 503, 504],
           methods: [:get, :post, :patch, :delete]
         }
 
@@ -113,22 +113,28 @@ module Mysigner
     def handle_error_response(response)
       error_data = response.body.is_a?(Hash) ? response.body : {}
       error_message = error_data['message'] || error_data['error'] || 'Unknown error'
+      suggestion = error_data['suggestion']
+
+      error_code = error_data['error']
+      timestamp = error_data['timestamp']
 
       case response.status
       when 401
-        raise UnauthorizedError, "Unauthorized: #{error_message}"
+        raise UnauthorizedError.new("Unauthorized: #{error_message}", error_code: error_code, suggestion: suggestion, details: error_data['details'], timestamp: timestamp)
       when 403
-        raise ForbiddenError, "Forbidden: #{error_message}"
+        raise ForbiddenError.new("Forbidden: #{error_message}", error_code: error_code, suggestion: suggestion, details: error_data['details'], timestamp: timestamp)
       when 404
-        raise NotFoundError, "Not found: #{error_message}"
+        raise NotFoundError.new("Not found: #{error_message}", error_code: error_code, suggestion: suggestion, details: error_data['details'], timestamp: timestamp)
+      when 409
+        raise ValidationError.new(error_message, error_data['details'], suggestion: suggestion, error_code: error_code, timestamp: timestamp)
       when 422
-        raise ValidationError.new(error_message, error_data['details'])
+        raise ValidationError.new(error_message, error_data['details'], suggestion: suggestion, error_code: error_code, timestamp: timestamp)
       when 429
         raise RateLimitError.new(error_message, error_data['retry_after'])
       when 500..599
-        raise ServerError, "Server error (#{response.status}): #{error_message}"
+        raise ServerError.new("Server error (#{response.status}): #{error_message}", error_code: error_code, timestamp: timestamp)
       else
-        raise ClientError, "Request failed (#{response.status}): #{error_message}"
+        raise ClientError.new("Request failed (#{response.status}): #{error_message}", error_code: error_code, timestamp: timestamp)
       end
     end
 
@@ -160,7 +166,17 @@ module Mysigner
   end
 
   # Custom errors
-  class ClientError < StandardError; end
+  class ClientError < StandardError
+    attr_reader :error_code, :suggestion, :details, :timestamp
+
+    def initialize(message, error_code: nil, suggestion: nil, details: nil, timestamp: nil)
+      super(message)
+      @error_code = error_code
+      @suggestion = suggestion
+      @details = details
+      @timestamp = timestamp
+    end
+  end
   class ConnectionError < ClientError; end
   class TimeoutError < ClientError; end
   class UnauthorizedError < ClientError; end
@@ -169,11 +185,8 @@ module Mysigner
   class ServerError < ClientError; end
   
   class ValidationError < ClientError
-    attr_reader :details
-
-    def initialize(message, details = nil)
-      super(message)
-      @details = details
+    def initialize(message, details = nil, suggestion: nil, error_code: nil, timestamp: nil)
+      super(message, error_code: error_code, suggestion: suggestion, details: details, timestamp: timestamp)
     end
   end
 
