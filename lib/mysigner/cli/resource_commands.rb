@@ -2847,6 +2847,472 @@ module Mysigner
               exit 1
             end
           end
+
+          # ==================== GOOGLE PLAY CREDENTIALS ====================
+
+          desc "gp-credential SUBCOMMAND", "Manage Google Play credentials (list, delete, activate, test)"
+          long_desc <<~DESC
+            Manage Google Play API credentials for Android app distribution.
+
+            SUBCOMMANDS:
+
+              mysigner gp-credential list
+              List all Google Play credentials
+
+              mysigner gp-credential delete ID
+              Delete a credential
+
+              mysigner gp-credential activate ID
+              Set a credential as the active one
+
+              mysigner gp-credential test ID
+              Test connection to Google Play API
+
+            EXAMPLES:
+
+              # List all credentials
+              mysigner gp-credential list
+
+              # Activate credential ID 2
+              mysigner gp-credential activate 2
+
+              # Test if credential can connect to Google Play
+              mysigner gp-credential test 1
+
+              # Delete old credential
+              mysigner gp-credential delete 3
+          DESC
+          def gp_credential(action, *args)
+            config = load_config
+            client = create_client(config)
+
+            case action
+            when 'list'
+              say "🔑 Google Play Credentials", :cyan
+              say ""
+
+              begin
+                response = client.get("/api/v1/organizations/#{config.current_organization_id}/google_play_credentials")
+                credentials = response[:data]['google_play_credentials'] || []
+
+                if credentials.empty?
+                  say "No Google Play credentials found", :yellow
+                  say ""
+                  say "Set up credentials with: mysigner onboard", :yellow
+                  return
+                end
+
+                credentials.each do |cred|
+                  active_icon = cred['active'] ? '✓' : '○'
+                  active_color = cred['active'] ? :green : :white
+
+                  say "  #{active_icon} #{cred['name']} (ID: #{cred['id']})", active_color
+                  say "    Developer Account: #{cred['developer_account_id'] || 'N/A'}"
+                  say "    Active: #{cred['active'] ? 'Yes' : 'No'}"
+                  if cred['last_synced_at']
+                    synced = Time.parse(cred['last_synced_at']).strftime('%Y-%m-%d %H:%M')
+                    say "    Last Synced: #{synced}"
+                  end
+                  if cred['last_sync_status']
+                    sync_color = cred['last_sync_status'] == 'success' ? :green : :red
+                    say "    Sync Status: #{cred['last_sync_status']}", sync_color
+                  end
+                  say ""
+                end
+
+                say "Total: #{credentials.count} credential(s)", :yellow
+              rescue Mysigner::ClientError => e
+                error "Failed to fetch credentials: #{e.message}"
+                exit 1
+              end
+
+            when 'delete'
+              credential_id = args[0]
+
+              unless credential_id
+                error "Usage: mysigner gp-credential delete ID"
+                say ""
+                say "Run 'mysigner gp-credential list' to see available IDs", :yellow
+                exit 1
+              end
+
+              say "⚠️  You are about to delete Google Play credential ID: #{credential_id}", :yellow
+              say ""
+
+              if yes?("Are you sure? This cannot be undone. (y/n)")
+                begin
+                  client.delete("/api/v1/organizations/#{config.current_organization_id}/google_play_credentials/#{credential_id}")
+                  say ""
+                  say "✓ Google Play credential deleted", :green
+                rescue Mysigner::NotFoundError
+                  error "Credential not found with ID: #{credential_id}"
+                  say ""
+                  say "Run 'mysigner gp-credential list' to see available IDs", :yellow
+                  exit 1
+                rescue Mysigner::ClientError => e
+                  error "Delete failed: #{e.message}"
+                  exit 1
+                end
+              else
+                say "Deletion cancelled", :yellow
+              end
+
+            when 'activate'
+              credential_id = args[0]
+
+              unless credential_id
+                error "Usage: mysigner gp-credential activate ID"
+                say ""
+                say "Run 'mysigner gp-credential list' to see available IDs", :yellow
+                exit 1
+              end
+
+              say "🔑 Activating credential...", :cyan
+
+              begin
+                response = client.post("/api/v1/organizations/#{config.current_organization_id}/google_play_credentials/#{credential_id}/activate")
+                credential = response[:data]['google_play_credential'] || response[:data]
+                say "✓ Credential activated!", :green
+                say ""
+                say "#{credential['name']} is now the active Google Play credential", :cyan
+              rescue Mysigner::NotFoundError
+                error "Credential not found with ID: #{credential_id}"
+                say ""
+                say "Run 'mysigner gp-credential list' to see available IDs", :yellow
+                exit 1
+              rescue Mysigner::ClientError => e
+                error "Activation failed: #{e.message}"
+                exit 1
+              end
+
+            when 'test'
+              credential_id = args[0]
+
+              unless credential_id
+                error "Usage: mysigner gp-credential test ID"
+                say ""
+                say "Run 'mysigner gp-credential list' to see available IDs", :yellow
+                exit 1
+              end
+
+              say "🔑 Testing credential connection...", :cyan
+              say ""
+
+              begin
+                response = client.post("/api/v1/organizations/#{config.current_organization_id}/google_play_credentials/#{credential_id}/test")
+                result = response[:data]
+
+                if result['success']
+                  say "✓ Connection successful!", :green
+                  say ""
+                  say "  Google Play API is reachable with this credential", :cyan
+                else
+                  say "✗ Connection failed", :red
+                  say ""
+                  say "  Error: #{result['error']}", :red if result['error']
+                  say ""
+                  say "💡 Check that:", :cyan
+                  say "   → The service account JSON key is valid", :yellow
+                  say "   → The service account has Google Play Console access", :yellow
+                  say "   → API access is enabled in Google Play Console", :yellow
+                  exit 1
+                end
+              rescue Mysigner::NotFoundError
+                error "Credential not found with ID: #{credential_id}"
+                say ""
+                say "Run 'mysigner gp-credential list' to see available IDs", :yellow
+                exit 1
+              rescue Mysigner::ClientError => e
+                error "Test failed: #{e.message}"
+                exit 1
+              end
+
+            when 'help'
+              invoke :help, ['gp-credential']
+            else
+              error "Unknown action: #{action}"
+              say "Available actions: list, delete, activate, test, help", :yellow
+              exit 1
+            end
+          end
+
+          # ==================== APP STORE RELEASES ====================
+
+          desc "release SUBCOMMAND", "Manage App Store release configurations (list, show, create, update)"
+          long_desc <<~DESC
+            Manage App Store release configurations for iOS app distribution.
+
+            Release configurations control how your app is submitted and released on the
+            App Store, including auto-submit, phased release, and release notes.
+
+            SUBCOMMANDS:
+
+              mysigner release list [--bundle-id BUNDLE_ID]
+              List all release configurations
+
+              mysigner release show ID
+              Show details for a release configuration
+
+              mysigner release create --bundle-id-id ID [OPTIONS]
+              Create a new release configuration
+
+              mysigner release update ID [OPTIONS]
+              Update an existing release configuration
+
+            OPTIONS FOR CREATE/UPDATE:
+
+              --bundle-id-id ID          Bundle ID record ID (required for create)
+              --whats-new TEXT           Release notes / What's New text
+              --support-url URL          Support URL
+              --marketing-url URL        Marketing URL
+              --privacy-url URL          Privacy policy URL
+              --auto-submit              Auto-submit for review after upload
+              --phased-release           Enable phased release (7-day rollout)
+              --release-type TYPE        Release type: manual, after_approval, scheduled
+              --scheduled-date DATE      Scheduled release date (ISO 8601)
+
+            EXAMPLES:
+
+              # List all release configs
+              mysigner release list
+
+              # List releases for a specific bundle ID
+              mysigner release list --bundle-id com.example.app
+
+              # Show details
+              mysigner release show 1
+
+              # Create a release config
+              mysigner release create --bundle-id-id 42 --auto-submit --phased-release
+
+              # Update release notes
+              mysigner release update 1 --whats-new "Bug fixes and improvements"
+
+              # Set up scheduled release
+              mysigner release update 1 --release-type scheduled --scheduled-date 2025-03-01T10:00:00Z
+          DESC
+          method_option :bundle_id, type: :string, aliases: '-b', desc: 'Filter by bundle identifier'
+          method_option :bundle_id_id, type: :numeric, desc: 'Bundle ID record ID (for create)'
+          method_option :whats_new, type: :string, desc: "What's New text"
+          method_option :support_url, type: :string, desc: 'Support URL'
+          method_option :marketing_url, type: :string, desc: 'Marketing URL'
+          method_option :privacy_url, type: :string, desc: 'Privacy policy URL'
+          method_option :auto_submit, type: :boolean, desc: 'Auto-submit for review'
+          method_option :phased_release, type: :boolean, desc: 'Enable phased release'
+          method_option :release_type, type: :string, desc: 'Release type: manual, after_approval, scheduled'
+          method_option :scheduled_date, type: :string, desc: 'Scheduled release date (ISO 8601)'
+          def release(action, *args)
+            config = load_config
+            client = create_client(config)
+
+            case action
+            when 'list'
+              say "🚀 App Store Releases", :cyan
+              say ""
+
+              params = {}
+              params[:bundle_id] = options[:bundle_id] if options[:bundle_id]
+
+              begin
+                response = client.get(
+                  "/api/v1/organizations/#{config.current_organization_id}/app_store_releases",
+                  params: params
+                )
+                releases = response[:data]['app_store_releases'] || []
+
+                if releases.empty?
+                  say "No release configurations found", :yellow
+                  say ""
+                  say "Create one with: mysigner release create --bundle-id-id ID", :yellow
+                  return
+                end
+
+                releases.each do |rel|
+                  say "  • #{rel['app_name'] || rel['bundle_identifier']} (ID: #{rel['id']})", :green
+                  say "    Bundle ID: #{rel['bundle_identifier']}" if rel['bundle_identifier']
+                  say "    Release Type: #{rel['release_type'] || 'N/A'}"
+                  say "    Auto Submit: #{rel['auto_submit'] ? 'Yes' : 'No'}"
+                  say "    Phased Release: #{rel['phased_release'] ? 'Yes' : 'No'}"
+                  say "    Version: #{rel['version_string']}" if rel['version_string']
+                  say ""
+                end
+
+                say "Total: #{releases.count} release(s)", :yellow
+              rescue Mysigner::ClientError => e
+                error "Failed to fetch releases: #{e.message}"
+                exit 1
+              end
+
+            when 'show'
+              release_id = args[0]
+
+              unless release_id
+                error "Usage: mysigner release show ID"
+                say ""
+                say "Run 'mysigner release list' to see available IDs", :yellow
+                exit 1
+              end
+
+              begin
+                response = client.get("/api/v1/organizations/#{config.current_organization_id}/app_store_releases/#{release_id}")
+                rel = response[:data]['app_store_release'] || response[:data]
+
+                say "🚀 Release Configuration (ID: #{rel['id']})", :cyan
+                say ""
+                say "Details:", :bold
+                say "  App Name:        #{rel['app_name'] || 'N/A'}"
+                say "  Bundle ID:       #{rel['bundle_identifier'] || 'N/A'}"
+                say "  Version:         #{rel['version_string'] || 'N/A'}"
+                say "  Release Type:    #{rel['release_type'] || 'N/A'}"
+                say "  Auto Submit:     #{rel['auto_submit'] ? 'Yes' : 'No'}"
+                say "  Phased Release:  #{rel['phased_release'] ? 'Yes' : 'No'}"
+                say ""
+                if rel['whats_new'] && !rel['whats_new'].empty?
+                  say "What's New:", :bold
+                  say "  #{rel['whats_new']}"
+                  say ""
+                end
+                say "URLs:", :bold
+                say "  Support:    #{rel['support_url'] || 'N/A'}"
+                say "  Marketing:  #{rel['marketing_url'] || 'N/A'}"
+                say "  Privacy:    #{rel['privacy_url'] || 'N/A'}"
+                if rel['scheduled_date']
+                  say ""
+                  say "Scheduled Date: #{rel['scheduled_date']}"
+                end
+              rescue Mysigner::NotFoundError
+                error "Release not found with ID: #{release_id}"
+                say ""
+                say "Run 'mysigner release list' to see available IDs", :yellow
+                exit 1
+              rescue Mysigner::ClientError => e
+                error "Failed to fetch release: #{e.message}"
+                exit 1
+              end
+
+            when 'create'
+              say "🚀 Creating release configuration...", :cyan
+              say ""
+
+              body = {}
+              body[:bundle_id_id] = options[:bundle_id_id] if options[:bundle_id_id]
+              body[:whats_new] = options[:whats_new] if options[:whats_new]
+              body[:support_url] = options[:support_url] if options[:support_url]
+              body[:marketing_url] = options[:marketing_url] if options[:marketing_url]
+              body[:privacy_url] = options[:privacy_url] if options[:privacy_url]
+              body[:auto_submit] = options[:auto_submit] unless options[:auto_submit].nil?
+              body[:phased_release] = options[:phased_release] unless options[:phased_release].nil?
+              body[:release_type] = options[:release_type] if options[:release_type]
+              body[:scheduled_date] = options[:scheduled_date] if options[:scheduled_date]
+
+              begin
+                response = client.post(
+                  "/api/v1/organizations/#{config.current_organization_id}/app_store_releases",
+                  body: body
+                )
+                rel = response[:data]['app_store_release'] || response[:data]
+
+                say "✓ Release configuration created!", :green
+                say ""
+                say "Details:", :bold
+                say "  ID:             #{rel['id']}"
+                say "  Bundle ID:      #{rel['bundle_identifier'] || 'N/A'}"
+                say "  Release Type:   #{rel['release_type'] || 'N/A'}"
+                say "  Auto Submit:    #{rel['auto_submit'] ? 'Yes' : 'No'}"
+                say "  Phased Release: #{rel['phased_release'] ? 'Yes' : 'No'}"
+              rescue Mysigner::ValidationError => e
+                if e.message.include?('already exists') || (e.error_code && e.error_code.to_s == '409')
+                  error "Release configuration already exists for this bundle ID"
+                  say ""
+                  say "💡 Use 'mysigner release update ID' to modify it", :cyan
+                  say "   Run 'mysigner release list' to find the ID", :yellow
+                else
+                  error "Validation failed: #{e.message}"
+                  if e.details
+                    e.details.each do |field, errors|
+                      errors_text = errors.is_a?(Array) ? errors.join(', ') : errors.to_s
+                      say "  #{field}: #{errors_text}", :red
+                    end
+                  end
+                end
+                exit 1
+              rescue Mysigner::ClientError => e
+                if e.message.include?('409') || e.message.include?('already exists')
+                  error "Release configuration already exists for this bundle ID"
+                  say ""
+                  say "💡 Use 'mysigner release update ID' to modify it", :cyan
+                  say "   Run 'mysigner release list' to find the ID", :yellow
+                else
+                  error "Failed to create release: #{e.message}"
+                end
+                exit 1
+              end
+
+            when 'update'
+              release_id = args[0]
+
+              unless release_id
+                error "Usage: mysigner release update ID [OPTIONS]"
+                say ""
+                say "Run 'mysigner release list' to see available IDs", :yellow
+                exit 1
+              end
+
+              body = {}
+              body[:whats_new] = options[:whats_new] if options[:whats_new]
+              body[:support_url] = options[:support_url] if options[:support_url]
+              body[:marketing_url] = options[:marketing_url] if options[:marketing_url]
+              body[:privacy_url] = options[:privacy_url] if options[:privacy_url]
+              body[:auto_submit] = options[:auto_submit] unless options[:auto_submit].nil?
+              body[:phased_release] = options[:phased_release] unless options[:phased_release].nil?
+              body[:release_type] = options[:release_type] if options[:release_type]
+              body[:scheduled_date] = options[:scheduled_date] if options[:scheduled_date]
+
+              say "🚀 Updating release configuration...", :cyan
+              say ""
+
+              begin
+                response = client.patch(
+                  "/api/v1/organizations/#{config.current_organization_id}/app_store_releases/#{release_id}",
+                  body: body
+                )
+                rel = response[:data]['app_store_release'] || response[:data]
+
+                say "✓ Release configuration updated!", :green
+                say ""
+                say "Details:", :bold
+                say "  ID:             #{rel['id']}"
+                say "  Bundle ID:      #{rel['bundle_identifier'] || 'N/A'}"
+                say "  Release Type:   #{rel['release_type'] || 'N/A'}"
+                say "  Auto Submit:    #{rel['auto_submit'] ? 'Yes' : 'No'}"
+                say "  Phased Release: #{rel['phased_release'] ? 'Yes' : 'No'}"
+              rescue Mysigner::NotFoundError
+                error "Release not found with ID: #{release_id}"
+                say ""
+                say "Run 'mysigner release list' to see available IDs", :yellow
+                exit 1
+              rescue Mysigner::ValidationError => e
+                error "Validation failed: #{e.message}"
+                if e.details
+                  e.details.each do |field, errors|
+                    errors_text = errors.is_a?(Array) ? errors.join(', ') : errors.to_s
+                    say "  #{field}: #{errors_text}", :red
+                  end
+                end
+                exit 1
+              rescue Mysigner::ClientError => e
+                error "Failed to update release: #{e.message}"
+                exit 1
+              end
+
+            when 'help'
+              invoke :help, ['release']
+            else
+              error "Unknown action: #{action}"
+              say "Available actions: list, show, create, update, help", :yellow
+              exit 1
+            end
+          end
         end
       end
     end

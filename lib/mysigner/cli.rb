@@ -11,6 +11,7 @@ require_relative 'cli/auth_commands'
 require_relative 'cli/diagnostic_commands'
 require_relative 'cli/build_commands'
 require_relative 'cli/resource_commands'
+require_relative 'cli/validate_commands'
 
 module Mysigner
   class CLI < Thor
@@ -31,6 +32,7 @@ module Mysigner
     include DiagnosticCommands
     include BuildCommands
     include ResourceCommands
+    include ValidateCommands
 
     # Command aliases for power users
     map 's' => :ship
