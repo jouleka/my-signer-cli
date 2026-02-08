@@ -823,7 +823,7 @@ module Mysigner
                   say ""
                   say "  📋 Quick fix:", :cyan
                   say "    • Get UDID: Connect device → Finder → Click serial number", :green
-                  say "    • Run: mysigner device add <UDID> <NAME>", :green
+                  say "    • Run: mysigner device add <NAME> <UDID>", :green
                   say "    • Or add in: #{client.api_url}/organizations/#{config.current_organization_id}", :green
                   say ""
                 else
@@ -931,7 +931,7 @@ module Mysigner
                   say "✓ Android sync started!", :green
                   say ""
                   say "Sync runs in the background. Check status with:", :cyan
-                  say "  mysigner android-apps", :green
+                  say "  mysigner apps --platform android", :green
                   say ""
                   
                   # Optionally wait and show status

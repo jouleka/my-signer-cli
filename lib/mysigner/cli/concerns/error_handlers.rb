@@ -311,7 +311,7 @@ module Mysigner
           say "💡 Keystore Not Found: How to fix", :cyan
           say ""
           say "   → Upload keystore: mysigner keystore upload <path>", :yellow
-          say "   → List keystores: mysigner keystores", :yellow
+          say "   → List keystores: mysigner keystore list", :yellow
           say "   → Download keystore: mysigner keystore download <ID>", :yellow
           say "   → Check keystore path in build.gradle", :yellow
           say ""
@@ -407,7 +407,7 @@ module Mysigner
           say "💡 General troubleshooting:", :cyan
           say ""
           say "   → Run 'mysigner doctor' to check your setup", :yellow
-          say "   → List keystores: mysigner keystores", :yellow
+          say "   → List keystores: mysigner keystore list", :yellow
           say "   → Check Play Console: https://play.google.com/console", :yellow
           say ""
         end

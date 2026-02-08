@@ -97,8 +97,8 @@ module Mysigner
             title: "Bundle ID Issue",
             suggestions: [
               "Verify Bundle ID in Xcode matches Apple Developer Portal",
-              "List Bundle IDs: mysigner bundleids",
-              "Register new Bundle ID: mysigner bundleids create <ID>",
+              "List Bundle IDs: mysigner bundleid list",
+              "Register new Bundle ID: mysigner bundleid register <ID>",
               "Check My Signer dashboard for registered apps"
             ]
           },
@@ -193,7 +193,7 @@ module Mysigner
             title: "Keystore Not Found",
             suggestions: [
               "Upload keystore: mysigner keystore upload <path>",
-              "List keystores: mysigner keystores",
+              "List keystores: mysigner keystore list",
               "Download keystore: mysigner keystore download <ID>",
               "Check keystore path in build.gradle"
             ]
@@ -324,7 +324,7 @@ module Mysigner
             suggestions: [
               "AAB is signed with a different key than expected",
               "Verify keystore matches what's registered in Play Console",
-              "Check active keystore: mysigner keystores --active",
+              "Check active keystore: mysigner keystore list --active",
               "If using Google Play App Signing, upload the correct upload key"
             ]
           }
@@ -482,7 +482,7 @@ module Mysigner
           },
           profiles: "mysigner profiles",
           certificates: "mysigner certificates",
-          keystores: "mysigner keystores",
+          keystores: "mysigner keystore list",
           doctor: "mysigner doctor",
           onboard: "mysigner onboard",
           login: "mysigner login"

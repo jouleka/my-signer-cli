@@ -229,6 +229,76 @@ mysigner keystore activate ID              # Set as active keystore
 mysigner keystore delete ID                # Delete keystore
 ```
 
+### Google Play Credentials
+
+```bash
+mysigner gp-credential list               # List all credentials
+mysigner gp-credential activate ID        # Set as active credential
+mysigner gp-credential test ID            # Test Google Play connection
+mysigner gp-credential delete ID          # Delete credential
+```
+
+### App Store Releases
+
+```bash
+mysigner release list                      # List release configurations
+mysigner release list --bundle-id com.app  # Filter by bundle ID
+mysigner release show ID                   # Show release details
+mysigner release create --bundle-id-id 42  # Create release config
+mysigner release update ID --auto-submit   # Update release config
+mysigner release update ID --whats-new "Bug fixes"
+```
+
+### Google Play Tracks
+
+```bash
+mysigner tracks com.example.app                # List tracks for an app
+mysigner tracks com.example.app --sort         # Sort alphabetically
+mysigner track com.example.app production      # Show track details
+mysigner track com.example.app beta            # Show beta track details
+```
+
+### Android Apps
+
+```bash
+mysigner android init                          # Detect and register Android app
+mysigner android add com.example.app           # Register app manually
+mysigner android build                         # Build AAB file
+mysigner android list                          # List registered Android apps
+```
+
+### Apps
+
+```bash
+mysigner apps                                  # List all apps (iOS + Android)
+mysigner apps --platform ios                   # iOS apps only
+mysigner apps --platform android               # Android apps only
+mysigner apps -q "myapp"                       # Search by name
+```
+
+### Merchant IDs
+
+```bash
+mysigner merchant-ids                          # List Apple Pay Merchant IDs
+mysigner merchant-id create IDENTIFIER         # Create a Merchant ID
+mysigner merchant-id delete IDENTIFIER         # Delete a Merchant ID
+```
+
+### App Groups
+
+```bash
+mysigner app-groups                            # List App Groups
+mysigner app-group register IDENTIFIER         # Register an App Group
+mysigner app-group delete IDENTIFIER           # Delete an App Group
+```
+
+### Validate Signing
+
+```bash
+mysigner validate -b com.example.app -t development   # Validate signing config
+mysigner validate --type appstore                      # Auto-detect bundle ID
+```
+
 ### Sync
 
 ```bash
@@ -280,11 +350,14 @@ mysigner config set KEY VAL # Update configuration value
 - ✅ **iOS Build & Ship** (`mysigner ship testflight`, `mysigner ship appstore`)
 - ✅ **Android Build & Ship** (`mysigner ship internal/alpha/beta/production`)
 - ✅ Android keystore management (`mysigner keystore upload/download/activate`)
+- ✅ Google Play credential management (`mysigner gp-credential list/activate/test/delete`)
 - ✅ Automatic version code increment for Android
 - ✅ App Store submission with release types (AFTER_APPROVAL, MANUAL, SCHEDULED)
+- ✅ App Store release configuration (`mysigner release list/show/create/update`)
+- ✅ Server-side signing validation (`mysigner validate`)
 - ✅ Project detection (Native iOS/Android, React Native, Flutter, Capacitor/Ionic)
 - ✅ `mysigner doctor` health check with auto-fix capabilities
-- ✅ 90+ RSpec tests
+- ✅ 260+ RSpec tests
 - ✅ Interactive prompts and wizards
 
 📅 **Future**:
@@ -292,7 +365,6 @@ mysigner config set KEY VAL # Update configuration value
 - Progress spinners (TTY::Spinner)
 - `--json` flag for scripting
 - CI/CD templates (GitHub Actions, GitLab CI)
-- Phased release support
 
 See the [main project roadmap](https://github.com/jurgenleka/my-signer/blob/main/ROADMAP.md) for detailed plans.
 

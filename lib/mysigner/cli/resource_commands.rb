@@ -1017,7 +1017,7 @@ module Mysigner
               invoke :help, ['certificate']
             else
               error "Unknown action: #{action}"
-              say "Available actions: download, help", :yellow
+              say "Available actions: check, download, help", :yellow
               exit 1
             end
           end
@@ -1190,7 +1190,7 @@ module Mysigner
               unless keystore_id
                 error "Usage: mysigner keystore download ID"
                 say ""
-                say "Run 'mysigner keystores' to see available IDs", :yellow
+                say "Run 'mysigner keystore list' to see available IDs", :yellow
                 exit 1
               end
 
@@ -1220,7 +1220,7 @@ module Mysigner
                 say ""
                 say "💡 Keystore Not Found: How to fix", :cyan
                 say ""
-                say "   → List available keystores: mysigner keystores", :yellow
+                say "   → List available keystores: mysigner keystore list", :yellow
                 say "   → Upload a keystore: mysigner keystore upload <path>", :yellow
                 say "   → Check the ID is correct (IDs are numeric)", :yellow
                 say ""
@@ -1254,7 +1254,7 @@ module Mysigner
                 say ""
                 say "💡 Keystore Not Found: How to fix", :cyan
                 say ""
-                say "   → List available keystores: mysigner keystores", :yellow
+                say "   → List available keystores: mysigner keystore list", :yellow
                 say "   → Upload a keystore: mysigner keystore upload <path>", :yellow
                 say ""
                 exit 1
@@ -1298,7 +1298,7 @@ module Mysigner
                 say ""
                 say "💡 Keystore Not Found: How to fix", :cyan
                 say ""
-                say "   → List available keystores: mysigner keystores", :yellow
+                say "   → List available keystores: mysigner keystore list", :yellow
                 say "   → Upload a keystore: mysigner keystore upload <path>", :yellow
                 say ""
                 exit 1
@@ -1307,7 +1307,7 @@ module Mysigner
                 say ""
                 say "💡 Activation Failed: Try these steps", :cyan
                 say ""
-                say "   → Verify keystore ID is correct: mysigner keystores", :yellow
+                say "   → Verify keystore ID is correct: mysigner keystore list", :yellow
                 say "   → Check API token is valid: mysigner status", :yellow
                 say ""
                 exit 1
