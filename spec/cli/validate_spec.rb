@@ -40,8 +40,8 @@ RSpec.describe 'mysigner validate', type: :cli do
       allow(config).to receive(:user_email).and_return(nil)
       # Stub post to prevent errors when stubbed exit doesn't halt execution
       allow(client).to receive(:post).and_return({
-        data: { 'valid' => true, 'checks' => {}, 'suggestions' => [] }
-      })
+                                                   data: { 'valid' => true, 'checks' => {}, 'suggestions' => [] }
+                                                 })
     end
 
     it 'shows error message' do
@@ -75,7 +75,7 @@ RSpec.describe 'mysigner validate', type: :cli do
     end
 
     describe 'when all checks pass' do
-      let(:valid_response) {
+      let(:valid_response) do
         {
           data: {
             'valid' => true,
@@ -87,7 +87,7 @@ RSpec.describe 'mysigner validate', type: :cli do
             'suggestions' => []
           }
         }
-      }
+      end
 
       before do
         cli.options = { bundle_id: 'com.example.app', type: 'development' }
@@ -140,7 +140,7 @@ RSpec.describe 'mysigner validate', type: :cli do
     end
 
     describe 'when checks fail' do
-      let(:invalid_response) {
+      let(:invalid_response) do
         {
           data: {
             'valid' => false,
@@ -155,7 +155,7 @@ RSpec.describe 'mysigner validate', type: :cli do
             ]
           }
         }
-      }
+      end
 
       before do
         cli.options = { bundle_id: 'com.example.app', type: 'appstore' }
@@ -196,7 +196,7 @@ RSpec.describe 'mysigner validate', type: :cli do
     end
 
     describe 'with auto-detected bundle ID' do
-      let(:valid_response) {
+      let(:valid_response) do
         {
           data: {
             'valid' => true,
@@ -208,7 +208,7 @@ RSpec.describe 'mysigner validate', type: :cli do
             'suggestions' => []
           }
         }
-      }
+      end
 
       before do
         cli.options = { type: 'development' }
@@ -239,8 +239,8 @@ RSpec.describe 'mysigner validate', type: :cli do
           cli.options = { type: 'development' }
           # Stub post to prevent errors when stubbed exit doesn't halt execution
           allow(client).to receive(:post).and_return({
-            data: { 'valid' => true, 'checks' => {}, 'suggestions' => [] }
-          })
+                                                       data: { 'valid' => true, 'checks' => {}, 'suggestions' => [] }
+                                                     })
         end
 
         it 'shows error message' do
@@ -264,8 +264,8 @@ RSpec.describe 'mysigner validate', type: :cli do
           cli.options = { bundle_id: 'com.example.app' }
           # Stub post to prevent errors when stubbed exit doesn't halt execution
           allow(client).to receive(:post).and_return({
-            data: { 'valid' => true, 'checks' => {}, 'suggestions' => [] }
-          })
+                                                       data: { 'valid' => true, 'checks' => {}, 'suggestions' => [] }
+                                                     })
         end
 
         it 'shows error message' do
@@ -289,8 +289,8 @@ RSpec.describe 'mysigner validate', type: :cli do
           cli.options = { bundle_id: 'com.example.app', type: 'invalid' }
           # Stub post to prevent errors when stubbed exit doesn't halt execution
           allow(client).to receive(:post).and_return({
-            data: { 'valid' => true, 'checks' => {}, 'suggestions' => [] }
-          })
+                                                       data: { 'valid' => true, 'checks' => {}, 'suggestions' => [] }
+                                                     })
         end
 
         it 'shows error message' do
@@ -391,17 +391,17 @@ RSpec.describe 'mysigner validate', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'validate']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help validate]) }
       expect(help_output).to include('validate')
     end
 
     it 'shows bundle-id option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'validate']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help validate]) }
       expect(help_output).to include('--bundle-id')
     end
 
     it 'shows type option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'validate']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help validate]) }
       expect(help_output).to include('--type')
     end
   end

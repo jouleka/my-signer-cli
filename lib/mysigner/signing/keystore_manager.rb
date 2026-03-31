@@ -1,3 +1,6 @@
+# frozen_string_literal: true
+
+require 'English'
 require 'fileutils'
 require 'base64'
 
@@ -44,21 +47,19 @@ module Mysigner
         # Get keystore details
         keystores = list
         keystore = keystores.find { |k| k['id'].to_s == keystore_id.to_s }
-        
-        unless keystore
-          raise KeystoreNotFoundError, "Keystore with ID #{keystore_id} not found"
-        end
+
+        raise KeystoreNotFoundError, "Keystore with ID #{keystore_id} not found" unless keystore
 
         # Download the keystore file
         download_url = "/api/v1/organizations/#{@organization_id}/android_keystores/#{keystore_id}/download"
-        
+
         conn = build_download_connection
         response = conn.get(download_url)
-        
+
         unless response.success?
           error_msg = begin
             JSON.parse(response.body)['message']
-          rescue
+          rescue StandardError
             "HTTP #{response.status}"
           end
           raise DownloadError, "Failed to download keystore: #{error_msg}"
@@ -67,9 +68,9 @@ module Mysigner
         # Save to local file
         filename = "#{keystore['name'].gsub(/[^a-zA-Z0-9_.-]/, '_')}.jks"
         local_path = File.join(KEYSTORES_DIR, filename)
-        
+
         File.binwrite(local_path, response.body)
-        File.chmod(0600, local_path)  # Secure permissions
+        File.chmod(0o600, local_path) # Secure permissions
 
         {
           path: local_path,
@@ -83,10 +84,8 @@ module Mysigner
       def get_or_download(keystore_id)
         keystores = list
         keystore = keystores.find { |k| k['id'].to_s == keystore_id.to_s }
-        
-        unless keystore
-          raise KeystoreNotFoundError, "Keystore with ID #{keystore_id} not found"
-        end
+
+        raise KeystoreNotFoundError, "Keystore with ID #{keystore_id} not found" unless keystore
 
         # Check if already cached locally
         filename = "#{keystore['name'].gsub(/[^a-zA-Z0-9_.-]/, '_')}.jks"
@@ -109,10 +108,9 @@ module Mysigner
       end
 
       # Upload a keystore to API
-      def upload(name:, keystore_path:, keystore_password:, key_alias:, key_password: nil, android_app_id: nil, active: true)
-        unless File.exist?(keystore_path)
-          raise KeystoreError, "Keystore file not found: #{keystore_path}"
-        end
+      def upload(name:, keystore_path:, keystore_password:, key_alias:, key_password: nil, android_app_id: nil,
+                 active: true)
+        raise KeystoreError, "Keystore file not found: #{keystore_path}" unless File.exist?(keystore_path)
 
         # Read and encode keystore
         keystore_content = File.binread(keystore_path)
@@ -141,14 +139,18 @@ module Mysigner
       # Delete a keystore
       def delete(keystore_id)
         @client.delete("/api/v1/organizations/#{@organization_id}/android_keystores/#{keystore_id}")
-        
+
         # Also remove local cached file
-        keystores = list rescue []
+        keystores = begin
+          list
+        rescue StandardError
+          []
+        end
         keystore = keystores.find { |k| k['id'].to_s == keystore_id.to_s }
         if keystore
           filename = "#{keystore['name'].gsub(/[^a-zA-Z0-9_.-]/, '_')}.jks"
           local_path = File.join(KEYSTORES_DIR, filename)
-          File.delete(local_path) if File.exist?(local_path)
+          FileUtils.rm_f(local_path)
         end
 
         true
@@ -187,26 +189,18 @@ module Mysigner
         return nil unless system('which keytool > /dev/null 2>&1')
 
         output = `keytool -list -v -keystore #{shell_escape(keystore_path)} -storepass #{shell_escape(password)} 2>&1`
-        return nil unless $?.success?
+        return nil unless $CHILD_STATUS.success?
 
         # Parse output
         info = {}
-        
-        if output =~ /Alias name: (.+)/
-          info[:aliases] = output.scan(/Alias name: (.+)/).flatten
-        end
-        
-        if output =~ /Valid from: .+ until: (.+)/
-          info[:expires] = $1
-        end
-        
-        if output =~ /SHA256: (.+)/
-          info[:sha256] = $1.strip
-        end
-        
-        if output =~ /SHA1: (.+)/
-          info[:sha1] = $1.strip
-        end
+
+        info[:aliases] = output.scan(/Alias name: (.+)/).flatten if output =~ /Alias name: (.+)/
+
+        info[:expires] = ::Regexp.last_match(1) if output =~ /Valid from: .+ until: (.+)/
+
+        info[:sha256] = ::Regexp.last_match(1).strip if output =~ /SHA256: (.+)/
+
+        info[:sha1] = ::Regexp.last_match(1).strip if output =~ /SHA1: (.+)/
 
         info
       end
@@ -215,7 +209,7 @@ module Mysigner
 
       def ensure_keystores_dir
         FileUtils.mkdir_p(KEYSTORES_DIR)
-        File.chmod(0700, KEYSTORES_DIR)  # Secure permissions
+        File.chmod(0o700, KEYSTORES_DIR) # Secure permissions
       end
 
       def build_download_connection
@@ -232,7 +226,8 @@ module Mysigner
 
       def shell_escape(str)
         return "''" if str.nil? || str.empty?
-        "'" + str.gsub("'", "'\\''") + "'"
+
+        "'#{str.gsub("'", "'\\''")}'"
       end
     end
   end

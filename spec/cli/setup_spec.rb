@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'mysigner/cli'
 require 'mysigner/config'
@@ -23,16 +25,18 @@ RSpec.describe 'mysigner onboard' do
     before do
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       # User has account
-      allow(cli).to receive(:ask).with("Select (1-2):", limited_to: ['1', '2']).and_return('1', '1')
+      allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1')
       # User has token
       allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
       # Provide token
-      allow(cli).to receive(:ask).with("Paste your API Token:", echo: false).and_return(api_token)
+      allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
       # Success responses
       allow(client).to receive(:test_connection).and_return({ success: true })
       allow(client).to receive(:get).with('/api/v1/organizations').and_return({
-        data: { 'organizations' => [{ 'id' => '1', 'name' => 'Test Org' }] }
-      })
+                                                                                data: { 'organizations' => [{
+                                                                                  'id' => '1', 'name' => 'Test Org'
+                                                                                }] }
+                                                                              })
       allow(config).to receive(:api_url=)
       allow(config).to receive(:api_token=)
       allow(config).to receive(:organization_id=)
@@ -95,16 +99,18 @@ RSpec.describe 'mysigner onboard' do
     context 'user confirms account created' do
       before do
         # User needs account (first ask call)
-        allow(cli).to receive(:ask).with("Select (1-2):", limited_to: ['1', '2']).and_return('2', '1')
+        allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('2', '1')
         # Confirms account created
         allow(cli).to receive(:yes?).with(/Have you created your account/).and_return(true)
         # Has token
         allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-        allow(cli).to receive(:ask).with("Paste your API Token:", echo: false).and_return(api_token)
+        allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
         allow(client).to receive(:test_connection).and_return({ success: true })
         allow(client).to receive(:get).with('/api/v1/organizations').and_return({
-          data: { 'organizations' => [{ 'id' => '1', 'name' => 'Test Org' }] }
-        })
+                                                                                  data: { 'organizations' => [{
+                                                                                    'id' => '1', 'name' => 'Test Org'
+                                                                                  }] }
+                                                                                })
         allow(config).to receive(:api_url=)
         allow(config).to receive(:api_token=)
         allow(config).to receive(:organization_id=)
@@ -126,7 +132,7 @@ RSpec.describe 'mysigner onboard' do
     context 'user has not created account' do
       before do
         # User needs account
-        allow(cli).to receive(:ask).with("Select (1-2):", limited_to: ['1', '2']).and_return('2')
+        allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('2')
         allow(cli).to receive(:yes?).with(/Have you created your account/).and_return(false)
       end
 
@@ -153,15 +159,17 @@ RSpec.describe 'mysigner onboard' do
     context 'user confirms organization created' do
       before do
         # Has account, needs org
-        allow(cli).to receive(:ask).with("Select (1-2):", limited_to: ['1', '2']).and_return('1', '2')
+        allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '2')
         allow(cli).to receive(:yes?).with(/Have you created your organization/).and_return(true)
         # Has token
         allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-        allow(cli).to receive(:ask).with("Paste your API Token:", echo: false).and_return(api_token)
+        allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
         allow(client).to receive(:test_connection).and_return({ success: true })
         allow(client).to receive(:get).with('/api/v1/organizations').and_return({
-          data: { 'organizations' => [{ 'id' => '1', 'name' => 'Test Org' }] }
-        })
+                                                                                  data: { 'organizations' => [{
+                                                                                    'id' => '1', 'name' => 'Test Org'
+                                                                                  }] }
+                                                                                })
         allow(config).to receive(:api_url=)
         allow(config).to receive(:api_token=)
         allow(config).to receive(:organization_id=)
@@ -183,7 +191,7 @@ RSpec.describe 'mysigner onboard' do
     context 'user has not created organization' do
       before do
         # Has account, needs org
-        allow(cli).to receive(:ask).with("Select (1-2):", limited_to: ['1', '2']).and_return('1', '2')
+        allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '2')
         allow(cli).to receive(:yes?).with(/Have you created your organization/).and_return(false)
       end
 
@@ -206,7 +214,7 @@ RSpec.describe 'mysigner onboard' do
     before do
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       # Has account and org
-      allow(cli).to receive(:ask).with("Select (1-2):", limited_to: ['1', '2']).and_return('1', '1')
+      allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1')
       # No token yet
       allow(cli).to receive(:yes?).with(/Have you generated/).and_return(false)
     end
@@ -229,14 +237,14 @@ RSpec.describe 'mysigner onboard' do
   describe 'error handling - empty token' do
     before do
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
-      allow(cli).to receive(:ask).with("Select (1-2):", limited_to: ['1', '2']).and_return('1', '1')
+      allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1')
       allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-      allow(cli).to receive(:ask).with("Paste your API Token:", echo: false).and_return('')
+      allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return('')
       allow(cli).to receive(:error)
     end
 
     it 'shows error message' do
-      expect(cli).to receive(:error).with("Token cannot be empty")
+      expect(cli).to receive(:error).with('Token cannot be empty')
       cli.onboard
     end
 
@@ -253,15 +261,15 @@ RSpec.describe 'mysigner onboard' do
   describe 'error handling - invalid token' do
     before do
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
-      allow(cli).to receive(:ask).with("Select (1-2):", limited_to: ['1', '2']).and_return('1', '1')
+      allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1')
       allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-      allow(cli).to receive(:ask).with("Paste your API Token:", echo: false).and_return(api_token)
+      allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
       allow(client).to receive(:test_connection).and_raise(Mysigner::UnauthorizedError)
       allow(cli).to receive(:error)
     end
 
     it 'shows invalid token error' do
-      expect(cli).to receive(:error).with("Invalid token")
+      expect(cli).to receive(:error).with('Invalid token')
       cli.onboard
     end
 
@@ -279,15 +287,15 @@ RSpec.describe 'mysigner onboard' do
   describe 'error handling - connection test fails' do
     before do
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
-      allow(cli).to receive(:ask).with("Select (1-2):", limited_to: ['1', '2']).and_return('1', '1')
+      allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1')
       allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-      allow(cli).to receive(:ask).with("Paste your API Token:", echo: false).and_return(api_token)
+      allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
       allow(client).to receive(:test_connection).and_return({ success: false })
       allow(cli).to receive(:error)
     end
 
     it 'shows connection error' do
-      expect(cli).to receive(:error).with("Connection test failed")
+      expect(cli).to receive(:error).with('Connection test failed')
       cli.onboard
     end
 
@@ -300,18 +308,18 @@ RSpec.describe 'mysigner onboard' do
   describe 'error handling - no organizations' do
     before do
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
-      allow(cli).to receive(:ask).with("Select (1-2):", limited_to: ['1', '2']).and_return('1', '1')
+      allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1')
       allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-      allow(cli).to receive(:ask).with("Paste your API Token:", echo: false).and_return(api_token)
+      allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
       allow(client).to receive(:test_connection).and_return({ success: true })
       allow(client).to receive(:get).with('/api/v1/organizations').and_return({
-        data: { 'organizations' => [] }
-      })
+                                                                                data: { 'organizations' => [] }
+                                                                              })
       allow(cli).to receive(:error)
     end
 
     it 'shows no organizations error' do
-      expect(cli).to receive(:error).with("No organizations found")
+      expect(cli).to receive(:error).with('No organizations found')
       cli.onboard
     end
 
@@ -328,10 +336,10 @@ RSpec.describe 'mysigner onboard' do
   describe 'error handling - unexpected error' do
     before do
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
-      allow(cli).to receive(:ask).with("Select (1-2):", limited_to: ['1', '2']).and_return('1', '1')
+      allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1')
       allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-      allow(cli).to receive(:ask).with("Paste your API Token:", echo: false).and_return(api_token)
-      allow(client).to receive(:test_connection).and_raise(StandardError, "Network error")
+      allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
+      allow(client).to receive(:test_connection).and_raise(StandardError, 'Network error')
       allow(cli).to receive(:error)
     end
 
@@ -384,4 +392,3 @@ RSpec.describe 'mysigner onboard' do
     $stdout = old_stdout
   end
 end
-

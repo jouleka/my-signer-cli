@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'mysigner/cli'
 require 'open3'
@@ -19,27 +21,27 @@ RSpec.describe 'mysigner doctor' do
       # Xcode installed
       allow(cli).to receive(:system).with('which xcodebuild > /dev/null 2>&1').and_return(true)
       allow(cli).to receive(:`).with('xcodebuild -version').and_return("Xcode 15.0\nBuild version 15A240d\n")
-      
+
       # Command Line Tools installed
       allow(cli).to receive(:system).with('xcode-select -p > /dev/null 2>&1').and_return(true)
-      
+
       # altool available
       allow(cli).to receive(:system).with('xcrun --find altool > /dev/null 2>&1').and_return(true)
-      
+
       # iTMSTransporter available
       allow(File).to receive(:exist?).and_call_original
       allow(File).to receive(:exist?).with('/Applications/Xcode.app/Contents/Developer/usr/bin/iTMSTransporter').and_return(true)
-      
+
       # Logged in with working API
       allow(config).to receive(:exists?).and_return(true)
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return('http://test')
       allow(config).to receive(:api_token).and_return('token')
       allow(client).to receive(:test_connection).and_return({})
-      
+
       # Good disk space
-      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return("Filesystem  50%  /")
-      
+      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return('Filesystem  50%  /')
+
       # No project in directory
       allow(Mysigner::Build::Detector).to receive(:detect).and_raise(Mysigner::Build::Detector::NoProjectError)
     end
@@ -93,7 +95,7 @@ RSpec.describe 'mysigner doctor' do
       allow(cli).to receive(:system).with('xcrun --find altool > /dev/null 2>&1').and_return(false)
       allow(File).to receive(:exist?).and_return(false)
       allow(config).to receive(:exists?).and_return(false)
-      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return("Filesystem  50%  /")
+      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return('Filesystem  50%  /')
       allow(Mysigner::Build::Detector).to receive(:detect).and_raise(Mysigner::Build::Detector::NoProjectError)
     end
 
@@ -118,7 +120,7 @@ RSpec.describe 'mysigner doctor' do
       allow(cli).to receive(:system).with('xcrun --find altool > /dev/null 2>&1').and_return(false)
       allow(File).to receive(:exist?).and_return(false)
       allow(config).to receive(:exists?).and_return(false)
-      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return("Filesystem  50%  /")
+      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return('Filesystem  50%  /')
       allow(Mysigner::Build::Detector).to receive(:detect).and_raise(Mysigner::Build::Detector::NoProjectError)
     end
 
@@ -144,7 +146,7 @@ RSpec.describe 'mysigner doctor' do
       allow(config).to receive(:api_url).and_return('http://test')
       allow(config).to receive(:api_token).and_return('token')
       allow(client).to receive(:test_connection).and_return({})
-      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return("Filesystem  50%  /")
+      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return('Filesystem  50%  /')
       allow(Mysigner::Build::Detector).to receive(:detect).and_raise(Mysigner::Build::Detector::NoProjectError)
     end
 
@@ -170,7 +172,7 @@ RSpec.describe 'mysigner doctor' do
       allow(File).to receive(:exist?).and_call_original
       allow(File).to receive(:exist?).with('/Applications/Xcode.app/Contents/Developer/usr/bin/iTMSTransporter').and_return(true)
       allow(config).to receive(:exists?).and_return(false)
-      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return("Filesystem  50%  /")
+      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return('Filesystem  50%  /')
       allow(Mysigner::Build::Detector).to receive(:detect).and_raise(Mysigner::Build::Detector::NoProjectError)
     end
 
@@ -195,8 +197,8 @@ RSpec.describe 'mysigner doctor' do
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return('http://test')
       allow(config).to receive(:api_token).and_return('token')
-      allow(client).to receive(:test_connection).and_raise(StandardError, "Connection failed")
-      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return("Filesystem  50%  /")
+      allow(client).to receive(:test_connection).and_raise(StandardError, 'Connection failed')
+      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return('Filesystem  50%  /')
       allow(Mysigner::Build::Detector).to receive(:detect).and_raise(Mysigner::Build::Detector::NoProjectError)
     end
 
@@ -222,7 +224,7 @@ RSpec.describe 'mysigner doctor' do
       allow(config).to receive(:api_url).and_return('http://test')
       allow(config).to receive(:api_token).and_return('token')
       allow(client).to receive(:test_connection).and_return({})
-      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return("Filesystem  95%  /")
+      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return('Filesystem  95%  /')
       allow(Mysigner::Build::Detector).to receive(:detect).and_raise(Mysigner::Build::Detector::NoProjectError)
     end
 
@@ -252,13 +254,13 @@ RSpec.describe 'mysigner doctor' do
       allow(config).to receive(:api_url).and_return('http://test')
       allow(config).to receive(:api_token).and_return('token')
       allow(client).to receive(:test_connection).and_return({})
-      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return("Filesystem  50%  /")
-      
+      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return('Filesystem  50%  /')
+
       # Project detected
       allow(Mysigner::Build::Detector).to receive(:detect).and_return({
-        path: '/test/MyApp.xcodeproj',
-        framework: :native
-      })
+                                                                        path: '/test/MyApp.xcodeproj',
+                                                                        framework: :native
+                                                                      })
     end
 
     it 'detects Native iOS project' do
@@ -283,12 +285,12 @@ RSpec.describe 'mysigner doctor' do
       allow(config).to receive(:api_url).and_return('http://test')
       allow(config).to receive(:api_token).and_return('token')
       allow(client).to receive(:test_connection).and_return({})
-      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return("Filesystem  50%  /")
-      
+      allow(cli).to receive(:`).with('df -h . 2>/dev/null | tail -1').and_return('Filesystem  50%  /')
+
       allow(Mysigner::Build::Detector).to receive(:detect).and_return({
-        path: '/test/ios/MyApp.xcworkspace',
-        framework: :react_native
-      })
+                                                                        path: '/test/ios/MyApp.xcworkspace',
+                                                                        framework: :react_native
+                                                                      })
     end
 
     it 'detects React Native project' do
@@ -305,12 +307,12 @@ RSpec.describe 'mysigner doctor' do
 
   describe 'integration tests' do
     it 'runs successfully via shell' do
-      stdout, _, status = Open3.capture3("#{exe_path} doctor 2>&1")
+      _, _, status = Open3.capture3("#{exe_path} doctor 2>&1")
       expect(status.success?).to be true
     end
 
     it 'produces health check output' do
-      stdout, _, status = Open3.capture3("#{exe_path} doctor 2>&1")
+      stdout, = Open3.capture3("#{exe_path} doctor 2>&1")
       expect(stdout).to include('Health Check')
     end
 

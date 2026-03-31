@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'mysigner/cli'
 require 'stringio'
@@ -16,10 +18,10 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
     allow(cli).to receive(:create_client).and_return(client)
     allow(config).to receive(:api_token).and_return('test-token')
     allow(config).to receive(:organization_id).and_return('org-123')
-    
+
     # Stub Build::Detector
     allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
-    
+
     # Stub Build::Parser
     allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
     allow(parser).to receive(:main_target).and_return(double(name: 'TestApp'))
@@ -31,19 +33,19 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
     allow(parser).to receive(:code_sign_style).and_return('Automatic')
     allow(parser).to receive(:team_id).and_return('ABCD1234')
     allow(parser).to receive(:signing_configured?).and_return(true)
-    
+
     # Stub Signing::Validator
     allow(Mysigner::Signing::Validator).to receive(:new).and_return(validator)
     allow(validator).to receive(:validate!)
-    
+
     # Stub Build::Executor
     allow(Mysigner::Build::Executor).to receive(:new).and_return(executor)
     allow(executor).to receive(:build!).and_return('/path/to/build/TestApp.xcarchive')
-    
+
     # Stub client for team fetch
-    allow(client).to receive(:get).with("/api/v1/organizations/org-123").and_return({
-      'app_store_connect_team_id' => 'TEAM123'
-    })
+    allow(client).to receive(:get).with('/api/v1/organizations/org-123').and_return({
+                                                                                      'app_store_connect_team_id' => 'TEAM123'
+                                                                                    })
   end
 
   def capture_output
@@ -58,8 +60,8 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
   describe 'mysigner build --bundle-id' do
     context 'with valid bundle ID override' do
       before do
-        cli.options = { 
-          configuration: 'Release', 
+        cli.options = {
+          configuration: 'Release',
           bundle_id: 'com.mycompany.newapp'
         }
       end
@@ -77,13 +79,13 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
 
       it 'shows override indicator in output' do
         output = capture_output { cli.build }
-        
+
         expect(output).to include('📦 Bundle ID: com.mycompany.newapp (overridden)')
       end
 
       it 'validates bundle ID before building' do
         expect(executor).to receive(:build!)
-        
+
         output = capture_output { cli.build }
         expect(output).to include('Bundle ID: com.mycompany.newapp (overridden)')
       end
@@ -91,8 +93,8 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
 
     context 'with invalid bundle ID format' do
       before do
-        cli.options = { 
-          configuration: 'Release', 
+        cli.options = {
+          configuration: 'Release',
           bundle_id: 'invalid bundle id!'
         }
       end
@@ -110,9 +112,13 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
 
       it 'shows helpful error message' do
         expect(cli).to receive(:exit).with(1)
-        
-        output = capture_output { cli.build rescue nil }
-        
+
+        output = capture_output do
+          cli.build
+        rescue StandardError
+          nil
+        end
+
         expect(output).to include('Invalid bundle ID format')
         expect(output).to include('Bundle IDs must contain only letters, numbers, hyphens, and periods')
       end
@@ -120,8 +126,8 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
 
     context 'with bundle ID containing variables' do
       before do
-        cli.options = { 
-          configuration: 'Release', 
+        cli.options = {
+          configuration: 'Release',
           bundle_id: '$(PRODUCT_BUNDLE_PREFIX).app'
         }
       end
@@ -139,8 +145,8 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
 
     context 'with bundle ID containing ${VAR} syntax' do
       before do
-        cli.options = { 
-          configuration: 'Release', 
+        cli.options = {
+          configuration: 'Release',
           bundle_id: '${BUNDLE_PREFIX}.app'
         }
       end
@@ -158,8 +164,8 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
 
     context 'with bundle ID containing special characters' do
       before do
-        cli.options = { 
-          configuration: 'Release', 
+        cli.options = {
+          configuration: 'Release',
           bundle_id: 'com.test.app@#$'
         }
       end
@@ -177,8 +183,8 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
 
     context 'with valid bundle ID containing hyphens' do
       before do
-        cli.options = { 
-          configuration: 'Release', 
+        cli.options = {
+          configuration: 'Release',
           bundle_id: 'com.my-company.my-app'
         }
       end
@@ -215,7 +221,7 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
 
     context 'with both team and bundle ID overrides' do
       before do
-        cli.options = { 
+        cli.options = {
           configuration: 'Release',
           team: 'CUSTOM123',
           bundle_id: 'com.custom.app'
@@ -238,7 +244,7 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
     end
   end
 
-  # Note: mysigner ship tests are covered by the build tests above
+  # NOTE: mysigner ship tests are covered by the build tests above
   # since ship calls build internally with the same options
 
   describe 'Executor integration' do
@@ -253,7 +259,7 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
     end
 
     it 'includes PRODUCT_BUNDLE_IDENTIFIER in xcodebuild command' do
-      cli.options = { 
+      cli.options = {
         configuration: 'Release',
         bundle_id: 'com.override.test'
       }
@@ -279,7 +285,7 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
     end
 
     it 'includes both DEVELOPMENT_TEAM and PRODUCT_BUNDLE_IDENTIFIER when both overridden' do
-      cli.options = { 
+      cli.options = {
         configuration: 'Release',
         team: 'CUSTOM123',
         bundle_id: 'com.custom.bundle'
@@ -313,13 +319,13 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
           hash_including(bundle_id: '')
         ).and_return('/path/to/build/TestApp.xcarchive')
 
-        output = capture_output { cli.build }
+        capture_output { cli.build }
         # Empty string is still passed, but it's up to the executor to handle it
       end
     end
 
     context 'with very long bundle ID' do
-      let(:long_bundle_id) { 'com.' + 'a' * 200 }
+      let(:long_bundle_id) { "com.#{'a' * 200}" }
 
       before do
         cli.options[:bundle_id] = long_bundle_id
@@ -408,4 +414,3 @@ RSpec.describe 'mysigner build/ship --bundle-id', type: :integration do
     end
   end
 end
-

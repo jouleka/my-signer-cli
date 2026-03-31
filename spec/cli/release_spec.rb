@@ -68,7 +68,7 @@ RSpec.describe 'mysigner release', type: :cli do
 
     describe 'release list' do
       context 'when releases exist' do
-        let(:releases) {
+        let(:releases) do
           [
             {
               'id' => 1,
@@ -89,12 +89,12 @@ RSpec.describe 'mysigner release', type: :cli do
               'version_string' => '2.0.0'
             }
           ]
-        }
+        end
 
         before do
           allow(client).to receive(:get).and_return({
-            data: { 'app_store_releases' => releases }
-          })
+                                                      data: { 'app_store_releases' => releases }
+                                                    })
         end
 
         it 'shows header' do
@@ -162,8 +162,8 @@ RSpec.describe 'mysigner release', type: :cli do
         before do
           cli.options = { bundle_id: 'com.example.app' }
           allow(client).to receive(:get).and_return({
-            data: { 'app_store_releases' => [] }
-          })
+                                                      data: { 'app_store_releases' => [] }
+                                                    })
         end
 
         it 'sends bundle_id filter to API' do
@@ -178,8 +178,8 @@ RSpec.describe 'mysigner release', type: :cli do
       context 'when no releases found' do
         before do
           allow(client).to receive(:get).and_return({
-            data: { 'app_store_releases' => [] }
-          })
+                                                      data: { 'app_store_releases' => [] }
+                                                    })
         end
 
         it 'shows no releases message' do
@@ -220,7 +220,7 @@ RSpec.describe 'mysigner release', type: :cli do
 
     describe 'release show' do
       context 'when release exists' do
-        let(:release_response) {
+        let(:release_response) do
           {
             data: {
               'app_store_release' => {
@@ -239,7 +239,7 @@ RSpec.describe 'mysigner release', type: :cli do
               }
             }
           }
-        }
+        end
 
         before do
           allow(client).to receive(:get).and_return(release_response)
@@ -368,7 +368,7 @@ RSpec.describe 'mysigner release', type: :cli do
 
     describe 'release create' do
       context 'when successful' do
-        let(:create_response) {
+        let(:create_response) do
           {
             data: {
               'app_store_release' => {
@@ -380,7 +380,7 @@ RSpec.describe 'mysigner release', type: :cli do
               }
             }
           }
-        }
+        end
 
         before do
           cli.options = { bundle_id_id: 42, auto_submit: true, phased_release: true }
@@ -490,7 +490,7 @@ RSpec.describe 'mysigner release', type: :cli do
 
     describe 'release update' do
       context 'when successful' do
-        let(:update_response) {
+        let(:update_response) do
           {
             data: {
               'app_store_release' => {
@@ -502,7 +502,7 @@ RSpec.describe 'mysigner release', type: :cli do
               }
             }
           }
-        }
+        end
 
         before do
           cli.options = { whats_new: 'New features', auto_submit: true }
@@ -643,7 +643,7 @@ RSpec.describe 'mysigner release', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'release']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help release]) }
       expect(help_output).to include('release')
     end
   end
@@ -654,7 +654,7 @@ RSpec.describe 'mysigner release', type: :cli do
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
 
-      output = capture_stdout { Mysigner::CLI.start(['release', 'list']) }
+      output = capture_stdout { Mysigner::CLI.start(%w[release list]) }
       expect(output).to include('Not logged in')
     end
   end

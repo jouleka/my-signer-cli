@@ -267,23 +267,23 @@ RSpec.describe 'mysigner export', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'export']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help export]) }
       expect(help_output).to include('Export .xcarchive to .ipa file')
     end
 
     it 'shows archive path argument' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'export']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help export]) }
       expect(help_output).to include('ARCHIVE_PATH')
     end
 
     it 'shows options' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'export']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help export]) }
       expect(help_output).to include('--method')
       expect(help_output).to include('--output')
     end
 
     it 'shows export methods' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'export']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help export]) }
       expect(help_output).to include('appstore')
     end
   end
@@ -294,7 +294,7 @@ RSpec.describe 'mysigner export', type: :cli do
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
       allow(File).to receive(:exist?).with(archive_path).and_return(true)
-      
+
       output = capture_stdout { Mysigner::CLI.start(['export', archive_path]) }
       expect(output).to include('Not logged in')
     end
@@ -306,4 +306,3 @@ RSpec.describe 'mysigner export', type: :cli do
     end
   end
 end
-

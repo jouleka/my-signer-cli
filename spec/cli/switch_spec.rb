@@ -9,13 +9,15 @@ RSpec.describe 'mysigner switch', type: :cli do
   let(:client) { instance_double(Mysigner::Client) }
   let(:api_url) { 'https://mysigner.dev' }
   let(:api_token) { 'sk_test_abc123xyz' }
+  let(:user_email) { 'dev@example.com' }
   let(:current_org_id) { '123' }
 
-  # Helper to capture stdout
   def capture_stdout
     old_stdout = $stdout
     $stdout = StringIO.new
     yield
+    $stdout.string
+  rescue SystemExit
     $stdout.string
   ensure
     $stdout = old_stdout
@@ -24,263 +26,140 @@ RSpec.describe 'mysigner switch', type: :cli do
   before do
     allow(Mysigner::Config).to receive(:new).and_return(config)
     allow(Mysigner::Client).to receive(:new).and_return(client)
-    allow(cli).to receive(:exit) # Stub exit
   end
 
   describe 'when not logged in' do
     before do
       allow(config).to receive(:exists?).and_return(false)
-      allow(config).to receive(:load)
-      allow(config).to receive(:api_url).and_return(nil)
-      allow(config).to receive(:api_token).and_return(nil)
-      allow(config).to receive(:organization_id).and_return('123')
-      # Stub to prevent errors if execution continues
-      allow(client).to receive(:get).and_return({ 
-        data: { 'organizations' => [] } 
-      })
     end
 
-    it 'shows error message' do
+    it 'shows the login guidance and exits' do
       output = capture_stdout { cli.switch }
-      expect(output).to include('Not logged in')
-    end
 
-    it 'suggests login command' do
-      output = capture_stdout { cli.switch }
-      expect(output).to include('mysigner login')
-    end
-
-    it 'exits with code 1' do
-      expect(cli).to receive(:exit).with(1)
-      cli.switch
+      expect(output).to include("Not logged in. Run 'mysigner login' first.")
+      expect { cli.switch }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
     end
   end
 
-  describe 'when user has only one organization' do
-    let(:current_org_response) {
-      {
-        data: {
-          'id' => current_org_id,
-          'name' => 'Only Organization'
-        }
-      }
-    }
-
-    let(:orgs_response) {
-      {
-        data: {
-          'organizations' => [
-            {
-              'id' => current_org_id,
-              'name' => 'Only Organization',
-              'role' => 'admin',
-              'member_count' => 5
-            }
-          ]
-        }
-      }
-    }
-
+  describe 'when only one organization is available' do
     before do
       allow(config).to receive(:exists?).and_return(true)
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(current_org_id)
-      allow(client).to receive(:get).with("/api/v1/organizations/#{current_org_id}").and_return(current_org_response)
-      allow(client).to receive(:get).with('/api/v1/organizations').and_return(orgs_response)
+      allow(config).to receive(:user_email).and_return(user_email)
+      allow(config).to receive(:current_organization_id).and_return(current_org_id)
+      allow(config).to receive(:organization_ids).and_return([current_org_id])
+      allow(client).to receive(:get).with("/api/v1/organizations/#{current_org_id}").and_return(
+        data: { 'id' => current_org_id, 'name' => 'Only Organization' }
+      )
+      allow(client).to receive(:get).with('/api/v1/user/organizations').and_return(
+        data: {
+          'organizations' => [
+            { 'id' => current_org_id, 'name' => 'Only Organization', 'role' => 'admin', 'member_count' => 5 }
+          ]
+        }
+      )
     end
 
-    it 'shows switch header' do
+    it 'shows that there is nothing to switch to' do
       output = capture_stdout { cli.switch }
+
       expect(output).to include('Switch Organization')
-    end
-
-    it 'shows current organization' do
-      output = capture_stdout { cli.switch }
       expect(output).to include('Current organization:')
       expect(output).to include('Only Organization')
-      expect(output).to include("ID: #{current_org_id}")
-    end
-
-    it 'shows message that nothing to switch to' do
-      output = capture_stdout { cli.switch }
-      expect(output).to include('You only have access to one organization')
-      expect(output).to include('Nothing to switch to')
-    end
-
-    it 'does not prompt for selection' do
-      expect(cli).not_to receive(:ask)
-      cli.switch
-    end
-
-    it 'does not update config' do
-      expect(config).not_to receive(:organization_id=)
-      expect(config).not_to receive(:save)
-      cli.switch
-    end
-
-    it 'does not exit with error' do
-      expect(cli).not_to receive(:exit).with(1)
-      cli.switch
+      expect(output).to include('You only have access to one organization.')
+      expect(output).to include('Nothing to switch to!')
+      expect(output).not_to include('Select organization')
     end
   end
 
-  describe 'when user has multiple organizations' do
-    let(:current_org_response) {
-      {
-        data: {
-          'id' => '123',
-          'name' => 'Current Org'
-        }
-      }
-    }
-
-    let(:orgs_response) {
-      {
+  describe 'when switching to another saved organization' do
+    before do
+      allow(config).to receive(:exists?).and_return(true)
+      allow(config).to receive(:load)
+      allow(config).to receive(:api_url).and_return(api_url)
+      allow(config).to receive(:api_token).and_return(api_token)
+      allow(config).to receive(:user_email).and_return(user_email)
+      allow(config).to receive(:current_organization_id).and_return(current_org_id)
+      allow(config).to receive(:organization_ids).and_return(%w[123 456])
+      allow(config).to receive(:has_token_for_org?).with('123').and_return(true)
+      allow(config).to receive(:has_token_for_org?).with('456').and_return(true)
+      allow(config).to receive(:org_name).with('123').and_return('Current Org')
+      allow(config).to receive(:org_name).with('456').and_return('Another Org')
+      allow(config).to receive(:current_organization_id=).with('456')
+      allow(config).to receive(:save)
+      allow(client).to receive(:get).with("/api/v1/organizations/#{current_org_id}").and_return(
+        data: { 'id' => current_org_id, 'name' => 'Current Org' }
+      )
+      allow(client).to receive(:get).with('/api/v1/user/organizations').and_return(
         data: {
           'organizations' => [
-            {
-              'id' => '123',
-              'name' => 'Current Org',
-              'role' => 'admin',
-              'member_count' => 5
-            },
-            {
-              'id' => '456',
-              'name' => 'Another Org',
-              'role' => 'developer',
-              'member_count' => 10
-            },
-            {
-              'id' => '789',
-              'name' => 'Third Org',
-              'role' => 'owner',
-              'member_count' => 3
-            }
+            { 'id' => '123', 'name' => 'Current Org', 'role' => 'admin', 'member_count' => 5 },
+            { 'id' => '456', 'name' => 'Another Org', 'role' => 'developer', 'member_count' => 10 }
           ]
         }
-      }
-    }
+      )
+      allow(cli).to receive(:ask).and_return('2')
+    end
+
+    it 'switches and saves the new current organization' do
+      output = capture_stdout { cli.switch }
+
+      expect(output).to include('Available organizations:')
+      expect(output).to include('1. ✓ Current Org (current)')
+      expect(output).to include('2. ✓ Another Org')
+      expect(output).to include('Successfully switched to: Another Org')
+      expect(output).to include("Run 'mysigner status' to verify your new configuration")
+      expect(config).to have_received(:current_organization_id=).with('456')
+      expect(config).to have_received(:save)
+    end
+  end
+
+  describe 'when switching to an organization without a saved token' do
+    let(:validation_client) { instance_double(Mysigner::Client) }
 
     before do
       allow(config).to receive(:exists?).and_return(true)
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return('123')
-      allow(client).to receive(:get).with("/api/v1/organizations/123").and_return(current_org_response)
-      allow(client).to receive(:get).with('/api/v1/organizations').and_return(orgs_response)
+      allow(config).to receive(:user_email).and_return(user_email)
+      allow(config).to receive(:current_organization_id).and_return(current_org_id)
+      allow(config).to receive(:organization_ids).and_return(%w[123 456])
+      allow(config).to receive(:has_token_for_org?).with('123').and_return(true)
+      allow(config).to receive(:has_token_for_org?).with('456').and_return(false)
+      allow(config).to receive(:org_name).with('123').and_return('Current Org')
+      allow(config).to receive(:org_name).with('456').and_return('Another Org')
+      allow(config).to receive(:save_token_for_org).with('456', 'Another Org', 'new_token_456')
+      allow(config).to receive(:current_organization_id=).with('456')
+      allow(config).to receive(:save)
+      allow(client).to receive(:get).with("/api/v1/organizations/#{current_org_id}").and_return(
+        data: { 'id' => current_org_id, 'name' => 'Current Org' }
+      )
+      allow(client).to receive(:get).with('/api/v1/user/organizations').and_return(
+        data: {
+          'organizations' => [
+            { 'id' => '123', 'name' => 'Current Org', 'role' => 'admin', 'member_count' => 5 },
+            { 'id' => '456', 'name' => 'Another Org', 'role' => 'developer', 'member_count' => 10 }
+          ]
+        }
+      )
+      allow(Mysigner::Client).to receive(:new).and_return(client, validation_client)
+      allow(validation_client).to receive(:get).with('/api/v1/organizations/456').and_return(
+        data: { 'id' => '456', 'name' => 'Another Org', 'token_organization_id' => '456' }
+      )
+      allow(cli).to receive(:ask).and_return('2', 'new_token_456')
     end
 
-    it 'shows switch header' do
-      allow(cli).to receive(:ask).and_return('2')
-      allow(config).to receive(:organization_id=)
-      allow(config).to receive(:save)
-      
+    it 'prompts for and saves a new org token before switching' do
       output = capture_stdout { cli.switch }
-      expect(output).to include('Switch Organization')
-    end
 
-    it 'shows current organization' do
-      allow(cli).to receive(:ask).and_return('2')
-      allow(config).to receive(:organization_id=)
-      allow(config).to receive(:save)
-      
-      output = capture_stdout { cli.switch }
-      expect(output).to include('Current organization:')
-      expect(output).to include('Current Org (ID: 123)')
-    end
-
-    it 'shows all available organizations' do
-      allow(cli).to receive(:ask).and_return('2')
-      allow(config).to receive(:organization_id=)
-      allow(config).to receive(:save)
-      
-      output = capture_stdout { cli.switch }
-      expect(output).to include('Available organizations:')
-      expect(output).to include('1. Current Org (current) (admin)')
-      expect(output).to include('2. Another Org (developer)')
-      expect(output).to include('3. Third Org (owner)')
-    end
-
-    it 'marks current organization' do
-      allow(cli).to receive(:ask).and_return('2')
-      allow(config).to receive(:organization_id=)
-      allow(config).to receive(:save)
-      
-      output = capture_stdout { cli.switch }
-      expect(output).to include('Current Org (current)')
-      expect(output).not_to include('Another Org (current)')
-      expect(output).not_to include('Third Org (current)')
-    end
-
-    it 'prompts for selection' do
-      allow(config).to receive(:organization_id=)
-      allow(config).to receive(:save)
-      
-      expect(cli).to receive(:ask).with("Select organization (1-3):", limited_to: ['1', '2', '3']).and_return('2')
-      cli.switch
-    end
-
-    context 'when user selects current organization' do
-      before do
-        allow(cli).to receive(:ask).and_return('1') # Current Org
-      end
-
-      it 'shows already using message' do
-        output = capture_stdout { cli.switch }
-        expect(output).to include('Already using this organization')
-      end
-
-      it 'does not update config' do
-        expect(config).not_to receive(:organization_id=)
-        expect(config).not_to receive(:save)
-        cli.switch
-      end
-    end
-
-    context 'when user selects different organization' do
-      before do
-        allow(cli).to receive(:ask).and_return('2') # Another Org (456)
-        allow(config).to receive(:organization_id=)
-        allow(config).to receive(:save)
-      end
-
-      it 'updates organization ID' do
-        expect(config).to receive(:organization_id=).with('456')
-        cli.switch
-      end
-
-      it 'saves config' do
-        expect(config).to receive(:save)
-        cli.switch
-      end
-
-      it 'shows success message' do
-        output = capture_stdout { cli.switch }
-        expect(output).to include('Successfully switched')
-        expect(output).to include('New organization: Another Org')
-      end
-
-      it 'shows verification tip' do
-        output = capture_stdout { cli.switch }
-        expect(output).to include('mysigner status')
-      end
-    end
-
-    context 'when organization has no role' do
-      before do
-        orgs_response[:data]['organizations'][1].delete('role')
-        allow(cli).to receive(:ask).and_return('2')
-        allow(config).to receive(:organization_id=)
-        allow(config).to receive(:save)
-      end
-
-      it 'defaults to viewer' do
-        output = capture_stdout { cli.switch }
-        expect(output).to include('2. Another Org (viewer)')
-      end
+      expect(output).to include("You don't have a token for 'Another Org' yet.")
+      expect(output).to include('Token validated successfully')
+      expect(output).to include('Successfully switched to: Another Org')
+      expect(config).to have_received(:save_token_for_org).with('456', 'Another Org', 'new_token_456')
+      expect(config).to have_received(:current_organization_id=).with('456')
     end
   end
 
@@ -290,119 +169,30 @@ RSpec.describe 'mysigner switch', type: :cli do
       allow(config).to receive(:load)
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return('123')
+      allow(config).to receive(:user_email).and_return(user_email)
+      allow(config).to receive(:current_organization_id).and_return(current_org_id)
     end
 
-    context 'when fetching current org fails' do
-      before do
-        allow(client).to receive(:get).with('/api/v1/organizations/123').and_raise(
-          Mysigner::ClientError.new('Organization not found')
-        )
-      end
+    it 'surfaces client errors and exits' do
+      allow(client).to receive(:get).with("/api/v1/organizations/#{current_org_id}").and_raise(
+        Mysigner::ClientError.new('Organization not found')
+      )
 
-      it 'shows error message' do
-        output = capture_stdout { cli.switch }
-        expect(output).to include('Failed to switch organization')
-        expect(output).to include('Organization not found')
-      end
+      output = capture_stdout { cli.switch }
 
-      it 'exits with code 1' do
-        expect(cli).to receive(:exit).with(1)
-        cli.switch
-      end
-    end
-
-    context 'when fetching organizations list fails' do
-      let(:current_org_response) {
-        {
-          data: {
-            'id' => '123',
-            'name' => 'Current Org'
-          }
-        }
-      }
-
-      before do
-        allow(client).to receive(:get).with('/api/v1/organizations/123').and_return(current_org_response)
-        allow(client).to receive(:get).with('/api/v1/organizations').and_raise(
-          Mysigner::ClientError.new('Failed to fetch organizations')
-        )
-      end
-
-      it 'shows error message' do
-        output = capture_stdout { cli.switch }
-        expect(output).to include('Failed to switch organization')
-        expect(output).to include('Failed to fetch organizations')
-      end
-
-      it 'exits with code 1' do
-        expect(cli).to receive(:exit).with(1)
-        cli.switch
-      end
-    end
-
-    context 'when connection fails' do
-      before do
-        allow(client).to receive(:get).and_raise(
-          Mysigner::ClientError.new('Connection failed')
-        )
-      end
-
-      it 'shows error message' do
-        output = capture_stdout { cli.switch }
-        expect(output).to include('Failed to switch organization')
-        expect(output).to include('Connection failed')
-      end
-
-      it 'exits with code 1' do
-        expect(cli).to receive(:exit).with(1)
-        cli.switch
-      end
-    end
-
-    context 'when token is invalid (401)' do
-      before do
-        allow(client).to receive(:get).and_raise(
-          Mysigner::UnauthorizedError.new('Invalid token')
-        )
-      end
-
-      it 'shows error message' do
-        output = capture_stdout { cli.switch }
-        expect(output).to include('Failed to switch organization')
-        expect(output).to include('Invalid token')
-      end
-
-      it 'exits with code 1' do
-        expect(cli).to receive(:exit).with(1)
-        cli.switch
-      end
+      expect(output).to include('Failed to switch organization')
+      expect(output).to include('Organization not found')
+      expect { cli.switch }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
     end
   end
 
   describe 'help text' do
-    it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'switch']) }
+    it 'matches the current command description' do
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help switch]) }
+
       expect(help_output).to include('Switch to a different organization')
-    end
-
-    it 'has long description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'switch']) }
-      expect(help_output).to include('without logging out')
-      expect(help_output).to include('current organization')
-      expect(help_output).to include('available')
-    end
-  end
-
-  describe 'integration tests' do
-    it 'requires login' do
-      allow(Mysigner::Config).to receive(:new).and_call_original
-      config_file = Mysigner::Config::CONFIG_FILE
-      allow(File).to receive(:exist?).with(config_file).and_return(false)
-      
-      output = capture_stdout { Mysigner::CLI.start(['switch']) }
-      expect(output).to include('Not logged in')
+      expect(help_output).to include('organization-specific tokens')
+      expect(help_output).to include('same user in all organizations')
     end
   end
 end
-

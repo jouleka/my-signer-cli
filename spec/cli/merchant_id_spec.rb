@@ -69,17 +69,18 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
 
     describe 'merchant-ids (list)' do
       context 'when merchant IDs exist' do
-        let(:merchant_ids_response) {
+        let(:merchant_ids_response) do
           {
             data: {
               'merchant_ids' => [
-                { 'id' => '1', 'identifier' => 'merchant.com.example.payments', 'name' => 'Example Payments', 'team_id' => 'ABC123' },
+                { 'id' => '1', 'identifier' => 'merchant.com.example.payments', 'name' => 'Example Payments',
+                  'team_id' => 'ABC123' },
                 { 'id' => '2', 'identifier' => 'merchant.com.example.store', 'name' => 'Example Store' }
               ],
               'pagination' => { 'page' => 1, 'total_pages' => 1, 'total' => 2 }
             }
           }
-        }
+        end
 
         before do
           allow(client).to receive(:get)
@@ -123,9 +124,9 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
       end
 
       context 'when no merchant IDs found' do
-        let(:empty_response) {
+        let(:empty_response) do
           { data: { 'merchant_ids' => [] } }
-        }
+        end
 
         before do
           allow(client).to receive(:get)
@@ -145,7 +146,7 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
       end
 
       context 'with search query' do
-        let(:search_response) {
+        let(:search_response) do
           {
             data: {
               'merchant_ids' => [
@@ -153,7 +154,7 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
               ]
             }
           }
-        }
+        end
 
         before do
           cli.options = { page: 1, per_page: 50, search: 'payments' }
@@ -191,7 +192,7 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
 
     describe 'merchant-id create' do
       context 'with valid identifier' do
-        let(:success_response) {
+        let(:success_response) do
           {
             data: {
               'merchant_id' => {
@@ -200,7 +201,7 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
               }
             }
           }
-        }
+        end
 
         before do
           cli.options = {}
@@ -232,7 +233,7 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
       end
 
       context 'with custom name' do
-        let(:success_response) {
+        let(:success_response) do
           {
             data: {
               'merchant_id' => {
@@ -241,7 +242,7 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
               }
             }
           }
-        }
+        end
 
         before do
           cli.options = { name: 'My Custom Payment' }
@@ -339,7 +340,7 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
 
     describe 'merchant-id delete' do
       context 'when merchant ID exists' do
-        let(:list_response) {
+        let(:list_response) do
           {
             data: {
               'merchant_ids' => [
@@ -347,7 +348,7 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
               ]
             }
           }
-        }
+        end
 
         before do
           cli.options = {}
@@ -383,9 +384,9 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
       end
 
       context 'when merchant ID not found' do
-        let(:empty_response) {
+        let(:empty_response) do
           { data: { 'merchant_ids' => [] } }
-        }
+        end
 
         before do
           cli.options = {}
@@ -422,7 +423,7 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
       end
 
       context 'when delete fails' do
-        let(:list_response) {
+        let(:list_response) do
           {
             data: {
               'merchant_ids' => [
@@ -430,7 +431,7 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
               ]
             }
           }
-        }
+        end
 
         before do
           cli.options = {}
@@ -479,12 +480,12 @@ RSpec.describe 'mysigner merchant-ids and merchant-id', type: :cli do
 
   describe 'help text' do
     it 'has description for merchant-ids' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'merchant-ids']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help merchant-ids]) }
       expect(help_output).to include('Merchant ID')
     end
 
     it 'has description for merchant-id' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'merchant-id']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help merchant-id]) }
       expect(help_output).to include('Merchant ID')
     end
   end

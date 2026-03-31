@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'mysigner/cli'
 require 'mysigner/config'
@@ -137,4 +139,3 @@ RSpec.describe 'mysigner logout' do
     $stdout = old_stdout
   end
 end
-

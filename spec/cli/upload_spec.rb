@@ -111,13 +111,13 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
   end
 
   describe 'when App Store Connect credentials not configured' do
-    let(:org_response) {
+    let(:org_response) do
       {
         data: {
           'app_store_connect_configured' => false
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -176,7 +176,7 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
   end
 
   describe 'when credentials are invalid' do
-    let(:org_response) {
+    let(:org_response) do
       {
         data: {
           'app_store_connect_configured' => true,
@@ -185,7 +185,7 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
           'app_store_connect_private_key' => 'key_content'
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -209,7 +209,7 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
   end
 
   describe 'successful upload' do
-    let(:org_response) {
+    let(:org_response) do
       {
         data: {
           'app_store_connect_configured' => true,
@@ -218,7 +218,7 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
           'app_store_connect_private_key' => '-----BEGIN PRIVATE KEY-----\nkey_content\n-----END PRIVATE KEY-----'
         }
       }
-    }
+    end
     let(:uploader) { instance_double(Mysigner::Upload::Uploader) }
 
     before do
@@ -291,7 +291,7 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
   end
 
   describe 'when transporter not found' do
-    let(:org_response) {
+    let(:org_response) do
       {
         data: {
           'app_store_connect_configured' => true,
@@ -300,7 +300,7 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
           'app_store_connect_private_key' => 'key_content'
         }
       }
-    }
+    end
     let(:uploader) { instance_double(Mysigner::Upload::Uploader) }
 
     before do
@@ -330,7 +330,7 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
   end
 
   describe 'when upload fails' do
-    let(:org_response) {
+    let(:org_response) do
       {
         data: {
           'app_store_connect_configured' => true,
@@ -339,7 +339,7 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
           'app_store_connect_private_key' => 'key_content'
         }
       }
-    }
+    end
     let(:uploader) { instance_double(Mysigner::Upload::Uploader) }
 
     before do
@@ -370,7 +370,7 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
   end
 
   describe 'when unexpected error occurs' do
-    let(:org_response) {
+    let(:org_response) do
       {
         data: {
           'app_store_connect_configured' => true,
@@ -379,7 +379,7 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
           'app_store_connect_private_key' => 'key_content'
         }
       }
-    }
+    end
     let(:uploader) { instance_double(Mysigner::Upload::Uploader) }
 
     before do
@@ -420,18 +420,18 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'upload']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help upload]) }
       expect(help_output).to include('Upload IPA to TestFlight')
     end
 
     it 'shows target and path arguments' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'upload']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help upload]) }
       expect(help_output).to include('testflight')
       expect(help_output).to include('IPA_PATH')
     end
 
     it 'shows wait option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'upload']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help upload]) }
       expect(help_output).to include('--wait')
     end
   end
@@ -442,10 +442,9 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
       allow(File).to receive(:exist?).with(ipa_path).and_return(true)
-      
+
       output = capture_stdout { Mysigner::CLI.start(['upload', 'testflight', ipa_path]) }
       expect(output).to include('Not logged in')
     end
   end
 end
-

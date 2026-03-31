@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'mysigner/cli'
 require 'open3'
@@ -38,16 +40,16 @@ RSpec.describe 'mysigner help' do
     end
 
     it 'lists global options' do
-      stdout, _, = Open3.capture3("#{exe_path} help 2>&1")
+      stdout, = Open3.capture3("#{exe_path} help 2>&1")
       expect(stdout).to include('Options:')
       expect(stdout).to include('verbose')
     end
 
     it 'includes command descriptions' do
-      stdout, _, = Open3.capture3("#{exe_path} help 2>&1")
-      expect(stdout).to include('Build iOS archive')
-      expect(stdout).to include('Authenticate with')
-      expect(stdout).to include('Diagnose common issues')
+      stdout, = Open3.capture3("#{exe_path} help 2>&1")
+      expect(stdout).to include('Build .xcarchive only')
+      expect(stdout).to include('Log in with existing API token')
+      expect(stdout).to include('Run health check and diagnose')
     end
   end
 
@@ -211,31 +213,28 @@ RSpec.describe 'mysigner help' do
     end
 
     it 'is listed in general help' do
-      stdout, _, = Open3.capture3("#{exe_path} help 2>&1")
+      stdout, = Open3.capture3("#{exe_path} help 2>&1")
       expect(stdout).to include('mysigner help')
     end
   end
 
   describe 'output format' do
     it 'uses consistent formatting' do
-      stdout, _, = Open3.capture3("#{exe_path} help 2>&1")
+      stdout, = Open3.capture3("#{exe_path} help 2>&1")
       # Should have proper structure
       expect(stdout).to match(/Commands:.*Options:/m)
     end
 
     it 'aligns command descriptions' do
-      stdout, _, = Open3.capture3("#{exe_path} help 2>&1")
+      stdout, = Open3.capture3("#{exe_path} help 2>&1")
       lines = stdout.split("\n").select { |l| l.include?('mysigner') && l.include?('#') }
       # All description markers should align
       expect(lines.length).to be > 10
     end
 
     it 'shows proper usage format for commands' do
-      stdout, _, = Open3.capture3("#{exe_path} help build 2>&1")
+      stdout, = Open3.capture3("#{exe_path} help build 2>&1")
       expect(stdout).to match(/Usage:\s+mysigner build/)
     end
   end
 end
-
-
-

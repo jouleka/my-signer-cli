@@ -68,7 +68,7 @@ RSpec.describe 'mysigner gp-credential', type: :cli do
 
     describe 'gp-credential list' do
       context 'when credentials exist' do
-        let(:credentials) {
+        let(:credentials) do
           [
             {
               'id' => 1,
@@ -87,12 +87,12 @@ RSpec.describe 'mysigner gp-credential', type: :cli do
               'last_sync_status' => 'failed'
             }
           ]
-        }
+        end
 
         before do
           allow(client).to receive(:get).and_return({
-            data: { 'google_play_credentials' => credentials }
-          })
+                                                      data: { 'google_play_credentials' => credentials }
+                                                    })
         end
 
         it 'shows header' do
@@ -156,8 +156,8 @@ RSpec.describe 'mysigner gp-credential', type: :cli do
       context 'when no credentials found' do
         before do
           allow(client).to receive(:get).and_return({
-            data: { 'google_play_credentials' => [] }
-          })
+                                                      data: { 'google_play_credentials' => [] }
+                                                    })
         end
 
         it 'shows no credentials message' do
@@ -300,7 +300,7 @@ RSpec.describe 'mysigner gp-credential', type: :cli do
 
     describe 'gp-credential activate' do
       context 'when credential exists' do
-        let(:activate_response) {
+        let(:activate_response) do
           {
             data: {
               'google_play_credential' => {
@@ -310,7 +310,7 @@ RSpec.describe 'mysigner gp-credential', type: :cli do
               }
             }
           }
-        }
+        end
 
         before do
           allow(client).to receive(:post).and_return(activate_response)
@@ -404,8 +404,8 @@ RSpec.describe 'mysigner gp-credential', type: :cli do
       context 'when connection succeeds' do
         before do
           allow(client).to receive(:post).and_return({
-            data: { 'success' => true }
-          })
+                                                       data: { 'success' => true }
+                                                     })
         end
 
         it 'shows testing message' do
@@ -434,8 +434,9 @@ RSpec.describe 'mysigner gp-credential', type: :cli do
       context 'when connection fails' do
         before do
           allow(client).to receive(:post).and_return({
-            data: { 'success' => false, 'error' => 'Invalid service account key' }
-          })
+                                                       data: { 'success' => false,
+                                                               'error' => 'Invalid service account key' }
+                                                     })
         end
 
         it 'shows failure message' do
@@ -538,7 +539,7 @@ RSpec.describe 'mysigner gp-credential', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'gp-credential']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help gp-credential]) }
       expect(help_output).to include('gp-credential')
     end
   end
@@ -549,7 +550,7 @@ RSpec.describe 'mysigner gp-credential', type: :cli do
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
 
-      output = capture_stdout { Mysigner::CLI.start(['gp-credential', 'list']) }
+      output = capture_stdout { Mysigner::CLI.start(%w[gp-credential list]) }
       expect(output).to include('Not logged in')
     end
   end

@@ -82,7 +82,7 @@ RSpec.describe 'mysigner profile delete', type: :cli do
   end
 
   describe 'successful deletion with confirmation' do
-    let(:profile_response) {
+    let(:profile_response) do
       {
         data: {
           'id' => profile_id,
@@ -91,7 +91,7 @@ RSpec.describe 'mysigner profile delete', type: :cli do
           'bundle_id_identifier' => 'com.example.app'
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -144,7 +144,7 @@ RSpec.describe 'mysigner profile delete', type: :cli do
   end
 
   describe 'deletion cancelled by user' do
-    let(:profile_response) {
+    let(:profile_response) do
       {
         data: {
           'id' => profile_id,
@@ -153,7 +153,7 @@ RSpec.describe 'mysigner profile delete', type: :cli do
           'bundle_id_identifier' => 'com.example.app'
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -211,7 +211,7 @@ RSpec.describe 'mysigner profile delete', type: :cli do
   end
 
   describe 'when API fails during deletion' do
-    let(:profile_response) {
+    let(:profile_response) do
       {
         data: {
           'id' => profile_id,
@@ -220,7 +220,7 @@ RSpec.describe 'mysigner profile delete', type: :cli do
           'bundle_id_identifier' => 'com.example.app'
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -247,12 +247,12 @@ RSpec.describe 'mysigner profile delete', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'profile']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help profile]) }
       expect(help_output).to include('Manage profiles')
     end
 
     it 'shows subcommands' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'profile']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help profile]) }
       expect(help_output).to include('download')
       expect(help_output).to include('delete')
     end
@@ -263,10 +263,9 @@ RSpec.describe 'mysigner profile delete', type: :cli do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
-      
+
       output = capture_stdout { Mysigner::CLI.start(['profile', 'delete', profile_id]) }
       expect(output).to include('Not logged in')
     end
   end
 end
-

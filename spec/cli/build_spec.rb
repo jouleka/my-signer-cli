@@ -91,13 +91,13 @@ RSpec.describe 'mysigner build', type: :cli do
   end
 
   describe 'when project is a framework or library' do
-    let(:project_info) {
+    let(:project_info) do
       {
         path: '/path/to/MyFramework.xcodeproj',
         type: :project,
         framework: :native
       }
-    }
+    end
     let(:parser) { instance_double(Mysigner::Build::Parser) }
 
     before do
@@ -138,13 +138,13 @@ RSpec.describe 'mysigner build', type: :cli do
   end
 
   describe 'successful build flow' do
-    let(:project_info) {
+    let(:project_info) do
       {
         path: '/path/to/MyApp.xcodeproj',
         type: :project,
         framework: :native
       }
-    }
+    end
     let(:parser) { instance_double(Mysigner::Build::Parser) }
     let(:main_target) { double('target', name: 'MyApp') }
     let(:validator) { instance_double(Mysigner::Signing::Validator) }
@@ -157,10 +157,10 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:current_organization_id).and_return(org_id)
-      
+
       allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
       allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
-      
+
       # Mock parser methods
       allow(parser).to receive(:product_type).and_return(:app)
       allow(parser).to receive(:has_multiple_apps?).and_return(false)
@@ -170,11 +170,11 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(parser).to receive(:bundle_id).and_return('com.example.myapp')
       allow(parser).to receive(:code_sign_style).and_return('Automatic')
       allow(parser).to receive(:team_id).and_return('ABC123')
-      
+
       # Mock validator
       allow(Mysigner::Signing::Validator).to receive(:new).and_return(validator)
       allow(validator).to receive(:validate!)
-      
+
       # Mock executor
       allow(Mysigner::Build::Executor).to receive(:new).and_return(executor)
       allow(executor).to receive(:build!).and_return(archive_path)
@@ -246,13 +246,13 @@ RSpec.describe 'mysigner build', type: :cli do
   end
 
   describe 'when project has multiple apps' do
-    let(:project_info) {
+    let(:project_info) do
       {
         path: '/path/to/MultiApp.xcodeproj',
         type: :project,
         framework: :native
       }
-    }
+    end
     let(:parser) { instance_double(Mysigner::Build::Parser) }
     let(:app1) { double('target', name: 'App1') }
     let(:app2) { double('target', name: 'App2') }
@@ -265,10 +265,10 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:current_organization_id).and_return(org_id)
-      
+
       allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
       allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
-      
+
       allow(parser).to receive(:product_type).and_return(:app)
       allow(parser).to receive(:has_multiple_apps?).and_return(true)
       allow(parser).to receive(:app_targets).and_return([app1, app2])
@@ -277,12 +277,12 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(parser).to receive(:bundle_id).and_return('com.example.app')
       allow(parser).to receive(:code_sign_style).and_return('Automatic')
       allow(parser).to receive(:team_id).and_return('ABC123')
-      
+
       allow(Mysigner::Signing::Validator).to receive(:new).and_return(validator)
       allow(validator).to receive(:validate!)
       allow(Mysigner::Build::Executor).to receive(:new).and_return(executor)
       allow(executor).to receive(:build!).and_return('/path/to/archive.xcarchive')
-      
+
       allow(cli).to receive(:ask).and_return('1')
     end
 
@@ -298,7 +298,7 @@ RSpec.describe 'mysigner build', type: :cli do
     end
 
     it 'prompts for selection' do
-      expect(cli).to receive(:ask).with(/Select app to build/, limited_to: ['1', '2'])
+      expect(cli).to receive(:ask).with(/Select app to build/, limited_to: %w[1 2])
       cli.build
     end
   end
@@ -316,7 +316,7 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:current_organization_id).and_return(org_id)
-      
+
       allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
       allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:product_type).and_return(:app)
@@ -326,7 +326,7 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(parser).to receive(:has_extensions?).and_return(false)
       allow(parser).to receive(:bundle_id).and_return('com.example.app')
       allow(parser).to receive(:code_sign_style).and_return('Automatic')
-      
+
       allow(Mysigner::Signing::Validator).to receive(:new).and_return(validator)
       allow(validator).to receive(:validate!)
       allow(Mysigner::Build::Executor).to receive(:new).and_return(executor)
@@ -336,11 +336,11 @@ RSpec.describe 'mysigner build', type: :cli do
     context 'when --team flag is provided' do
       it 'uses the provided team ID' do
         allow(parser).to receive(:team_id).and_return('PROJECT_TEAM')
-        
+
         expect(Mysigner::Signing::Validator).to receive(:new).with(
           parser, 'App', 'Release', team_id: 'CUSTOM_TEAM'
         )
-        
+
         cli.options = { team: 'CUSTOM_TEAM', configuration: 'Release' }
         cli.build
       end
@@ -350,8 +350,8 @@ RSpec.describe 'mysigner build', type: :cli do
       before do
         allow(parser).to receive(:team_id).and_return(nil)
         allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return({
-          'app_store_connect_team_id' => 'API_TEAM'
-        })
+                                                                                            'app_store_connect_team_id' => 'API_TEAM'
+                                                                                          })
       end
 
       it 'fetches team from API' do
@@ -365,8 +365,8 @@ RSpec.describe 'mysigner build', type: :cli do
       before do
         allow(parser).to receive(:team_id).and_return(nil)
         allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return({
-          'app_store_connect_team_id' => nil
-        })
+                                                                                            'app_store_connect_team_id' => nil
+                                                                                          })
       end
 
       it 'shows warning' do
@@ -388,7 +388,7 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:current_organization_id).and_return(org_id)
-      
+
       allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
       allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:product_type).and_return(:app)
@@ -399,11 +399,11 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(parser).to receive(:bundle_id).and_return('com.example.app')
       allow(parser).to receive(:code_sign_style).and_return('Automatic')
       allow(parser).to receive(:team_id).and_return(nil)
-      
+
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return({
-        'app_store_connect_team_id' => nil
-      })
-      
+                                                                                          'app_store_connect_team_id' => nil
+                                                                                        })
+
       allow(Mysigner::Signing::Validator).to receive(:new).and_return(validator)
       allow(validator).to receive(:validate!).and_raise(
         Mysigner::Signing::Validator::ValidationError.new('No development team set')
@@ -439,7 +439,7 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:current_organization_id).and_return(org_id)
-      
+
       allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
       allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:product_type).and_return(:app)
@@ -450,9 +450,9 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(parser).to receive(:bundle_id).and_return('com.example.app')
       allow(parser).to receive(:code_sign_style).and_return('Automatic')
       allow(parser).to receive(:team_id).and_return('ABC123')
-      
+
       allow(client).to receive(:get) # Stub any API calls
-      
+
       allow(Mysigner::Signing::Validator).to receive(:new).and_return(validator)
       allow(validator).to receive(:validate!)
       allow(Mysigner::Build::Executor).to receive(:new).and_return(executor)
@@ -474,12 +474,12 @@ RSpec.describe 'mysigner build', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'build']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help build]) }
       expect(help_output).to include('Build .xcarchive only')
     end
 
     it 'shows options' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'build']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help build]) }
       expect(help_output).to include('--configuration')
       expect(help_output).to include('--target')
       expect(help_output).to include('--scheme')
@@ -492,10 +492,9 @@ RSpec.describe 'mysigner build', type: :cli do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
-      
+
       output = capture_stdout { Mysigner::CLI.start(['build']) }
       expect(output).to include('Not logged in')
     end
   end
 end
-

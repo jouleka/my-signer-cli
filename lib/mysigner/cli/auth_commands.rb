@@ -1,28 +1,30 @@
+# frozen_string_literal: true
+
 module Mysigner
   class CLI < Thor
     module AuthCommands
       def self.included(base)
         base.class_eval do
-          desc "version", "Show CLI version and system information"
+          desc 'version', 'Show CLI version and system information'
           def version
             say "My Signer CLI v#{Mysigner::VERSION}", :cyan
-            say ""
+            say ''
             say "Ruby:        #{RUBY_VERSION} (#{RUBY_PLATFORM})", :white
-            say "Install:     #{File.expand_path('../../../..', __FILE__)}", :white
+            say "Install:     #{File.expand_path('../../..', __dir__)}", :white
             say "Config:      #{Config::CONFIG_FILE}", :white
-            say ""
-            say "Docs:        https://mysigner.dev/docs/commands", :white
-            say "Support:     https://mysigner.dev/landing#contact", :white
+            say ''
+            say 'Docs:        https://mysigner.dev/docs/commands', :white
+            say 'Support:     https://mysigner.dev/landing#contact', :white
           end
 
-          desc "login", "Log in with existing API token (⭐ first-timers: use 'onboard' instead)"
+          desc 'login', "Log in with existing API token (⭐ first-timers: use 'onboard' instead)"
           long_desc <<~DESC
             Authenticate with My Signer API using an API token.
-            
+
             New user? Run 'mysigner onboard' for step-by-step guidance.
-            
+
             Your credentials will be stored securely in ~/.mysigner/config.yml
-            
+
             Note: API tokens are organization-specific. This token will only
             grant access to the organization it was created in.
           DESC
@@ -31,86 +33,86 @@ module Mysigner
             config = Config.new
             if config.exists?
               config.load
-              say "⚠️  Already logged in", :yellow
-              say ""
-              say "Current configuration:", :yellow
+              say '⚠️  Already logged in', :yellow
+              say ''
+              say 'Current configuration:', :yellow
               say "  User: #{config.user_email || '(unknown)'}"
               say "  Organization: #{config.org_name || '(unknown)'} (ID: #{config.current_organization_id})"
               say "  API URL: #{config.api_url}"
-              say ""
-              
-              if yes?("Do you want to logout and login with different user? (y/n)")
+              say ''
+
+              if yes?('Do you want to logout and login with different user? (y/n)')
                 config.clear
-                say "✓ Logged out successfully", :green
-                say ""
+                say '✓ Logged out successfully', :green
+                say ''
               else
                 say "Login cancelled. Use 'mysigner logout' to logout first.", :yellow
-                say ""
+                say ''
                 say "💡 Tip: Use 'mysigner switch' to switch organizations for the same user", :yellow
                 return
               end
             end
 
-            say "🔐 My Signer Login", :cyan
-            say "=" * 80, :cyan
-            say ""
+            say '🔐 My Signer Login', :cyan
+            say '=' * 80, :cyan
+            say ''
 
             # Get API URL with smart default
             api_url = prompt_api_url
-            say ""
-            
+            say ''
+
             # Get user email
             user_email = prompt_for_email
-            say ""
-            
+            say ''
+
             # Show guidance for getting token
             show_token_guidance(api_url)
-            
-            api_token = ask("API Token:", echo: false)
-            say "" # New line after hidden input
-            
+
+            api_token = ask('API Token:', echo: false)
+            say '' # New line after hidden input
+
             if api_token.empty?
-              error "API token cannot be empty"
-              say ""
+              error 'API token cannot be empty'
+              say ''
               say "💡 Tip: Run 'mysigner onboard' for detailed guidance", :yellow
               exit 1
             end
 
-            say "Validating token and email...", :yellow
-            
+            say 'Validating token and email...', :yellow
+
             begin
               client = Client.new(api_url: api_url, api_token: api_token, user_email: user_email)
               response = client.test_connection
-              
+
               if response[:success]
-                say "✓ Token valid", :green
+                say '✓ Token valid', :green
               else
-                error "Connection failed"
+                error 'Connection failed'
                 handle_connection_failure(api_url)
                 exit 1
               end
-              
+
               # Fetch organization info (token can only access its own org)
-              say "Detecting organization...", :yellow
-              
+              say 'Detecting organization...', :yellow
+
               # Try to fetch organizations - with org-specific tokens, this will return only the token's org
               orgs_response = client.get('/api/v1/organizations')
               organizations = orgs_response[:data]['organizations']
-              
+
               if ENV['DEBUG']
                 say "DEBUG: Found #{organizations.length} organizations", :cyan
                 organizations.each do |org|
                   say "DEBUG:   - #{org['name']} (ID: #{org['id']})", :cyan
                 end
               end
-              
+
               if organizations.empty?
-                error "No organizations found for this token"
-                say ""
-                say "This might mean:", :yellow
+                error 'No organizations found for this token'
+                say ''
+                say 'This might mean:', :yellow
                 say "  • Your token doesn't have access to any organizations", :yellow
-                say "  • The token was created but the organization was deleted", :yellow
-                say ""
+                say '  • The token was created but the organization was deleted', :yellow
+                say ''
                 show_create_org_guidance(api_url)
                 exit 1
               end
@@ -118,19 +120,19 @@ module Mysigner
               # With org-specific tokens, there should only be one organization
               selected_org = organizations.first
               org_id = selected_org['id']
-              
+
               say "DEBUG: Fetching details for organization #{org_id}...", :cyan if ENV['DEBUG']
-              
+
               # Get detailed org info to extract user email and token_organization_id
               org_response = client.get("/api/v1/organizations/#{org_id}")
               org_data = org_response[:data]
-              
-              say "DEBUG: Organization data received", :cyan if ENV['DEBUG']
-              
+
+              say 'DEBUG: Organization data received', :cyan if ENV['DEBUG']
+
               say "✓ Organization detected: #{org_data['name']}", :green
               say "✓ Email validated: #{user_email}", :green
-              say ""
-              
+              say ''
+
               # Save configuration with multi-token support
               config = Config.new
               config.api_url = api_url
@@ -139,49 +141,48 @@ module Mysigner
               config.save_token_for_org(org_id, org_data['name'], api_token)
               config.save
 
-              say ""
-              say "=" * 80, :green
-              say "✓ Successfully logged in!", :green
-              say "=" * 80, :green
-              say ""
+              say ''
+              say '=' * 80, :green
+              say '✓ Successfully logged in!', :green
+              say '=' * 80, :green
+              say ''
               say "Organization: #{org_data['name']} (ID: #{org_id})", :cyan
               say "Role: #{org_data['role'] || 'viewer'}", :cyan
               say "Config saved to: #{Config::CONFIG_FILE}", :cyan
-              say ""
-              say "🔒 Security Note:", :yellow
-              say "  Your token is organization-specific and can only access", :yellow
+              say ''
+              say '🔒 Security Note:', :yellow
+              say '  Your token is organization-specific and can only access', :yellow
               say "  #{org_data['name']}. To access other organizations,", :yellow
               say "  use 'mysigner switch' to add tokens for those organizations.", :yellow
-              say ""
-              say "🚀 Next steps:", :bold
-              say "  cd your-ios-project"
-              say "  mysigner ship testflight"
-              say ""
-              say "💡 Helpful commands:", :cyan
-              say "  • mysigner doctor     - Check your environment"
-              say "  • mysigner orgs       - List all organizations"
-              say "  • mysigner switch     - Switch to another organization"
-              say ""
-              
+              say ''
+              say '🚀 Next steps:', :bold
+              say '  cd your-ios-project'
+              say '  mysigner ship testflight'
+              say ''
+              say '💡 Helpful commands:', :cyan
+              say '  • mysigner doctor     - Check your environment'
+              say '  • mysigner orgs       - List all organizations'
+              say '  • mysigner switch     - Switch to another organization'
+              say ''
             rescue Mysigner::UnauthorizedError => e
-              error "Authentication failed"
-              say ""
-              
+              error 'Authentication failed'
+              say ''
+
               # Check if it's an email validation error
-              if e.message.include?("doesn't belong to") || e.message.include?("use your own token")
-                say "⚠️  Token Email Mismatch", :yellow
-                say ""
+              if e.message.include?("doesn't belong to") || e.message.include?('use your own token')
+                say '⚠️  Token Email Mismatch', :yellow
+                say ''
                 say "The token you provided doesn't belong to #{user_email}.", :yellow
-                say ""
-                say "This could mean:", :yellow
+                say ''
+                say 'This could mean:', :yellow
                 say "  • You're using a token created by someone else", :yellow
                 say "  • You're using a token from a different account", :yellow
-                say ""
-                say "💡 Solutions:", :cyan
-                say "  1. Generate a new token from your own account at:", :cyan
+                say ''
+                say '💡 Solutions:', :cyan
+                say '  1. Generate a new token from your own account at:', :cyan
                 say "     #{api_url}", :cyan
                 say "  2. Make sure you're logged in as #{user_email} on the web", :cyan
-                say "  3. Check that you entered the correct email address", :cyan
+                say '  3. Check that you entered the correct email address', :cyan
               else
                 handle_unauthorized_error(api_url)
               end
@@ -189,16 +190,16 @@ module Mysigner
             rescue Mysigner::ConnectionError => e
               handle_connection_error(e, api_url)
               exit 1
-            rescue => e
+            rescue StandardError => e
               handle_unexpected_error(e, api_url)
               exit 1
             end
           end
 
-          desc "onboard", "⭐ START HERE - Complete setup wizard for new users"
+          desc 'onboard', '⭐ START HERE - Complete setup wizard for new users'
           long_desc <<~DESC
             Step-by-step guide to get started with My Signer CLI.
-            
+
             This command will:
             1. Check if you have an account
             2. Guide you through creating an organization
@@ -206,92 +207,48 @@ module Mysigner
             4. Configure your CLI
           DESC
           def onboard
-            say "🚀 My Signer Setup Guide", :cyan
-            say "=" * 80, :cyan
-            say ""
+            say '🚀 My Signer Setup Guide', :cyan
+            say '=' * 80, :cyan
+            say ''
             say "Welcome! Let's get you set up with My Signer.", :bold
-            say ""
+            say ''
 
             # Check if already configured
             config = Config.new
             if config.exists? && config.api_token && config.current_organization_id
               say "✓ You're already logged in!", :green
-              say ""
-              say "Current configuration:", :cyan
+              say ''
+              say 'Current configuration:', :cyan
               say "  Email: #{config.user_email}"
               say "  Organization ID: #{config.current_organization_id}"
               say "  API URL: #{config.api_url}"
-              say ""
-              
+              say ''
+
               # Check App Store Connect status
               begin
                 client = Client.new(api_url: config.api_url, api_token: config.api_token, user_email: config.user_email)
                 org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
                 org_data = org_response[:data]
-                
+
                 asc_configured = org_data['app_store_connect_configured'] || false
-                
-                if !asc_configured
-                  # Missing ASC credentials - offer to add them
-                  say "⚠️  App Store Connect: Not configured", :yellow
-                  say ""
-                  say "What would you like to do?", :bold
-                  say "  1. Set up App Store Connect credentials now"
-                  say "  2. Check status with 'mysigner status'"
-                  say "  3. Log out and start fresh"
-                  say "  4. Exit"
-                  say ""
-                  
-                  choice = ask("Select (1-4):", limited_to: ['1', '2', '3', '4'])
-                  say ""
-                  
-                  case choice
-                  when '1'
-                    # Go directly to ASC setup
-                    say "🚀 Setting up App Store Connect credentials...", :cyan
-                    say ""
-                    asc_configured = setup_app_store_connect_credentials(client, config, config.current_organization_id)
-                    
-                    say ""
-                    say "=" * 80, :green
-                    if asc_configured
-                      say "✓ App Store Connect configured successfully!", :green
-                    else
-                      say "⚠️  Setup incomplete", :yellow
-                      say "Run 'mysigner onboard' again or use 'mysigner doctor'", :yellow
-                    end
-                    say "=" * 80, :green
-                    return
-                  when '2'
-                    invoke :status
-                    return
-                  when '3'
-                    say "Clearing configuration...", :yellow
-                    say ""
-                    # Continue with full onboarding
-                  when '4'
-                    say "No changes made.", :green
-                    return
-                  end
-                else
+
+                if asc_configured
                   # Already fully configured
-                  say "✓ App Store Connect: Configured", :green
-                  if org_data['app_store_connect_team_id']
-                    say "  Team ID: #{org_data['app_store_connect_team_id']}"
-                  end
-                  say ""
+                  say '✓ App Store Connect: Configured', :green
+                  say "  Team ID: #{org_data['app_store_connect_team_id']}" if org_data['app_store_connect_team_id']
+                  say ''
                   say "You're all set! 🎉", :bold
-                  say ""
-                  say "What would you like to do?", :bold
-                  say "  1. Check status"
-                  say "  2. Switch to another organization"
-                  say "  3. Log out and start fresh"
-                  say "  4. Exit"
-                  say ""
-                  
-                  choice = ask("Select (1-4):", limited_to: ['1', '2', '3', '4'])
-                  say ""
-                  
+                  say ''
+                  say 'What would you like to do?', :bold
+                  say '  1. Check status'
+                  say '  2. Switch to another organization'
+                  say '  3. Log out and start fresh'
+                  say '  4. Exit'
+                  say ''
+
+                  choice = ask('Select (1-4):', limited_to: %w[1 2 3 4])
+                  say ''
+
                   case choice
                   when '1'
                     invoke :status
@@ -300,179 +257,221 @@ module Mysigner
                     invoke :switch
                     return
                   when '3'
-                    say "Clearing configuration...", :yellow
-                    say ""
+                    say 'Clearing configuration...', :yellow
+                    say ''
                     # Continue with full onboarding
                   when '4'
-                    say "No changes made.", :green
+                    say 'No changes made.', :green
+                    return
+                  end
+                else
+                  # Missing ASC credentials - offer to add them
+                  say '⚠️  App Store Connect: Not configured', :yellow
+                  say ''
+                  say 'What would you like to do?', :bold
+                  say '  1. Set up App Store Connect credentials now'
+                  say "  2. Check status with 'mysigner status'"
+                  say '  3. Log out and start fresh'
+                  say '  4. Exit'
+                  say ''
+
+                  choice = ask('Select (1-4):', limited_to: %w[1 2 3 4])
+                  say ''
+
+                  case choice
+                  when '1'
+                    # Go directly to ASC setup
+                    say '🚀 Setting up App Store Connect credentials...', :cyan
+                    say ''
+                    asc_configured = setup_app_store_connect_credentials(client, config, config.current_organization_id)
+
+                    say ''
+                    say '=' * 80, :green
+                    if asc_configured
+                      say '✓ App Store Connect configured successfully!', :green
+                    else
+                      say '⚠️  Setup incomplete', :yellow
+                      say "Run 'mysigner onboard' again or use 'mysigner doctor'", :yellow
+                    end
+                    say '=' * 80, :green
+                    return
+                  when '2'
+                    invoke :status
+                    return
+                  when '3'
+                    say 'Clearing configuration...', :yellow
+                    say ''
+                    # Continue with full onboarding
+                  when '4'
+                    say 'No changes made.', :green
                     return
                   end
                 end
-              rescue => e
+              rescue StandardError => e
                 say "⚠️  Could not check organization status: #{e.message}", :yellow
-                say ""
-                
-                unless yes_with_default?("Do you want to re-configure from scratch?", :yellow)
-                  say ""
-                  say "Keeping existing configuration.", :green
-                  say ""
+                say ''
+
+                unless yes_with_default?('Do you want to re-configure from scratch?', :yellow)
+                  say ''
+                  say 'Keeping existing configuration.', :green
+                  say ''
                   say "💡 Tip: Use 'mysigner status' to check your setup", :cyan
                   say "💡 Tip: Use 'mysigner switch' to add another organization", :cyan
                   return
                 end
-                
-                say ""
-                say "Clearing existing configuration...", :yellow
-                say ""
+
+                say ''
+                say 'Clearing existing configuration...', :yellow
+                say ''
               end
             end
 
             # Get API URL
             api_url = prompt_api_url
-            say ""
+            say ''
 
             # Step 1: Check if user has account
-            say "Step 1: Account Setup", :cyan
-            say "-" * 80
-            say ""
-            say "Do you have a My Signer account?", :bold
-            say "  1. Yes, I have an account"
-            say "  2. No, I need to sign up"
-            say ""
-            
-            choice = ask("Select (1-2):", limited_to: ['1', '2'])
-            say ""
-            
+            say 'Step 1: Account Setup', :cyan
+            say '-' * 80
+            say ''
+            say 'Do you have a My Signer account?', :bold
+            say '  1. Yes, I have an account'
+            say '  2. No, I need to sign up'
+            say ''
+
+            choice = ask('Select (1-2):', limited_to: %w[1 2])
+            say ''
+
             if choice == '2'
               # Guide to signup
               say "📝 Let's create your account:", :cyan
-              say ""
-              say "1. Open your browser and go to:", :bold
+              say ''
+              say '1. Open your browser and go to:', :bold
               say "   #{api_url}", :green
-              say ""
+              say ''
               say "2. Click 'Sign Up' and create your account", :bold
-              say ""
-              say "3. Verify your email (check your inbox)", :bold
-              say ""
-              
-            unless yes_with_default?("Have you created your account?", :green)
-              say ""
-              say "Come back and run 'mysigner onboard' when you're ready!", :yellow
-              return
-            end
-              say ""
+              say ''
+              say '3. Verify your email (check your inbox)', :bold
+              say ''
+
+              unless yes_with_default?('Have you created your account?', :green)
+                say ''
+                say "Come back and run 'mysigner onboard' when you're ready!", :yellow
+                return
+              end
+              say ''
             end
 
             # Step 2: Organization
-            say "Step 2: Organization Setup", :cyan
-            say "-" * 80
-            say ""
-            say "Do you have an organization?", :bold
-            say "  1. Yes, I have an organization"
-            say "  2. No, I need to create one"
-            say ""
-            
-            choice = ask("Select (1-2):", limited_to: ['1', '2'])
-            say ""
-            
+            say 'Step 2: Organization Setup', :cyan
+            say '-' * 80
+            say ''
+            say 'Do you have an organization?', :bold
+            say '  1. Yes, I have an organization'
+            say '  2. No, I need to create one'
+            say ''
+
+            choice = ask('Select (1-2):', limited_to: %w[1 2])
+            say ''
+
             if choice == '2'
               # Guide to create org
               say "🏢 Let's create your organization:", :cyan
-              say ""
-              say "1. Go to the dashboard:", :bold
+              say ''
+              say '1. Go to the dashboard:', :bold
               say "   #{api_url}", :green
-              say ""
-              say "2. Sign in with your account", :bold
-              say ""
+              say ''
+              say '2. Sign in with your account', :bold
+              say ''
               say "3. Click 'Create Organization'", :bold
-              say ""
+              say ''
               say "4. Enter your organization name (e.g., 'My Startup')", :bold
-              say ""
-              
-            unless yes_with_default?("Have you created your organization?", :green)
-              say ""
-              say "Come back and run 'mysigner onboard' when you're ready!", :yellow
-              return
-            end
-              say ""
+              say ''
+
+              unless yes_with_default?('Have you created your organization?', :green)
+                say ''
+                say "Come back and run 'mysigner onboard' when you're ready!", :yellow
+                return
+              end
+              say ''
             end
 
             # Step 3: API Token
-            say "Step 3: Generate API Token", :cyan
-            say "-" * 80
-            say ""
+            say 'Step 3: Generate API Token', :cyan
+            say '-' * 80
+            say ''
             say "Now let's generate your API token:", :bold
-            say ""
-            say "1. Go to API Tokens:", :bold
+            say ''
+            say '1. Go to API Tokens:', :bold
             say "   #{api_url}/organizations/YOUR_ORG_ID/api_tokens", :green
-            say ""
-            say "   Or navigate: Dashboard → Your Organization → API Tokens", :cyan
-            say ""
+            say ''
+            say '   Or navigate: Dashboard → Your Organization → API Tokens', :cyan
+            say ''
             say "2. Click 'Create Token'", :bold
-            say ""
-            say "3. Fill in the details:", :bold
+            say ''
+            say '3. Fill in the details:', :bold
             say "   • Name: 'CLI Access' (or anything you like)"
-            say "   • Scopes: ✓ read  ✓ write  (minimum required)"
+            say '   • Scopes: ✓ read  ✓ write  (minimum required)'
             say "   • Expiration: Choose 'Never' or '1 year'"
-            say ""
+            say ''
             say "4. Click 'Create' and COPY the token", :bold
             say "   ⚠️  You'll only see it once!", :yellow
-            say ""
-            
-            unless yes_with_default?("Have you generated and copied your token?", :green)
-              say ""
+            say ''
+
+            unless yes_with_default?('Have you generated and copied your token?', :green)
+              say ''
               say "Come back and run 'mysigner onboard' when you have your token!", :yellow
               return
             end
-            say ""
+            say ''
 
             # Step 4: Login
-            say "Step 4: Login to CLI", :cyan
-            say "-" * 80
-            say ""
+            say 'Step 4: Login to CLI', :cyan
+            say '-' * 80
+            say ''
             say "Great! Now let's log you in.", :bold
-            say ""
-            
+            say ''
+
             # Get user email
             user_email = prompt_for_email
-            say ""
-            
-            api_token = ask("Paste your API Token:", echo: false)
-            say ""
-            
+            say ''
+
+            api_token = ask('Paste your API Token:', echo: false)
+            say ''
+
             if api_token.empty?
-              error "Token cannot be empty"
+              error 'Token cannot be empty'
               say "Run 'mysigner onboard' again when you have your token", :yellow
               return
             end
 
-            say "Validating token and email...", :yellow
-            
+            say 'Validating token and email...', :yellow
+
             begin
               client = Client.new(api_url: api_url, api_token: api_token, user_email: user_email)
               response = client.test_connection
-              
+
               unless response[:success]
-                error "Connection test failed"
+                error 'Connection test failed'
                 return
               end
-              
+
               response = client.get('/api/v1/organizations')
               organizations = response[:data]['organizations']
-              
+
               if organizations.empty?
-                error "No organizations found"
-                say "Please check that your token is associated with an organization", :yellow
+                error 'No organizations found'
+                say 'Please check that your token is associated with an organization', :yellow
                 return
               end
 
               selected_org = organizations.first
               org_id = selected_org['id']
-              
+
               # Get detailed org info
               org_response = client.get("/api/v1/organizations/#{org_id}")
               org_data = org_response[:data]
-              
+
               config = Config.new
               config.api_url = api_url
               config.user_email = user_email # Save the verified email
@@ -481,228 +480,216 @@ module Mysigner
               config.save
 
               # Step 5: App Store Connect Setup (Optional)
-              say ""
-              say "Step 5: App Store Connect Setup (optional but recommended)", :cyan
-              say "-" * 80
-              say ""
-              
+              say ''
+              say 'Step 5: App Store Connect Setup (optional but recommended)', :cyan
+              say '-' * 80
+              say ''
+
               # Check if already configured
               asc_configured = org_data['app_store_connect_configured'] || false
-              
+
               if asc_configured
-                say "✓ App Store Connect is already configured!", :green
-                say ""
-                say "Current setup:", :cyan
-                if org_data['app_store_connect_team_id']
-                  say "  • Team ID: #{org_data['app_store_connect_team_id']}"
-                end
-                say "  • Status: Active"
-                say ""
-                say "You can manage credentials in the web dashboard:", :cyan
+                say '✓ App Store Connect is already configured!', :green
+                say ''
+                say 'Current setup:', :cyan
+                say "  • Team ID: #{org_data['app_store_connect_team_id']}" if org_data['app_store_connect_team_id']
+                say '  • Status: Active'
+                say ''
+                say 'You can manage credentials in the web dashboard:', :cyan
                 say "  #{api_url}/organizations/#{org_id}", :green
-                say ""
-                say "💡 Tip: You can add multiple credentials (for different teams)", :cyan
-                say ""
+                say ''
+                say '💡 Tip: You can add multiple credentials (for different teams)', :cyan
+                say ''
               else
-                say "To upload to TestFlight/App Store, we need your API credentials.", :bold
-                say ""
-                say "Do you want to set this up now?", :bold
-                say "  1. Yes, guide me through it (recommended)"
-                say "  2. Skip for now (you can do this later)"
-                say ""
-                
-                asc_choice = ask("Select (1-2):", limited_to: ['1', '2'])
-                say ""
-                
+                say 'To upload to TestFlight/App Store, we need your API credentials.', :bold
+                say ''
+                say 'Do you want to set this up now?', :bold
+                say '  1. Yes, guide me through it (recommended)'
+                say '  2. Skip for now (you can do this later)'
+                say ''
+
+                asc_choice = ask('Select (1-2):', limited_to: %w[1 2])
+                say ''
+
                 if asc_choice == '1'
                   asc_configured = setup_app_store_connect_credentials(client, config, org_id)
                 else
-                  say "⏭️  Skipped App Store Connect setup", :yellow
-                  say ""
-                  say "You can set this up later by:", :cyan
-                  say "  • Running: mysigner doctor"
-                  say "  • Or via the web dashboard"
-                  say ""
+                  say '⏭️  Skipped App Store Connect setup', :yellow
+                  say ''
+                  say 'You can set this up later by:', :cyan
+                  say '  • Running: mysigner doctor'
+                  say '  • Or via the web dashboard'
+                  say ''
                 end
               end
 
-              say ""
-              say "=" * 80, :green
-              say "🎉 Setup Complete!", :green
-              say "=" * 80, :green
-              say ""
+              say ''
+              say '=' * 80, :green
+              say '🎉 Setup Complete!', :green
+              say '=' * 80, :green
+              say ''
               say "You're all set up and ready to go!", :bold
-              say ""
+              say ''
               say "User: #{user_email}", :cyan
               say "Organization: #{org_data['name']} (ID: #{org_id})", :cyan
               say "Config saved to: #{Config::CONFIG_FILE}", :cyan
-              
+
               # Show App Store Connect status
-              say ""
+              say ''
               if asc_configured
-                say "✓ App Store Connect: Configured", :green
+                say '✓ App Store Connect: Configured', :green
               elsif defined?(asc_choice) && asc_choice == '1'
-                say "⚠️  App Store Connect:", :yellow
-                say "  Setup was attempted but not completed", :yellow
+                say '⚠️  App Store Connect:', :yellow
+                say '  Setup was attempted but not completed', :yellow
                 say "  Run 'mysigner doctor' to configure it", :yellow
               else
-                say "⚠️  App Store Connect: Not configured", :yellow
+                say '⚠️  App Store Connect: Not configured', :yellow
                 say "  Run 'mysigner doctor' to set it up", :yellow
               end
-              
-              say ""
-              say "🔒 Security Note:", :yellow
+
+              say ''
+              say '🔒 Security Note:', :yellow
               say "  Your token is organization-specific. Use 'mysigner switch'", :yellow
-              say "  to add tokens for other organizations.", :yellow
-              say ""
-              say "🚀 Try your first ship:", :bold
-              say ""
-              say "  cd your-ios-project"
-              say "  mysigner ship testflight"
-              say ""
-              say "💡 Tips:", :cyan
+              say '  to add tokens for other organizations.', :yellow
+              say ''
+              say '🚀 Try your first ship:', :bold
+              say ''
+              say '  cd your-ios-project'
+              say '  mysigner ship testflight'
+              say ''
+              say '💡 Tips:', :cyan
               say "  • Run 'mysigner doctor' to check your environment"
               say "  • Run 'mysigner --help' to see all commands"
               say "  • Run 'mysigner status' to verify your setup"
-              say ""
-              
+              say ''
             rescue Mysigner::UnauthorizedError => e
-              error "Authentication failed"
-              say ""
-              
+              error 'Authentication failed'
+              say ''
+
               # Check if it's an email validation error
-              if e.message.include?("doesn't belong to") || e.message.include?("use your own token")
-                say "⚠️  Token Email Mismatch", :yellow
-                say ""
+              if e.message.include?("doesn't belong to") || e.message.include?('use your own token')
+                say '⚠️  Token Email Mismatch', :yellow
+                say ''
                 say "The token you provided doesn't belong to #{user_email}.", :yellow
-                say ""
-                say "Please make sure you:", :yellow
+                say ''
+                say 'Please make sure you:', :yellow
                 say "  1. Are logged in as #{user_email} on the web dashboard", :yellow
                 say "  2. Generate the token while logged in as #{user_email}", :yellow
-                say "  3. Enter the correct email address", :yellow
+                say '  3. Enter the correct email address', :yellow
               else
-                say "The token you entered is invalid. Please:", :yellow
-                say "  1. Check you copied the entire token"
+                say 'The token you entered is invalid. Please:', :yellow
+                say '  1. Check you copied the entire token'
                 say "  2. Make sure the token hasn't been revoked"
-                say "  3. Generate a new token if needed"
+                say '  3. Generate a new token if needed'
               end
-              say ""
+              say ''
               say "Run 'mysigner onboard' to try again", :yellow
-            rescue => e
+            rescue StandardError => e
               error "Setup failed: #{e.message}"
-              say ""
+              say ''
               say "Run 'mysigner onboard' to try again", :yellow
             end
           end
 
-          desc "logout", "Log out and clear stored credentials"
+          desc 'logout', 'Log out and clear stored credentials'
           def logout
             config = Config.new
-            
+
             unless config.exists?
-              say "No stored credentials found", :yellow
+              say 'No stored credentials found', :yellow
               return
             end
 
-            if yes?("Are you sure you want to logout? (y/n)")
+            if yes?('Are you sure you want to logout? (y/n)')
               config.clear
-              say "✓ Successfully logged out", :green
+              say '✓ Successfully logged out', :green
               say "Config file removed: #{Config::CONFIG_FILE}", :green
             else
-              say "Logout cancelled", :yellow
+              say 'Logout cancelled', :yellow
             end
           end
 
-          desc "status", "Check connection, credentials, and App Store Connect setup"
+          desc 'status', 'Check connection, credentials, and App Store Connect setup'
           def status
-            config = Config.new
+            config = load_config
 
-            unless config.exists?
-              error "Not logged in. Run 'mysigner login' first."
-              exit 1
-            end
-
-            config.load
-
-            say "📊 My Signer Status", :cyan
-            say ""
-            say "Configuration:", :bold
+            say '📊 My Signer Status', :cyan
+            say ''
+            say 'Configuration:', :bold
             say "  API URL:         #{config.api_url}"
             say "  User:            #{config.user_email || '(unknown)'}"
             say "  Encryption:      #{config.encrypted_config? ? '✓ Enabled' : '✗ Disabled'}"
-            say ""
+            say ''
 
             # Show current organization
             if config.current_organization_id
-              say "Current Organization:", :bold
+              say 'Current Organization:', :bold
               say "  Name:  #{config.org_name || '(unknown)'}"
               say "  ID:    #{config.current_organization_id}"
               say "  Token: #{config.display[:current_token]}"
-              say ""
+              say ''
             end
 
             # Show all saved organizations
             if config.organization_ids.length > 1
               say "Saved Organizations: (#{config.organization_ids.length})", :bold
               config.organization_ids.each do |org_id|
-                current_marker = org_id == config.current_organization_id ? " (current)" : ""
-                org_name = config.org_name(org_id) || "Unknown"
+                current_marker = org_id == config.current_organization_id ? ' (current)' : ''
+                org_name = config.org_name(org_id) || 'Unknown'
                 say "  • #{org_name}#{current_marker} (ID: #{org_id})"
               end
-              say ""
+              say ''
             end
 
             # Test connection
-            say "Connection:", :bold
-            
+            say 'Connection:', :bold
+
             begin
               client = Client.new(api_url: config.api_url, api_token: config.api_token)
               client.test_connection
-              
-              say "  Status: ✓ Connected", :green
-              
+
+              say '  Status: ✓ Connected', :green
+
               # Get organization details
               if config.current_organization_id
                 org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
                 org = org_response[:data]
-                
+
                 say "  Role:   #{org['role'] || 'viewer'}"
                 say "  Members: #{org['member_count'] || 0}"
-                say ""
-                
+                say ''
+
                 # Show App Store Connect status
-                say "App Store Connect:", :bold
+                say 'App Store Connect:', :bold
                 if org['app_store_connect_configured']
-                  say "  ✓ Configured", :green
-                  if org['app_store_connect_team_id']
-                    say "  Team ID: #{org['app_store_connect_team_id']}"
-                  end
+                  say '  ✓ Configured', :green
+                  say "  Team ID: #{org['app_store_connect_team_id']}" if org['app_store_connect_team_id']
                 else
-                  say "  ✗ Not configured", :yellow
+                  say '  ✗ Not configured', :yellow
                   say "  Run 'mysigner doctor' to set it up"
                 end
               end
             rescue Mysigner::UnauthorizedError
-              say "  Status: ✗ Unauthorized (invalid token)", :red
+              say '  Status: ✗ Unauthorized (invalid token)', :red
               exit 1
             rescue Mysigner::ConnectionError => e
-              say "  Status: ✗ Connection failed", :red
+              say '  Status: ✗ Connection failed', :red
               say "  Error: #{e.message}", :red
               exit 1
-            rescue => e
-              say "  Status: ✗ Error", :red
+            rescue StandardError => e
+              say '  Status: ✗ Error', :red
               say "  Error: #{e.message}", :red
               exit 1
             end
           end
 
-          desc "orgs", "List all organizations you're a member of"
+          desc 'orgs', "List all organizations you're a member of"
           def orgs
             config = load_config
             client = create_client(config)
 
-            say "📋 Organizations", :cyan
-            say ""
+            say '📋 Organizations', :cyan
+            say ''
 
             begin
               # Fetch ALL organizations the user is a member of (not restricted by token's org)
@@ -713,37 +700,37 @@ module Mysigner
               all_org_ids = (config.organization_ids + api_organizations.map { |o| o['id'] }).uniq
 
               if all_org_ids.empty?
-                say "No organizations found", :yellow
+                say 'No organizations found', :yellow
                 return
               end
 
               all_org_ids.each do |org_id|
                 has_token = config.has_token_for_org?(org_id)
                 is_current = org_id == config.current_organization_id
-                
+
                 # Get org details
                 org_name = config.org_name(org_id)
                 api_org = api_organizations.find { |o| o['id'] == org_id }
                 org_name = api_org['name'] if api_org && (org_name.nil? || org_name == 'Unknown')
-                
-                current_marker = is_current ? " (current)" : ""
-                token_status = has_token ? "✓" : "⚠️"
-                
+
+                current_marker = is_current ? ' (current)' : ''
+                token_status = has_token ? '✓' : '⚠️'
+
                 say "  #{token_status} #{org_name}#{current_marker}", :green
-                
+
                 if api_org
                   role = api_org['role'] || 'viewer'
                   say "    ID: #{org_id} | Role: #{role} | Members: #{api_org['member_count'] || 0}"
                 else
                   say "    ID: #{org_id} | #{has_token ? 'Token saved' : 'Need token to access'}"
                 end
-                say ""
+                say ''
               end
 
               say "Total: #{all_org_ids.length} organization(s)", :white
-              say ""
-              say "Legend: ✓ = Has token | ⚠️  = Need token", :white
-              say ""
+              say ''
+              say 'Legend: ✓ = Has token | ⚠️  = Need token', :white
+              say ''
               say "💡 Tip: Use 'mysigner switch' to change organizations", :yellow
             rescue Mysigner::ClientError => e
               error "Failed to fetch organizations: #{e.message}"
@@ -751,10 +738,10 @@ module Mysigner
             end
           end
 
-          desc "switch", "Switch between organizations (for multi-org users)"
+          desc 'switch', 'Switch between organizations (for multi-org users)'
           long_desc <<~DESC
             Switch to a different organization.
-            
+
             With organization-specific tokens, you'll need a token for each
             organization you want to access. This command will:
             - Show all organizations you're a member of
@@ -762,7 +749,7 @@ module Mysigner
             - Prompt for a token if switching to an org without one
             - Validate the token belongs to the target organization
             - Update your configuration
-            
+
             Note: You need to be the same user in all organizations. Tokens
             from different user accounts will be rejected.
           DESC
@@ -770,43 +757,43 @@ module Mysigner
             config = load_config
             client = create_client(config)
 
-            say "🔄 Switch Organization", :cyan
-            say ""
+            say '🔄 Switch Organization', :cyan
+            say ''
 
             begin
               # Get current org details
               current_org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
               current_org = current_org_response[:data]
 
-              say "Current organization:", :yellow
+              say 'Current organization:', :yellow
               say "  #{current_org['name']} (ID: #{config.current_organization_id})", :green
-              say ""
+              say ''
 
               # Fetch ALL organizations the user is a member of (not restricted by token's org)
               response = client.get('/api/v1/user/organizations')
               api_organizations = response[:data]['organizations']
-              
+
               # Build comprehensive list: stored orgs + API orgs
               all_org_ids = (config.organization_ids + api_organizations.map { |o| o['id'] }).uniq
-              
+
               if all_org_ids.length < 2
-                say "You only have access to one organization.", :yellow
-                say "Nothing to switch to!", :yellow
-                say ""
+                say 'You only have access to one organization.', :yellow
+                say 'Nothing to switch to!', :yellow
+                say ''
                 say "💡 Tip: If you're a member of other organizations, you'll need", :cyan
-                say "   to generate tokens for them first (in the web dashboard).", :cyan
+                say '   to generate tokens for them first (in the web dashboard).', :cyan
                 return
               end
 
               # Show available organizations
-              say "Available organizations:", :cyan
-              say ""
+              say 'Available organizations:', :cyan
+              say ''
               organizations_list = []
-              
+
               all_org_ids.each_with_index do |org_id, index|
                 has_token = config.has_token_for_org?(org_id)
                 is_current = org_id == config.current_organization_id
-                
+
                 # Get org name from config or API
                 org_name = config.org_name(org_id)
                 if org_name.nil? || org_name == 'Unknown'
@@ -814,63 +801,63 @@ module Mysigner
                   api_org = api_organizations.find { |o| o['id'] == org_id }
                   org_name = api_org['name'] if api_org
                 end
-                
-                status = has_token ? "✓" : "⚠️ "
-                current_marker = is_current ? " (current)" : ""
-                
+
+                status = has_token ? '✓' : '⚠️ '
+                current_marker = is_current ? ' (current)' : ''
+
                 say "  #{index + 1}. #{status} #{org_name}#{current_marker}"
                 say "      ID: #{org_id} | #{has_token ? 'Token saved' : 'Need token'}", :white
-                
+
                 organizations_list << { id: org_id, name: org_name, has_token: has_token }
               end
-              
-              say ""
-              say "Legend: ✓ = Has token | ⚠️  = Needs token", :white
-              say ""
+
+              say ''
+              say 'Legend: ✓ = Has token | ⚠️  = Needs token', :white
+              say ''
 
               # Let user select
               org_index = ask("Select organization (1-#{organizations_list.length}, or 'q' to cancel):")
-              
+
               if org_index.downcase == 'q'
-                say "Cancelled", :yellow
+                say 'Cancelled', :yellow
                 return
               end
-              
+
               unless org_index.match(/^\d+$/) && org_index.to_i.between?(1, organizations_list.length)
-                error "Invalid selection"
+                error 'Invalid selection'
                 return
               end
-              
+
               selected_org = organizations_list[org_index.to_i - 1]
 
               if selected_org[:id] == config.current_organization_id
-                say ""
-                say "Already using this organization!", :yellow
+                say ''
+                say 'Already using this organization!', :yellow
                 return
               end
 
               # Check if we have a token for this org
               unless selected_org[:has_token]
-                say ""
+                say ''
                 say "⚠️  You don't have a token for '#{selected_org[:name]}' yet.", :yellow
-                say ""
-                say "To switch to this organization:", :cyan
+                say ''
+                say 'To switch to this organization:', :cyan
                 say "  1. Go to: #{config.api_url}/organizations/#{selected_org[:id]}/api_tokens"
-                say "  2. Generate a new API token"
-                say "  3. Paste it below"
-                say ""
-                
+                say '  2. Generate a new API token'
+                say '  3. Paste it below'
+                say ''
+
                 new_token = ask("Paste API token for '#{selected_org[:name]}' (or 'q' to cancel):", echo: false)
-                say ""
-                
+                say ''
+
                 if new_token.downcase == 'q' || new_token.empty?
-                  say "Cancelled", :yellow
+                  say 'Cancelled', :yellow
                   return
                 end
-                
+
                 # Validate the new token (with email validation)
-                say "Validating token...", :yellow
-                
+                say 'Validating token...', :yellow
+
                 begin
                   # Use stored email from config for validation
                   temp_client = Client.new(
@@ -878,42 +865,42 @@ module Mysigner
                     api_token: new_token,
                     user_email: config.user_email
                   )
-                  
+
                   # Try to fetch the target organization with the new token
                   validation_response = temp_client.get("/api/v1/organizations/#{selected_org[:id]}")
                   token_org_data = validation_response[:data]
-                  
+
                   # Check if token_organization_id matches (new backend feature)
                   if token_org_data['token_organization_id'] && token_org_data['token_organization_id'] != selected_org[:id]
-                    error "This token belongs to a different organization!"
-                    say ""
-                    say "The token you provided is for organization ID #{token_org_data['token_organization_id']},", :yellow
+                    error 'This token belongs to a different organization!'
+                    say ''
+                    say "The token you provided is for organization ID #{token_org_data['token_organization_id']},",
+                        :yellow
                     say "but you're trying to access organization ID #{selected_org[:id]}.", :yellow
-                    say ""
-                    say "Please generate a token from the correct organization.", :yellow
+                    say ''
+                    say 'Please generate a token from the correct organization.', :yellow
                     exit 1
                   end
-                  
-                  say "✓ Token validated successfully", :green
-                  
+
+                  say '✓ Token validated successfully', :green
+
                   # Save the token
                   config.save_token_for_org(selected_org[:id], selected_org[:name], new_token)
-                  
                 rescue Mysigner::UnauthorizedError => e
-                  error "Token validation failed"
-                  say ""
-                  
+                  error 'Token validation failed'
+                  say ''
+
                   # Check if it's an email validation error
-                  if e.message.include?("doesn't belong to") || e.message.include?("use your own token")
+                  if e.message.include?("doesn't belong to") || e.message.include?('use your own token')
                     say "⚠️  This token doesn't belong to #{config.user_email}!", :yellow
-                    say ""
+                    say ''
                     say "You can only use tokens from your own account (#{config.user_email}).", :yellow
                     say "Please generate a token while logged in as #{config.user_email} on the web.", :yellow
                   else
-                    say "The token you provided is not valid.", :yellow
+                    say 'The token you provided is not valid.', :yellow
                   end
                   exit 1
-                rescue => e
+                rescue StandardError => e
                   error "Token validation failed: #{e.message}"
                   exit 1
                 end
@@ -923,18 +910,17 @@ module Mysigner
               config.current_organization_id = selected_org[:id]
               config.save
 
-              say ""
+              say ''
               say "✓ Successfully switched to: #{selected_org[:name]}", :green
-              say ""
+              say ''
               say "💡 Run 'mysigner status' to verify your new configuration", :cyan
-              
             rescue Mysigner::ClientError => e
               error "Failed to switch organization: #{e.message}"
               exit 1
             end
           end
 
-          desc "config", "Show current CLI configuration (API URL, tokens, org)"
+          desc 'config', 'Show current CLI configuration (API URL, tokens, org)'
           def config
             config = Config.new
 
@@ -945,12 +931,12 @@ module Mysigner
 
             config.load
 
-            say "⚙️  Configuration", :cyan
-            say ""
+            say '⚙️  Configuration', :cyan
+            say ''
             config.display.each do |key, value|
               say "  #{key.to_s.ljust(20)}: #{value}"
             end
-            say ""
+            say ''
             say "Config file: #{Config::CONFIG_FILE}"
           end
 
@@ -963,273 +949,272 @@ module Mysigner
 
             # Helper method for App Store Connect credential setup
             # Returns true if successfully configured, false otherwise
-            def setup_app_store_connect_credentials(client, config, org_id)
-            say "📱 App Store Connect API Key Setup", :cyan
-            say ""
-            say "Let's set up your App Store Connect credentials.", :bold
-            say ""
-            say "Step 1: Create an API Key (if you don't have one)", :bold
-            say ""
-            say "1. Go to:", :cyan
-            say "   https://appstoreconnect.apple.com/access/api", :green
-            say ""
-            say "2. Click the '+' button to create a new key", :cyan
-            say ""
-            say "3. Select access:", :cyan
-            say "   • App Manager (for uploading builds)"
-            say "   • Or Admin (full access)"
-            say ""
-            say "4. Download the .p8 file", :cyan
-            say "   ⚠️  Save it securely - you can only download it once!", :yellow
-            say ""
+            def setup_app_store_connect_credentials(client, _config, org_id)
+              say '📱 App Store Connect API Key Setup', :cyan
+              say ''
+              say "Let's set up your App Store Connect credentials.", :bold
+              say ''
+              say "Step 1: Create an API Key (if you don't have one)", :bold
+              say ''
+              say '1. Go to:', :cyan
+              say '   https://appstoreconnect.apple.com/access/api', :green
+              say ''
+              say "2. Click the '+' button to create a new key", :cyan
+              say ''
+              say '3. Select access:', :cyan
+              say '   • App Manager (for uploading builds)'
+              say '   • Or Admin (full access)'
+              say ''
+              say '4. Download the .p8 file', :cyan
+              say '   ⚠️  Save it securely - you can only download it once!', :yellow
+              say ''
 
-            unless yes_with_default?("Have you created and downloaded your API key?", :green)
-              say ""
-              say "⏭️  You can set this up later with:", :yellow
-              say "   • mysigner doctor", :cyan
-              say "   • Or via the web dashboard", :cyan
-              return false
-            end
-            say ""
+              unless yes_with_default?('Have you created and downloaded your API key?', :green)
+                say ''
+                say '⏭️  You can set this up later with:', :yellow
+                say '   • mysigner doctor', :cyan
+                say '   • Or via the web dashboard', :cyan
+                return false
+              end
+              say ''
 
-            # Prompt for .p8 file path with retry
-            max_retries = 3
-            attempts = 0
-            p8_path = nil
-            private_key = nil
+              # Prompt for .p8 file path with retry
+              max_retries = 3
+              attempts = 0
+              p8_path = nil
+              private_key = nil
 
-            while attempts < max_retries
-              say "Step 2: Locate your .p8 file", :bold
-              say ""
-              say "💡 Tip: You can drag & drop the file into terminal to get the path", :cyan
-              say ""
-              p8_path = ask("Enter the path to your .p8 file:").strip.gsub(/^['"]|['"]$/, '') # Remove quotes
-              say ""
+              while attempts < max_retries
+                say 'Step 2: Locate your .p8 file', :bold
+                say ''
+                say '💡 Tip: You can drag & drop the file into terminal to get the path', :cyan
+                say ''
+                p8_path = ask('Enter the path to your .p8 file:').strip.gsub(/^['"]|['"]$/, '') # Remove quotes
+                say ''
 
-              # Expand ~ to home directory
-              p8_path = File.expand_path(p8_path)
+                # Expand ~ to home directory
+                p8_path = File.expand_path(p8_path)
 
-              if File.exist?(p8_path)
-                # Read private key
-                begin
-                  private_key = File.read(p8_path).strip
-                  
-                  # Validate it looks like a private key
-                  unless private_key.include?("BEGIN PRIVATE KEY") || private_key.include?("BEGIN EC PRIVATE KEY")
-                    error "This doesn't look like a valid .p8 private key file"
+                if File.exist?(p8_path)
+                  # Read private key
+                  begin
+                    private_key = File.read(p8_path).strip
+
+                    # Validate it looks like a private key
+                    unless private_key.include?('BEGIN PRIVATE KEY') || private_key.include?('BEGIN EC PRIVATE KEY')
+                      error "This doesn't look like a valid .p8 private key file"
+                      attempts += 1
+                      next
+                    end
+
+                    break # Success!
+                  rescue StandardError => e
+                    error "Failed to read file: #{e.message}"
                     attempts += 1
                     next
                   end
-                  
-                  break # Success!
-                rescue => e
-                  error "Failed to read file: #{e.message}"
-                  attempts += 1
-                  next
-                end
-              else
-                error "File not found: #{p8_path}"
-                attempts += 1
-                
-                if attempts < max_retries
-                  say ""
-                  say "Please try again (attempt #{attempts + 1}/#{max_retries})", :yellow
-                  say ""
-                end
-              end
-            end
-
-            unless private_key
-              say ""
-              error "Could not read .p8 file after #{max_retries} attempts"
-              say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
-              return false
-            end
-
-            # Auto-extract Key ID from filename (e.g., AuthKey_ABC123.p8 → ABC123)
-            filename = File.basename(p8_path)
-            key_id = nil
-            if filename =~ /AuthKey_([A-Z0-9]+)\.p8/i
-              key_id = $1
-              say "✓ Auto-detected Key ID: #{key_id}", :green
-              say ""
-            end
-
-            # Prompt for Key ID if not auto-detected
-            unless key_id
-              say "Could not auto-detect Key ID from filename.", :yellow
-              say ""
-              say "Find your Key ID in App Store Connect:", :cyan
-              say "  https://appstoreconnect.apple.com/access/api", :green
-              say ""
-              key_id = ask("Enter your Key ID (e.g., ABC12345):").strip
-              say ""
-              
-              if key_id.empty?
-                error "Key ID cannot be empty"
-                say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
-                return false
-              end
-            end
-
-            # Prompt for Issuer ID
-            say "Step 3: Find your Issuer ID", :bold
-            say ""
-            say "Find it in App Store Connect (top right of Keys page):", :cyan
-            say "  https://appstoreconnect.apple.com/access/api", :green
-            say ""
-            issuer_id = ask("Enter your Issuer ID (UUID format):").strip
-            say ""
-            
-            if issuer_id.empty?
-              error "Issuer ID cannot be empty"
-              say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
-              return false
-            end
-            
-            # Basic UUID format validation
-            unless issuer_id.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
-              say "⚠️  Warning: Issuer ID doesn't look like a UUID format", :yellow
-              say "   Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", :yellow
-              say ""
-              unless yes_with_default?("Continue anyway?", :yellow)
-                say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
-                return false
-              end
-              say ""
-            end
-
-            # Prompt for credential name
-            say "Step 4: Name this credential", :bold
-            say ""
-            say "Choose a name to identify this API key (e.g., 'Production Key', 'Team A Key')", :cyan
-            say "Default: 'CLI Setup' - just press Enter to use it", :cyan
-            say ""
-            
-            credential_name = nil
-            while credential_name.nil? || credential_name.empty?
-              name_input = ask("Credential name:").strip
-              credential_name = name_input.empty? ? "CLI Setup" : name_input
-              
-              if credential_name.empty?
-                error "Name cannot be empty"
-                say ""
-              end
-            end
-            say ""
-            say "→ Using name: '#{credential_name}'", :cyan
-            say ""
-            
-            # Validate and upload
-            say "Step 5: Validating credentials with Apple...", :bold
-            say ""
-            say "This may take a few seconds...", :yellow
-            say ""
-
-            begin
-              response = client.post("/api/v1/organizations/#{org_id}/app_store_connect_credentials", 
-                body: {
-                  app_store_connect_credential: {
-                    name: credential_name,
-                    key_id: key_id,
-                    issuer_id: issuer_id,
-                    private_key: private_key
-                  }
-                }
-              )
-
-              if response[:success]
-                data = response[:data]
-                team_id = data['team_id']
-                
-                say "✓ Credentials validated successfully!", :green
-                say ""
-                say "Details:", :cyan
-                say "  • Name: #{credential_name}"
-                say "  • Key ID: #{key_id}"
-                say "  • Issuer ID: #{issuer_id}"
-                if team_id
-                  say "  • Team ID: #{team_id}"
                 else
-                  say "  • Team ID: (will be extracted after first sync)"
+                  error "File not found: #{p8_path}"
+                  attempts += 1
+
+                  if attempts < max_retries
+                    say ''
+                    say "Please try again (attempt #{attempts + 1}/#{max_retries})", :yellow
+                    say ''
+                  end
                 end
-                say "  • Status: Active ✓"
-                say ""
-                say "🎉 App Store Connect is now configured!", :green
-                say ""
-                return true # Success!
-              else
-                error "Validation failed"
+              end
+
+              unless private_key
+                say ''
+                error "Could not read .p8 file after #{max_retries} attempts"
                 say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
                 return false
               end
-            rescue Mysigner::ClientError => e
-              error_msg = e.message
-              
-              # Check for duplicate name error
-              if error_msg.include?("Name has already been taken") || error_msg.include?("validation_failed")
-                error "A credential with the name '#{credential_name}' already exists"
-                say ""
-                say "Please choose a different name and try again.", :yellow
-                say "Or manage credentials via the web dashboard:", :cyan
-                say "  #{client.api_url}/organizations/#{org_id}", :green
-              else
-                error "Failed to configure credentials: #{error_msg}"
-                say ""
-                say "Common issues:", :yellow
-                say "  • Invalid Key ID or Issuer ID"
-                say "  • Incorrect .p8 file content"
-                say "  • API key doesn't have proper permissions"
-                say "  • API key may be revoked or expired"
+
+              # Auto-extract Key ID from filename (e.g., AuthKey_ABC123.p8 → ABC123)
+              filename = File.basename(p8_path)
+              key_id = nil
+              if filename =~ /AuthKey_([A-Z0-9]+)\.p8/i
+                key_id = ::Regexp.last_match(1)
+                say "✓ Auto-detected Key ID: #{key_id}", :green
+                say ''
               end
-              
-              say ""
-              say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
-              return false
-            rescue => e
-              error "Unexpected error: #{e.message}"
-              say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
-              return false
-            end
+
+              # Prompt for Key ID if not auto-detected
+              unless key_id
+                say 'Could not auto-detect Key ID from filename.', :yellow
+                say ''
+                say 'Find your Key ID in App Store Connect:', :cyan
+                say '  https://appstoreconnect.apple.com/access/api', :green
+                say ''
+                key_id = ask('Enter your Key ID (e.g., ABC12345):').strip
+                say ''
+
+                if key_id.empty?
+                  error 'Key ID cannot be empty'
+                  say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+                  return false
+                end
+              end
+
+              # Prompt for Issuer ID
+              say 'Step 3: Find your Issuer ID', :bold
+              say ''
+              say 'Find it in App Store Connect (top right of Keys page):', :cyan
+              say '  https://appstoreconnect.apple.com/access/api', :green
+              say ''
+              issuer_id = ask('Enter your Issuer ID (UUID format):').strip
+              say ''
+
+              if issuer_id.empty?
+                error 'Issuer ID cannot be empty'
+                say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+                return false
+              end
+
+              # Basic UUID format validation
+              unless issuer_id.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+                say "⚠️  Warning: Issuer ID doesn't look like a UUID format", :yellow
+                say '   Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', :yellow
+                say ''
+                unless yes_with_default?('Continue anyway?', :yellow)
+                  say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+                  return false
+                end
+                say ''
+              end
+
+              # Prompt for credential name
+              say 'Step 4: Name this credential', :bold
+              say ''
+              say "Choose a name to identify this API key (e.g., 'Production Key', 'Team A Key')", :cyan
+              say "Default: 'CLI Setup' - just press Enter to use it", :cyan
+              say ''
+
+              credential_name = nil
+              while credential_name.nil? || credential_name.empty?
+                name_input = ask('Credential name:').strip
+                credential_name = name_input.empty? ? 'CLI Setup' : name_input
+
+                if credential_name.empty?
+                  error 'Name cannot be empty'
+                  say ''
+                end
+              end
+              say ''
+              say "→ Using name: '#{credential_name}'", :cyan
+              say ''
+
+              # Validate and upload
+              say 'Step 5: Validating credentials with Apple...', :bold
+              say ''
+              say 'This may take a few seconds...', :yellow
+              say ''
+
+              begin
+                response = client.post("/api/v1/organizations/#{org_id}/app_store_connect_credentials",
+                                       body: {
+                                         app_store_connect_credential: {
+                                           name: credential_name,
+                                           key_id: key_id,
+                                           issuer_id: issuer_id,
+                                           private_key: private_key
+                                         }
+                                       })
+
+                if response[:success]
+                  data = response[:data]
+                  team_id = data['team_id']
+
+                  say '✓ Credentials validated successfully!', :green
+                  say ''
+                  say 'Details:', :cyan
+                  say "  • Name: #{credential_name}"
+                  say "  • Key ID: #{key_id}"
+                  say "  • Issuer ID: #{issuer_id}"
+                  if team_id
+                    say "  • Team ID: #{team_id}"
+                  else
+                    say '  • Team ID: (will be extracted after first sync)'
+                  end
+                  say '  • Status: Active ✓'
+                  say ''
+                  say '🎉 App Store Connect is now configured!', :green
+                  say ''
+                  true # Success!
+                else
+                  error 'Validation failed'
+                  say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+                  false
+                end
+              rescue Mysigner::ClientError => e
+                error_msg = e.message
+
+                # Check for duplicate name error
+                if error_msg.include?('Name has already been taken') || error_msg.include?('validation_failed')
+                  error "A credential with the name '#{credential_name}' already exists"
+                  say ''
+                  say 'Please choose a different name and try again.', :yellow
+                  say 'Or manage credentials via the web dashboard:', :cyan
+                  say "  #{client.api_url}/organizations/#{org_id}", :green
+                else
+                  error "Failed to configure credentials: #{error_msg}"
+                  say ''
+                  say 'Common issues:', :yellow
+                  say '  • Invalid Key ID or Issuer ID'
+                  say '  • Incorrect .p8 file content'
+                  say "  • API key doesn't have proper permissions"
+                  say '  • API key may be revoked or expired'
+                end
+
+                say ''
+                say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+                false
+              rescue StandardError => e
+                error "Unexpected error: #{e.message}"
+                say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
+                false
+              end
             end
 
             # Setup Google Play credentials
-            def setup_google_play_credentials(client, config, org_id)
-              say "🤖 Google Play Service Account Setup", :cyan
-              say ""
+            def setup_google_play_credentials(client, _config, org_id)
+              say '🤖 Google Play Service Account Setup', :cyan
+              say ''
               say "Let's set up your Google Play credentials.", :bold
-              say ""
+              say ''
               say "Step 1: Create a Service Account (if you don't have one)", :bold
-              say ""
-              say "1. Go to Google Play Console:", :cyan
-              say "   https://play.google.com/console", :green
-              say ""
-              say "2. Navigate to: Settings → API access", :cyan
-              say ""
+              say ''
+              say '1. Go to Google Play Console:', :cyan
+              say '   https://play.google.com/console', :green
+              say ''
+              say '2. Navigate to: Settings → API access', :cyan
+              say ''
               say "3. Click 'Create new service account' or 'Link existing service account'", :cyan
-              say ""
-              say "4. In Google Cloud Console, create a Service Account with:", :cyan
+              say ''
+              say '4. In Google Cloud Console, create a Service Account with:', :cyan
               say "   • Name: 'My Signer CLI' (or anything)"
-              say "   • Role: Editor or Admin"
-              say ""
-              say "5. Create a JSON key for the service account", :cyan
-              say "   • Click on the service account → Keys → Add Key → JSON"
-              say "   • Download the JSON file"
-              say ""
-              say "6. Back in Play Console, grant the service account access:", :cyan
+              say '   • Role: Editor or Admin'
+              say ''
+              say '5. Create a JSON key for the service account', :cyan
+              say '   • Click on the service account → Keys → Add Key → JSON'
+              say '   • Download the JSON file'
+              say ''
+              say '6. Back in Play Console, grant the service account access:', :cyan
               say "   • Click 'Done' in the modal"
-              say "   • Click on the service account"
-              say "   • Set permissions: Release apps, Manage production releases"
-              say ""
+              say '   • Click on the service account'
+              say '   • Set permissions: Release apps, Manage production releases'
+              say ''
 
-              unless yes_with_default?("Have you created and downloaded your service account JSON?", :green)
-                say ""
-                say "⏭️  You can set this up later with:", :yellow
-                say "   • mysigner doctor (will prompt for setup)", :cyan
-                say "   • Or via the web dashboard", :cyan
+              unless yes_with_default?('Have you created and downloaded your service account JSON?', :green)
+                say ''
+                say '⏭️  You can set this up later with:', :yellow
+                say '   • mysigner doctor (will prompt for setup)', :cyan
+                say '   • Or via the web dashboard', :cyan
                 return false
               end
-              say ""
+              say ''
 
               # Prompt for JSON file path with retry
               max_retries = 3
@@ -1238,12 +1223,12 @@ module Mysigner
               service_account_json = nil
 
               while attempts < max_retries
-                say "Step 2: Locate your service account JSON file", :bold
-                say ""
-                say "💡 Tip: You can drag & drop the file into terminal to get the path", :cyan
-                say ""
-                json_path = ask("Enter the path to your service account JSON file:").strip.gsub(/^['"]|['"]$/, '')
-                say ""
+                say 'Step 2: Locate your service account JSON file', :bold
+                say ''
+                say '💡 Tip: You can drag & drop the file into terminal to get the path', :cyan
+                say ''
+                json_path = ask('Enter the path to your service account JSON file:').strip.gsub(/^['"]|['"]$/, '')
+                say ''
 
                 # Expand ~ to home directory
                 json_path = File.expand_path(json_path)
@@ -1251,7 +1236,7 @@ module Mysigner
                 if File.exist?(json_path)
                   begin
                     service_account_json = File.read(json_path).strip
-                    
+
                     # Validate it looks like a service account JSON
                     parsed = JSON.parse(service_account_json)
                     unless parsed['type'] == 'service_account' && parsed['client_email'] && parsed['private_key']
@@ -1260,16 +1245,16 @@ module Mysigner
                       attempts += 1
                       next
                     end
-                    
-                    say "✓ Valid service account JSON detected", :green
+
+                    say '✓ Valid service account JSON detected', :green
                     say "  Email: #{parsed['client_email']}", :cyan
-                    say ""
+                    say ''
                     break # Success!
                   rescue JSON::ParserError => e
                     error "Invalid JSON file: #{e.message}"
                     attempts += 1
                     next
-                  rescue => e
+                  rescue StandardError => e
                     error "Failed to read file: #{e.message}"
                     attempts += 1
                     next
@@ -1277,100 +1262,98 @@ module Mysigner
                 else
                   error "File not found: #{json_path}"
                   attempts += 1
-                  
+
                   if attempts < max_retries
-                    say ""
+                    say ''
                     say "Please try again (attempt #{attempts + 1}/#{max_retries})", :yellow
-                    say ""
+                    say ''
                   end
                 end
               end
 
               unless service_account_json
-                say ""
+                say ''
                 error "Could not read JSON file after #{max_retries} attempts"
                 say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
                 return false
               end
 
               # Prompt for credential name
-              say "Step 3: Name this credential", :bold
-              say ""
+              say 'Step 3: Name this credential', :bold
+              say ''
               say "Choose a name to identify this service account (e.g., 'Production', 'CI/CD')", :cyan
               say "Default: 'CLI Setup' - just press Enter to use it", :cyan
-              say ""
-              
+              say ''
+
               credential_name = nil
               while credential_name.nil? || credential_name.empty?
-                name_input = ask("Credential name:").strip
-                credential_name = name_input.empty? ? "CLI Setup" : name_input
-                
+                name_input = ask('Credential name:').strip
+                credential_name = name_input.empty? ? 'CLI Setup' : name_input
+
                 if credential_name.empty?
-                  error "Name cannot be empty"
-                  say ""
+                  error 'Name cannot be empty'
+                  say ''
                 end
               end
-              say ""
+              say ''
               say "→ Using name: '#{credential_name}'", :cyan
-              say ""
-              
+              say ''
+
               # Validate and upload
-              say "Step 4: Saving credentials...", :bold
-              say ""
+              say 'Step 4: Saving credentials...', :bold
+              say ''
 
               begin
-                response = client.post("/api/v1/organizations/#{org_id}/google_play_credentials", 
-                  body: {
-                    google_play_credential: {
-                      name: credential_name,
-                      service_account_json: service_account_json,
-                      active: true
-                    }
-                  }
-                )
+                response = client.post("/api/v1/organizations/#{org_id}/google_play_credentials",
+                                       body: {
+                                         google_play_credential: {
+                                           name: credential_name,
+                                           service_account_json: service_account_json,
+                                           active: true
+                                         }
+                                       })
 
-                say "✓ Google Play credentials saved!", :green
-                say ""
-                say "Details:", :cyan
+                say '✓ Google Play credentials saved!', :green
+                say ''
+                say 'Details:', :cyan
                 say "  • Name: #{credential_name}"
-                say "  • Status: Active ✓"
-                say ""
-                
+                say '  • Status: Active ✓'
+                say ''
+
                 # Test the connection
-                say "Testing connection to Google Play...", :yellow
-                
+                say 'Testing connection to Google Play...', :yellow
+
                 begin
                   cred_id = response[:data]['id']
                   client.post("/api/v1/organizations/#{org_id}/google_play_credentials/#{cred_id}/test")
-                  say "✓ Successfully connected to Google Play API!", :green
-                rescue => e
+                  say '✓ Successfully connected to Google Play API!', :green
+                rescue StandardError => e
                   say "⚠️  Connection test failed: #{e.message}", :yellow
-                  say "   The credentials are saved but may need verification", :yellow
+                  say '   The credentials are saved but may need verification', :yellow
                 end
-                
-                say ""
-                say "🎉 Google Play is now configured!", :green
-                say ""
-                return true
 
+                say ''
+                say '🎉 Google Play is now configured!', :green
+                say ''
+                true
               rescue Mysigner::ClientError => e
                 error_msg = e.message
-                
-                if error_msg.include?("already been taken") || error_msg.include?("validation")
+
+                if error_msg.include?('already been taken') || error_msg.include?('validation')
                   error "A credential with the name '#{credential_name}' already exists"
-                  say ""
-                  say "Please choose a different name and try again.", :yellow
+                  say ''
+                  say 'Please choose a different name and try again.', :yellow
                 else
                   error "Failed to configure credentials: #{error_msg}"
                 end
-                
-                say ""
+
+                say ''
                 say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
-                return false
-              rescue => e
+                false
+              rescue StandardError => e
                 error "Unexpected error: #{e.message}"
                 say "Setup skipped. Run 'mysigner doctor' to try again.", :yellow
-                return false
+                false
               end
             end
           end

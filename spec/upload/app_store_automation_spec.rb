@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'mysigner/upload/app_store_automation'
 
@@ -97,11 +99,10 @@ RSpec.describe Mysigner::Upload::AppStoreAutomation do
           }
         ) do
           calls += 1
+          advance(poll_interval)
           if calls < 3
-            advance(poll_interval)
             { data: { 'data' => { 'builds' => [{ 'id' => 'build-1', 'processing_state' => 'PROCESSING' }] } } }
           else
-            advance(poll_interval)
             { data: { 'data' => { 'builds' => [build_ready] } } }
           end
         end
@@ -156,9 +157,9 @@ RSpec.describe Mysigner::Upload::AppStoreAutomation do
       end
 
       it 'raises an error after timing out and sets timeout indicator' do
-        expect {
+        expect do
           automation.perform!(metadata: metadata, build_info: build_info, metadata_overrides: {})
-        }.to raise_error(Mysigner::Upload::AppStoreAutomation::AutomationError, /still processing/)
+        end.to raise_error(Mysigner::Upload::AppStoreAutomation::AutomationError, /still processing/)
       end
     end
 
@@ -184,9 +185,9 @@ RSpec.describe Mysigner::Upload::AppStoreAutomation do
       end
 
       it 'performs automation without polling' do
-        expect {
+        expect do
           automation.perform!(metadata: metadata, build_info: build_info, metadata_overrides: {})
-        }.not_to raise_error
+        end.not_to raise_error
       end
     end
 

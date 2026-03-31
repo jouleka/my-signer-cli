@@ -67,7 +67,7 @@ RSpec.describe 'mysigner sync', type: :cli do
     end
 
     describe 'sync iOS (default)' do
-      let(:ios_sync_response) {
+      let(:ios_sync_response) do
         {
           success: true,
           data: {
@@ -81,7 +81,7 @@ RSpec.describe 'mysigner sync', type: :cli do
             }
           }
         }
-      }
+      end
 
       before do
         allow(client).to receive(:post)
@@ -122,9 +122,9 @@ RSpec.describe 'mysigner sync', type: :cli do
     end
 
     describe 'sync iOS (explicit)' do
-      let(:ios_sync_response) {
+      let(:ios_sync_response) do
         { success: true, data: { 'synced_at' => '2026-02-06T10:00:00Z' } }
-      }
+      end
 
       before do
         allow(client).to receive(:post)
@@ -152,9 +152,9 @@ RSpec.describe 'mysigner sync', type: :cli do
     end
 
     describe 'sync Android' do
-      let(:android_sync_response) {
+      let(:android_sync_response) do
         { success: true, data: {} }
-      }
+      end
 
       before do
         allow(client).to receive(:post)
@@ -203,12 +203,12 @@ RSpec.describe 'mysigner sync', type: :cli do
     end
 
     describe 'sync all' do
-      let(:ios_sync_response) {
+      let(:ios_sync_response) do
         { success: true, data: { 'synced_at' => '2026-02-06T10:00:00Z' } }
-      }
-      let(:android_sync_response) {
+      end
+      let(:android_sync_response) do
         { success: true, data: {} }
-      }
+      end
 
       before do
         allow(client).to receive(:post)
@@ -247,9 +247,9 @@ RSpec.describe 'mysigner sync', type: :cli do
     end
 
     describe 'with --force option' do
-      let(:ios_sync_response) {
+      let(:ios_sync_response) do
         { success: true, data: {} }
-      }
+      end
 
       before do
         cli.options = { force: true }
@@ -347,12 +347,12 @@ RSpec.describe 'mysigner sync', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'sync']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help sync]) }
       expect(help_output).to include('Sync')
     end
 
     it 'shows force option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'sync']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help sync]) }
       expect(help_output).to include('--force')
     end
   end

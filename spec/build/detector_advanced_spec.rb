@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'mysigner/build/detector'
 require 'fileutils'
@@ -23,28 +25,30 @@ RSpec.describe Mysigner::Build::Detector do
       end
 
       it 'raises NoProjectError with helpful Expo message' do
-        expect {
+        expect do
           described_class.detect(test_dir)
-        }.to raise_error(Mysigner::Build::Detector::NoProjectError, /Failed to generate iOS project with expo prebuild/)
+        end.to raise_error(Mysigner::Build::Detector::NoProjectError,
+                           /Failed to generate iOS project with expo prebuild/)
       end
 
       it 'suggests using expo prebuild' do
-        expect {
+        expect do
           described_class.detect(test_dir)
-        }.to raise_error(Mysigner::Build::Detector::NoProjectError, /expo prebuild/)
+        end.to raise_error(Mysigner::Build::Detector::NoProjectError, /expo prebuild/)
       end
 
       it 'suggests using EAS Build' do
-        expect {
+        expect do
           described_class.detect(test_dir)
-        }.to raise_error(Mysigner::Build::Detector::NoProjectError, /EAS Build/)
+        end.to raise_error(Mysigner::Build::Detector::NoProjectError, /EAS Build/)
       end
     end
 
     context 'when Expo bare workflow (has ios/ folder)' do
       before do
         File.write(File.join(test_dir, 'app.json'), '{"expo": {"name": "Test"}}')
-        File.write(File.join(test_dir, 'package.json'), '{"dependencies": {"expo": "^50.0.0", "react-native": "0.73.0"}}')
+        File.write(File.join(test_dir, 'package.json'),
+                   '{"dependencies": {"expo": "^50.0.0", "react-native": "0.73.0"}}')
         FileUtils.mkdir_p(File.join(test_dir, 'ios'))
         # Create a dummy xcodeproj
         FileUtils.mkdir_p(File.join(test_dir, 'ios', 'TestApp.xcodeproj'))

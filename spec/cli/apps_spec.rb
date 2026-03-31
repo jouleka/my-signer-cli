@@ -36,8 +36,8 @@ RSpec.describe 'mysigner apps', type: :cli do
       allow(config).to receive(:current_organization_id).and_return('123')
       allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return({
-        data: { 'data' => { 'apps' => [] } }
-      })
+                                                  data: { 'data' => { 'apps' => [] } }
+                                                })
     end
 
     it 'shows error message' do
@@ -69,7 +69,7 @@ RSpec.describe 'mysigner apps', type: :cli do
     end
 
     describe 'list all apps (both platforms)' do
-      let(:ios_apps_response) {
+      let(:ios_apps_response) do
         {
           data: {
             'data' => {
@@ -80,9 +80,9 @@ RSpec.describe 'mysigner apps', type: :cli do
             }
           }
         }
-      }
+      end
 
-      let(:android_apps_response) {
+      let(:android_apps_response) do
         {
           data: {
             'android_apps' => [
@@ -90,7 +90,7 @@ RSpec.describe 'mysigner apps', type: :cli do
             ]
           }
         }
-      }
+      end
 
       before do
         allow(client).to receive(:get)
@@ -135,7 +135,7 @@ RSpec.describe 'mysigner apps', type: :cli do
     end
 
     describe 'list iOS apps only' do
-      let(:ios_apps_response) {
+      let(:ios_apps_response) do
         {
           data: {
             'data' => {
@@ -145,7 +145,7 @@ RSpec.describe 'mysigner apps', type: :cli do
             }
           }
         }
-      }
+      end
 
       before do
         cli.options = { page: 1, per_page: 50, platform: 'ios' }
@@ -174,7 +174,7 @@ RSpec.describe 'mysigner apps', type: :cli do
     end
 
     describe 'list Android apps only' do
-      let(:android_apps_response) {
+      let(:android_apps_response) do
         {
           data: {
             'android_apps' => [
@@ -182,7 +182,7 @@ RSpec.describe 'mysigner apps', type: :cli do
             ]
           }
         }
-      }
+      end
 
       before do
         cli.options = { page: 1, per_page: 50, platform: 'android' }
@@ -211,14 +211,14 @@ RSpec.describe 'mysigner apps', type: :cli do
     end
 
     describe 'with search query' do
-      let(:ios_apps_response) {
+      let(:ios_apps_response) do
         {
           data: { 'data' => { 'apps' => [{ 'name' => 'Search Result', 'bundle_id' => 'com.example.search' }] } }
         }
-      }
-      let(:android_apps_response) {
+      end
+      let(:android_apps_response) do
         { data: { 'android_apps' => [] } }
-      }
+      end
 
       before do
         cli.options = { page: 1, per_page: 50, search: 'myapp' }
@@ -249,12 +249,12 @@ RSpec.describe 'mysigner apps', type: :cli do
     end
 
     describe 'when no iOS apps found' do
-      let(:ios_apps_response) {
+      let(:ios_apps_response) do
         { data: { 'data' => { 'apps' => [] } } }
-      }
-      let(:android_apps_response) {
+      end
+      let(:android_apps_response) do
         { data: { 'android_apps' => [] } }
-      }
+      end
 
       before do
         allow(client).to receive(:get)
@@ -282,9 +282,9 @@ RSpec.describe 'mysigner apps', type: :cli do
     end
 
     describe 'when iOS API fails' do
-      let(:android_apps_response) {
+      let(:android_apps_response) do
         { data: { 'android_apps' => [] } }
-      }
+      end
 
       before do
         allow(client).to receive(:get)
@@ -308,9 +308,9 @@ RSpec.describe 'mysigner apps', type: :cli do
     end
 
     describe 'when Android API fails' do
-      let(:ios_apps_response) {
+      let(:ios_apps_response) do
         { data: { 'data' => { 'apps' => [] } } }
-      }
+      end
 
       before do
         allow(client).to receive(:get)
@@ -336,22 +336,22 @@ RSpec.describe 'mysigner apps', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'apps']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help apps]) }
       expect(help_output).to include('List apps')
     end
 
     it 'shows platform option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'apps']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help apps]) }
       expect(help_output).to include('--platform')
     end
 
     it 'shows search option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'apps']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help apps]) }
       expect(help_output).to include('--search')
     end
 
     it 'shows pagination options' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'apps']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help apps]) }
       expect(help_output).to include('--page')
       expect(help_output).to include('--per-page')
     end

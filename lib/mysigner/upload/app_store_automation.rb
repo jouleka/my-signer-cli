@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Mysigner
   module Upload
     class AppStoreAutomation
@@ -11,23 +13,23 @@ module Mysigner
       def initialize(client:, organization_id:, opts: {})
         @client = client
         @organization_id = organization_id
-        @wait_enabled = opts.key?(:wait) ? !!opts[:wait] : true
+        @wait_enabled = opts.key?(:wait) ? !opts[:wait].nil? : true
 
         poll = opts[:poll_interval] || opts[:poll_seconds]
         poll = poll.to_i if poll
-        @poll_interval = poll && poll.positive? ? poll : DEFAULT_POLL_INTERVAL
+        @poll_interval = poll&.positive? ? poll : DEFAULT_POLL_INTERVAL
 
         timeout = opts[:timeout] || opts[:timeout_seconds]
         timeout = timeout.to_i if timeout
-        @timeout = timeout && timeout.positive? ? timeout : DEFAULT_WAIT_TIMEOUT
+        @timeout = timeout&.positive? ? timeout : DEFAULT_WAIT_TIMEOUT
 
-        @no_submit = !!opts[:no_submit]
+        @no_submit = !opts[:no_submit].nil?
         @now = opts[:now]
       end
 
       def perform!(metadata:, build_info:, metadata_overrides: {})
         build_info = symbolize_keys(build_info)
-        metadata = metadata || {}
+        metadata ||= {}
 
         result = {
           wait: {
@@ -43,9 +45,9 @@ module Mysigner
           submission_source: nil
         }
 
-        puts ""
-        puts "🤖 App Store automation in progress..."
-        puts ""
+        puts ''
+        puts '🤖 App Store automation in progress...'
+        puts ''
 
         app = ensure_app(build_info[:bundle_id])
         raise AutomationError, "App with bundle ID #{build_info[:bundle_id]} not found" unless app
@@ -56,11 +58,13 @@ module Mysigner
         unless build
           version_info = [build_info[:version], build_info[:build_number]].compact.join(' / ')
           version_info = "for #{version_info}" unless version_info.empty?
-          raise AutomationError, "No processed build found #{version_info}. Upload a build first with 'mysigner ship appstore --wait'"
+          raise AutomationError,
+                "No processed build found #{version_info}. Upload a build first with 'mysigner ship appstore --wait'"
         end
 
         unless build_processed?(build)
-          raise AutomationError, "Build #{build_info[:version]} (#{build_info[:build_number]}) is still processing. Wait for it or use --wait flag."
+          raise AutomationError,
+                "Build #{build_info[:version]} (#{build_info[:build_number]}) is still processing. Wait for it or use --wait flag."
         end
 
         version = ensure_app_store_version(app_id: app['id'], metadata: metadata, overrides: metadata_overrides)
@@ -70,12 +74,12 @@ module Mysigner
 
         if should_submit
           submit_for_review(
-            version_id: version['id'], 
+            version_id: version['id'],
             version_string: version['version_string'],
-            metadata: metadata, 
+            metadata: metadata,
             overrides: metadata_overrides
           )
-          puts "✓ Submitted for App Store review"
+          puts '✓ Submitted for App Store review'
           result[:submitted] = true
           result[:submission_source] = submit_source
         else
@@ -83,8 +87,8 @@ module Mysigner
           result[:skip_reason] = skip_reason
         end
 
-        puts ""
-        puts "✅ App Store automation complete"
+        puts ''
+        puts '✅ App Store automation complete'
 
         result
       end
@@ -112,29 +116,29 @@ module Mysigner
 
         return [build, status] unless @wait_enabled
 
-        puts "⏳ Waiting for Apple to finish processing the build..."
+        puts '⏳ Waiting for Apple to finish processing the build...'
         puts "   Polling every #{@poll_interval}s (timeout #{@timeout}s)"
-        print ""
+        print ''
 
         start_time = current_time
-        
+
         loop do
           build = latest_build(app_id, build_info)
           status[:last_state] = build_state(build)
 
           if build && build_processed?(build)
             puts "\r✓ Build is processed and ready".ljust(70)
-            puts ""
+            puts ''
             return [build, status]
           end
-          
+
           elapsed = current_time - start_time
           status[:elapsed_seconds] = elapsed
 
           if elapsed >= @timeout
             status[:timed_out] = true
             puts "\r✗ Timed out after #{format_duration(elapsed)} (use --asc-timeout-seconds to extend)".ljust(90)
-            puts ""
+            puts ''
             return [build, status]
           end
 
@@ -152,32 +156,30 @@ module Mysigner
           app_id: app_id,
           processed_only: !@wait_enabled
         }
-        
+
         # Only filter by version/build if NOT using latest
         unless build_info[:use_latest]
           params[:version] = build_info[:version] if build_info[:version]
           params[:build_number] = build_info[:build_number] if build_info[:build_number]
         end
-        
+
         # Apply min_build_number filter if set in release config
-        if build_info[:min_build_number]
-          params[:min_build_number] = build_info[:min_build_number]
-        end
-        
+        params[:min_build_number] = build_info[:min_build_number] if build_info[:min_build_number]
+
         response = @client.get(
           "/api/v1/organizations/#{@organization_id}/builds",
           params: params.compact
         )
 
         builds = Array(response[:data]['data']['builds'])
-        
+
         # Smart build selection: filter by min_build_number client-side if API doesn't support it
         if build_info[:min_build_number] && builds.any?
           min_bn = build_info[:min_build_number].to_i
           builds = builds.select { |b| b['build_number'].to_i >= min_bn }
         end
-        
-        builds.first  # Already ordered by uploaded_date desc
+
+        builds.first # Already ordered by uploaded_date desc
       rescue Mysigner::NotFoundError
         nil
       rescue StandardError => e
@@ -264,7 +266,7 @@ module Mysigner
       def determine_earliest_release_date(metadata, overrides)
         date = overrides['earliest_release_date'] || metadata['earliest_release_date']
         return nil unless date
-        
+
         # Convert to ISO 8601 if not already
         date.respond_to?(:iso8601) ? date.iso8601 : date.to_s
       end
@@ -287,17 +289,17 @@ module Mysigner
 
       def determine_release_type(metadata, overrides)
         result = overrides['release_type'] || metadata['release_type']
-        
+
         # FIX v7: Changed default from MANUAL to AFTER_APPROVAL
         # Log deprecation notice if no explicit release_type is set
         if result.nil?
           if ENV['MYSIGNER_DEBUG'] || @deprecation_warned.nil?
-            puts "   Note: Using default release_type AFTER_APPROVAL (was MANUAL in older versions)"
+            puts '   Note: Using default release_type AFTER_APPROVAL (was MANUAL in older versions)'
             @deprecation_warned = true
           end
           result = 'AFTER_APPROVAL'
         end
-        
+
         result
       end
 
@@ -307,7 +309,7 @@ module Mysigner
           body: { build_id: build_id }
         )
 
-        puts "✓ Attached build to App Store version"
+        puts '✓ Attached build to App Store version'
       rescue StandardError => e
         raise AutomationError, "Failed to attach build to version: #{e.message}"
       end
@@ -316,11 +318,13 @@ module Mysigner
         return [false, nil, '--no-auto-submit flag'] if @no_submit
 
         if overrides.key?('auto_submit')
-          return overrides['auto_submit'] ? [true, 'CLI override', nil] : [false, nil, 'CLI override disabled auto_submit']
+          return overrides['auto_submit'] ? [true, 'CLI override',
+                                             nil] : [false, nil, 'CLI override disabled auto_submit']
         end
 
         if metadata.key?('auto_submit')
-          return metadata['auto_submit'] ? [true, 'Dashboard configuration', nil] : [false, nil, 'Dashboard auto_submit disabled']
+          return metadata['auto_submit'] ? [true, 'Dashboard configuration',
+                                            nil] : [false, nil, 'Dashboard auto_submit disabled']
         end
 
         [false, nil, 'No auto_submit configuration']
@@ -329,27 +333,26 @@ module Mysigner
       def submit_for_review(version_id:, version_string: nil, metadata: {}, overrides: {})
         # Merge metadata and overrides
         merged = metadata.merge(overrides)
-        
+
         # Get version string to check if first version
         version_string ||= merged['version_string'] || merged['version'] || '1.0'
         is_first_version = version_string.split('.').first.to_i <= 1
-        
+
         # Validate required fields for Apple submission
         # Note: What's New is NOT required for version 1.0 (first release)
         # Support URL may already be set in App Store Connect, so we only warn if missing
         missing_fields = []
         missing_fields << "What's New text" if !is_first_version && merged['whats_new'].to_s.strip.empty?
-        
+
         # Don't block on missing support_url - it may already be in App Store Connect
         # Just warn about it
-        if merged['support_url'].to_s.strip.empty?
-          puts "⚠️  Note: No Support URL provided via CLI - using value from App Store Connect if available"
-        end
-        
+        puts '⚠️  Note: No Support URL provided via CLI - using value from App Store Connect if available' if merged['support_url'].to_s.strip.empty?
+
         unless missing_fields.empty?
-          raise AutomationError, "Cannot submit to Apple Store: missing required fields: #{missing_fields.join(', ')}. Please configure these in your My Signer dashboard or provide via --whats-new flag."
+          raise AutomationError,
+                "Cannot submit to Apple Store: missing required fields: #{missing_fields.join(', ')}. Please configure these in your My Signer dashboard or provide via --whats-new flag."
         end
-        
+
         payload = {
           whats_new: merged['whats_new'],
           keywords: merged['keywords'],
@@ -357,7 +360,7 @@ module Mysigner
           promotional_text: merged['promotional_text'],
           support_url: merged['support_url'],
           locale: merged['locale']
-        }.compact  # Remove nil values
+        }.compact # Remove nil values
 
         @client.post(
           "/api/v1/organizations/#{@organization_id}/app_store_versions/#{version_id}/submit",
@@ -375,7 +378,6 @@ module Mysigner
         end
       end
 
-
       def format_duration(seconds)
         minutes = (seconds / 60).floor
         seconds = (seconds % 60).round
@@ -383,7 +385,7 @@ module Mysigner
       end
 
       def current_time
-        (@now && @now.call) || Time.now
+        @now&.call || Time.now
       end
     end
   end

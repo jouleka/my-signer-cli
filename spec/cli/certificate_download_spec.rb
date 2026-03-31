@@ -63,7 +63,9 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(config).to receive(:organization_id).and_return(org_id)
       # Stub to prevent errors if execution continues
       allow(client).to receive(:get).and_return({ data: {} })
-      allow(Faraday).to receive(:new).and_return(double('connection', get: double('response', success?: false, status: 404, headers: {}, body: '')))
+      allow(Faraday).to receive(:new).and_return(double('connection',
+                                                        get: double('response', success?: false, status: 404,
+                                                                                headers: {}, body: '')))
     end
 
     it 'shows usage message' do
@@ -83,7 +85,7 @@ RSpec.describe 'mysigner certificate download', type: :cli do
   end
 
   describe 'successful download with default filename' do
-    let(:cert_response) {
+    let(:cert_response) do
       {
         data: {
           'id' => cert_id,
@@ -93,7 +95,7 @@ RSpec.describe 'mysigner certificate download', type: :cli do
           'status' => 'ACTIVE'
         }
       }
-    }
+    end
     let(:cert_content) { 'binary certificate content' }
     let(:faraday_response) { double('response', success?: true, body: cert_content, headers: {}) }
     let(:faraday_conn) { double('connection') }
@@ -105,19 +107,19 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}/certificates/#{cert_id}").and_return(cert_response)
-      
+
       # Mock Faraday connection
       request_options = double('options')
       allow(request_options).to receive(:timeout=)
       allow(request_options).to receive(:open_timeout=)
       request = double('request', options: request_options)
-      
+
       allow(Faraday).to receive(:new).and_return(faraday_conn)
       allow(faraday_conn).to receive(:get).and_yield(request).and_return(faraday_response)
-      
+
       # Mock File write
       allow(File).to receive(:binwrite)
-      
+
       cli.options = {}
     end
 
@@ -173,7 +175,7 @@ RSpec.describe 'mysigner certificate download', type: :cli do
   end
 
   describe 'successful download with custom output path' do
-    let(:cert_response) {
+    let(:cert_response) do
       {
         data: {
           'id' => cert_id,
@@ -183,7 +185,7 @@ RSpec.describe 'mysigner certificate download', type: :cli do
           'status' => 'ACTIVE'
         }
       }
-    }
+    end
     let(:cert_content) { 'binary certificate content' }
     let(:faraday_response) { double('response', success?: true, body: cert_content, headers: {}) }
     let(:faraday_conn) { double('connection') }
@@ -196,16 +198,16 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}/certificates/#{cert_id}").and_return(cert_response)
-      
+
       request_options = double('options')
       allow(request_options).to receive(:timeout=)
       allow(request_options).to receive(:open_timeout=)
       request = double('request', options: request_options)
-      
+
       allow(Faraday).to receive(:new).and_return(faraday_conn)
       allow(faraday_conn).to receive(:get).and_yield(request).and_return(faraday_response)
       allow(File).to receive(:binwrite)
-      
+
       cli.options = { output: custom_path }
     end
 
@@ -244,7 +246,7 @@ RSpec.describe 'mysigner certificate download', type: :cli do
   end
 
   describe 'when download fails' do
-    let(:cert_response) {
+    let(:cert_response) do
       {
         data: {
           'id' => cert_id,
@@ -254,7 +256,7 @@ RSpec.describe 'mysigner certificate download', type: :cli do
           'status' => 'ACTIVE'
         }
       }
-    }
+    end
     let(:faraday_response) { double('response', success?: false, status: 500, headers: {}, body: 'Server error') }
     let(:faraday_conn) { double('connection') }
 
@@ -265,15 +267,15 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}/certificates/#{cert_id}").and_return(cert_response)
-      
+
       request_options = double('options')
       allow(request_options).to receive(:timeout=)
       allow(request_options).to receive(:open_timeout=)
       request = double('request', options: request_options)
-      
+
       allow(Faraday).to receive(:new).and_return(faraday_conn)
       allow(faraday_conn).to receive(:get).and_yield(request).and_return(faraday_response)
-      
+
       cli.options = {}
     end
 
@@ -289,7 +291,7 @@ RSpec.describe 'mysigner certificate download', type: :cli do
   end
 
   describe 'when file write fails' do
-    let(:cert_response) {
+    let(:cert_response) do
       {
         data: {
           'id' => cert_id,
@@ -299,7 +301,7 @@ RSpec.describe 'mysigner certificate download', type: :cli do
           'status' => 'ACTIVE'
         }
       }
-    }
+    end
     let(:cert_content) { 'binary certificate content' }
     let(:faraday_response) { double('response', success?: true, body: cert_content, headers: {}) }
     let(:faraday_conn) { double('connection') }
@@ -311,16 +313,16 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}/certificates/#{cert_id}").and_return(cert_response)
-      
+
       request_options = double('options')
       allow(request_options).to receive(:timeout=)
       allow(request_options).to receive(:open_timeout=)
       request = double('request', options: request_options)
-      
+
       allow(Faraday).to receive(:new).and_return(faraday_conn)
       allow(faraday_conn).to receive(:get).and_yield(request).and_return(faraday_response)
       allow(File).to receive(:binwrite).and_raise(StandardError.new('Permission denied'))
-      
+
       cli.options = {}
     end
 
@@ -363,17 +365,17 @@ RSpec.describe 'mysigner certificate download', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'certificate']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help certificate]) }
       expect(help_output).to include('Download a signing certificate')
     end
 
     it 'shows ID argument' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'certificate']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help certificate]) }
       expect(help_output).to include('ID')
     end
 
     it 'shows output option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'certificate']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help certificate]) }
       expect(help_output).to include('--output')
     end
   end
@@ -383,10 +385,9 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
-      
+
       output = capture_stdout { Mysigner::CLI.start(['certificate', 'download', cert_id]) }
       expect(output).to include('Not logged in')
     end
   end
 end
-

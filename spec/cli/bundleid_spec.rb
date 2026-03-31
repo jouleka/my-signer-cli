@@ -68,7 +68,7 @@ RSpec.describe 'mysigner bundleid', type: :cli do
 
     describe 'bundleid list' do
       context 'when bundle IDs exist' do
-        let(:bundle_ids_response) {
+        let(:bundle_ids_response) do
           {
             data: {
               'bundle_ids' => [
@@ -77,7 +77,7 @@ RSpec.describe 'mysigner bundleid', type: :cli do
               ]
             }
           }
-        }
+        end
 
         before do
           allow(client).to receive(:get)
@@ -110,9 +110,9 @@ RSpec.describe 'mysigner bundleid', type: :cli do
       end
 
       context 'when no bundle IDs found' do
-        let(:empty_response) {
+        let(:empty_response) do
           { data: { 'bundle_ids' => [] } }
-        }
+        end
 
         before do
           allow(client).to receive(:get)
@@ -153,7 +153,7 @@ RSpec.describe 'mysigner bundleid', type: :cli do
 
     describe 'bundleid register' do
       context 'with valid identifier' do
-        let(:success_response) {
+        let(:success_response) do
           {
             data: {
               'bundle_id' => {
@@ -162,7 +162,7 @@ RSpec.describe 'mysigner bundleid', type: :cli do
               }
             }
           }
-        }
+        end
 
         before do
           allow(client).to receive(:post).and_return(success_response)
@@ -198,7 +198,7 @@ RSpec.describe 'mysigner bundleid', type: :cli do
       end
 
       context 'with custom name' do
-        let(:success_response) {
+        let(:success_response) do
           {
             data: {
               'bundle_id' => {
@@ -207,7 +207,7 @@ RSpec.describe 'mysigner bundleid', type: :cli do
               }
             }
           }
-        }
+        end
 
         before do
           allow(client).to receive(:post).and_return(success_response)
@@ -351,7 +351,7 @@ RSpec.describe 'mysigner bundleid', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'bundleid']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help bundleid]) }
       expect(help_output).to include('Bundle ID')
     end
   end
@@ -362,7 +362,7 @@ RSpec.describe 'mysigner bundleid', type: :cli do
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
 
-      output = capture_stdout { Mysigner::CLI.start(['bundleid', 'list']) }
+      output = capture_stdout { Mysigner::CLI.start(%w[bundleid list]) }
       expect(output).to include('Not logged in')
     end
   end

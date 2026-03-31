@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'mysigner/signing/validator'
 
@@ -12,10 +14,9 @@ RSpec.describe Mysigner::Signing::Validator do
 
   let(:parser) do
     instance_double(Mysigner::Build::Parser,
-      team_id: build_settings['DEVELOPMENT_TEAM'],
-      code_sign_style: build_settings['CODE_SIGN_STYLE'],
-      bundle_id: build_settings['PRODUCT_BUNDLE_IDENTIFIER']
-    )
+                    team_id: build_settings['DEVELOPMENT_TEAM'],
+                    code_sign_style: build_settings['CODE_SIGN_STYLE'],
+                    bundle_id: build_settings['PRODUCT_BUNDLE_IDENTIFIER'])
   end
 
   let(:validator) { described_class.new(parser, 'TestApp', 'Release') }
@@ -32,10 +33,9 @@ RSpec.describe Mysigner::Signing::Validator do
     context 'with team override' do
       let(:parser) do
         instance_double(Mysigner::Build::Parser,
-          team_id: nil,  # No team in project
-          code_sign_style: 'Automatic',
-          bundle_id: 'com.test.app'
-        )
+                        team_id: nil, # No team in project
+                        code_sign_style: 'Automatic',
+                        bundle_id: 'com.test.app')
       end
 
       let(:validator) { described_class.new(parser, 'TestApp', 'Release', team_id: 'XYZ789') }
@@ -50,10 +50,9 @@ RSpec.describe Mysigner::Signing::Validator do
     context 'with no development team' do
       let(:parser) do
         instance_double(Mysigner::Build::Parser,
-          team_id: nil,
-          code_sign_style: 'Automatic',
-          bundle_id: 'com.test.app'
-        )
+                        team_id: nil,
+                        code_sign_style: 'Automatic',
+                        bundle_id: 'com.test.app')
       end
 
       it 'returns error about missing team' do
@@ -68,10 +67,9 @@ RSpec.describe Mysigner::Signing::Validator do
     context 'with empty development team' do
       let(:parser) do
         instance_double(Mysigner::Build::Parser,
-          team_id: '',
-          code_sign_style: 'Automatic',
-          bundle_id: 'com.test.app'
-        )
+                        team_id: '',
+                        code_sign_style: 'Automatic',
+                        bundle_id: 'com.test.app')
       end
 
       it 'returns error about missing team' do
@@ -86,10 +84,9 @@ RSpec.describe Mysigner::Signing::Validator do
     context 'with missing bundle ID' do
       let(:parser) do
         instance_double(Mysigner::Build::Parser,
-          team_id: 'ABC123XYZ',
-          code_sign_style: 'Automatic',
-          bundle_id: nil
-        )
+                        team_id: 'ABC123XYZ',
+                        code_sign_style: 'Automatic',
+                        bundle_id: nil)
       end
 
       it 'returns error about bundle ID' do
@@ -102,10 +99,9 @@ RSpec.describe Mysigner::Signing::Validator do
     context 'with bundle ID containing variables' do
       let(:parser) do
         instance_double(Mysigner::Build::Parser,
-          team_id: 'ABC123XYZ',
-          code_sign_style: 'Automatic',
-          bundle_id: '$(PRODUCT_BUNDLE_ID)'
-        )
+                        team_id: 'ABC123XYZ',
+                        code_sign_style: 'Automatic',
+                        bundle_id: '$(PRODUCT_BUNDLE_ID)')
       end
 
       it 'returns error about bundle ID variables' do
@@ -118,10 +114,9 @@ RSpec.describe Mysigner::Signing::Validator do
     context 'with manual signing' do
       let(:parser) do
         instance_double(Mysigner::Build::Parser,
-          team_id: 'ABC123XYZ',
-          code_sign_style: 'Manual',
-          bundle_id: 'com.test.app'
-        )
+                        team_id: 'ABC123XYZ',
+                        code_sign_style: 'Manual',
+                        bundle_id: 'com.test.app')
       end
 
       before do
@@ -140,15 +135,14 @@ RSpec.describe Mysigner::Signing::Validator do
     context 'with manual signing and no certificates' do
       let(:parser) do
         instance_double(Mysigner::Build::Parser,
-          team_id: 'ABC123XYZ',
-          code_sign_style: 'Manual',
-          bundle_id: 'com.test.app'
-        )
+                        team_id: 'ABC123XYZ',
+                        code_sign_style: 'Manual',
+                        bundle_id: 'com.test.app')
       end
 
       before do
         allow(validator).to receive(:`).with(/security find-identity/).and_return(
-          "0 valid identities found"
+          '0 valid identities found'
         )
       end
 
@@ -174,10 +168,9 @@ RSpec.describe Mysigner::Signing::Validator do
     context 'when validation fails' do
       let(:parser) do
         instance_double(Mysigner::Build::Parser,
-          team_id: nil,
-          code_sign_style: 'Automatic',
-          bundle_id: 'com.test.app'
-        )
+                        team_id: nil,
+                        code_sign_style: 'Automatic',
+                        bundle_id: 'com.test.app')
       end
 
       it 'raises ValidationError' do
@@ -185,23 +178,20 @@ RSpec.describe Mysigner::Signing::Validator do
       end
 
       it 'prints error messages' do
-        expect { 
-          begin
-            validator.validate!
-          rescue Mysigner::Signing::Validator::ValidationError
-            # Expected
-          end
-        }.to output(/No development team/).to_stdout
+        expect do
+          validator.validate!
+        rescue Mysigner::Signing::Validator::ValidationError
+          # Expected
+        end.to output(/No development team/).to_stdout
       end
     end
 
     context 'with warnings only' do
       let(:parser) do
         instance_double(Mysigner::Build::Parser,
-          team_id: 'ABC123XYZ',
-          code_sign_style: nil,  # Not set
-          bundle_id: 'com.test.app'
-        )
+                        team_id: 'ABC123XYZ',
+                        code_sign_style: nil, # Not set
+                        bundle_id: 'com.test.app')
       end
 
       it 'does not raise error' do

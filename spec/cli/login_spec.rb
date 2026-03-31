@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'mysigner/cli'
 require 'mysigner/config'
@@ -22,15 +24,16 @@ RSpec.describe 'mysigner login' do
       allow(config).to receive(:exists?).and_return(false)
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       allow(cli).to receive(:show_token_guidance)
-      allow(cli).to receive(:ask).with("API Token:", echo: false).and_return(api_token)
+      allow(cli).to receive(:ask).with('API Token:', echo: false).and_return(api_token)
       allow(client).to receive(:test_connection).and_return({ success: true })
       allow(client).to receive(:get).with('/api/v1/organizations').and_return({
-        data: {
-          'organizations' => [
-            { 'id' => '1', 'name' => 'Test Organization' }
-          ]
-        }
-      })
+                                                                                data: {
+                                                                                  'organizations' => [
+                                                                                    { 'id' => '1',
+                                                                                      'name' => 'Test Organization' }
+                                                                                  ]
+                                                                                }
+                                                                              })
       allow(config).to receive(:api_url=)
       allow(config).to receive(:api_token=)
       allow(config).to receive(:organization_id=)
@@ -47,7 +50,7 @@ RSpec.describe 'mysigner login' do
     end
 
     it 'prompts for API token with hidden input' do
-      expect(cli).to receive(:ask).with("API Token:", echo: false).and_return(api_token)
+      expect(cli).to receive(:ask).with('API Token:', echo: false).and_return(api_token)
       cli.login
     end
 
@@ -105,15 +108,16 @@ RSpec.describe 'mysigner login' do
         allow(config).to receive(:clear)
         allow(cli).to receive(:prompt_api_url).and_return(api_url)
         allow(cli).to receive(:show_token_guidance)
-        allow(cli).to receive(:ask).with("API Token:", echo: false).and_return(api_token)
+        allow(cli).to receive(:ask).with('API Token:', echo: false).and_return(api_token)
         allow(client).to receive(:test_connection).and_return({ success: true })
         allow(client).to receive(:get).with('/api/v1/organizations').and_return({
-          data: {
-            'organizations' => [
-              { 'id' => '1', 'name' => 'Test Organization' }
-            ]
-          }
-        })
+                                                                                  data: {
+                                                                                    'organizations' => [
+                                                                                      { 'id' => '1',
+                                                                                        'name' => 'Test Organization' }
+                                                                                    ]
+                                                                                  }
+                                                                                })
         allow(config).to receive(:api_url=)
         allow(config).to receive(:api_token=)
         allow(config).to receive(:organization_id=)
@@ -177,7 +181,7 @@ RSpec.describe 'mysigner login' do
       allow(config).to receive(:exists?).and_return(false)
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       allow(cli).to receive(:show_token_guidance)
-      allow(cli).to receive(:ask).with("API Token:", echo: false).and_return('')
+      allow(cli).to receive(:ask).with('API Token:', echo: false).and_return('')
       allow(cli).to receive(:error)
       allow(cli).to receive(:exit) # Stub but don't raise - code continues
     end
@@ -189,8 +193,8 @@ RSpec.describe 'mysigner login' do
       allow(config).to receive(:api_url=)
       allow(config).to receive(:api_token=)
       allow(config).to receive(:organization_id=)
-      
-      expect(cli).to receive(:error).with("API token cannot be empty")
+
+      expect(cli).to receive(:error).with('API token cannot be empty')
       cli.login
     end
 
@@ -201,7 +205,7 @@ RSpec.describe 'mysigner login' do
       allow(config).to receive(:api_url=)
       allow(config).to receive(:api_token=)
       allow(config).to receive(:organization_id=)
-      
+
       expect { cli.login }.to output(/mysigner onboard/).to_stdout
     end
 
@@ -212,7 +216,7 @@ RSpec.describe 'mysigner login' do
       allow(config).to receive(:api_url=)
       allow(config).to receive(:api_token=)
       allow(config).to receive(:organization_id=)
-      
+
       expect(cli).to receive(:exit).with(1)
       cli.login
     end
@@ -223,7 +227,7 @@ RSpec.describe 'mysigner login' do
       allow(config).to receive(:exists?).and_return(false)
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       allow(cli).to receive(:show_token_guidance)
-      allow(cli).to receive(:ask).with("API Token:", echo: false).and_return(api_token)
+      allow(cli).to receive(:ask).with('API Token:', echo: false).and_return(api_token)
       allow(client).to receive(:test_connection).and_raise(Mysigner::UnauthorizedError)
       allow(cli).to receive(:handle_unauthorized_error)
       allow(cli).to receive(:exit)
@@ -250,8 +254,8 @@ RSpec.describe 'mysigner login' do
       allow(config).to receive(:exists?).and_return(false)
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       allow(cli).to receive(:show_token_guidance)
-      allow(cli).to receive(:ask).with("API Token:", echo: false).and_return(api_token)
-      allow(client).to receive(:test_connection).and_raise(Mysigner::ConnectionError.new("Network error"))
+      allow(cli).to receive(:ask).with('API Token:', echo: false).and_return(api_token)
+      allow(client).to receive(:test_connection).and_raise(Mysigner::ConnectionError.new('Network error'))
       allow(cli).to receive(:handle_connection_error)
       allow(cli).to receive(:exit)
     end
@@ -277,7 +281,7 @@ RSpec.describe 'mysigner login' do
       allow(config).to receive(:exists?).and_return(false)
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       allow(cli).to receive(:show_token_guidance)
-      allow(cli).to receive(:ask).with("API Token:", echo: false).and_return(api_token)
+      allow(cli).to receive(:ask).with('API Token:', echo: false).and_return(api_token)
       allow(client).to receive(:test_connection).and_return({ success: false })
       allow(cli).to receive(:error)
       allow(cli).to receive(:handle_connection_failure)
@@ -290,7 +294,7 @@ RSpec.describe 'mysigner login' do
     end
 
     it 'shows connection failed error' do
-      expect(cli).to receive(:error).with("Connection failed")
+      expect(cli).to receive(:error).with('Connection failed')
       cli.login
     end
 
@@ -310,11 +314,11 @@ RSpec.describe 'mysigner login' do
       allow(config).to receive(:exists?).and_return(false)
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       allow(cli).to receive(:show_token_guidance)
-      allow(cli).to receive(:ask).with("API Token:", echo: false).and_return(api_token)
+      allow(cli).to receive(:ask).with('API Token:', echo: false).and_return(api_token)
       allow(client).to receive(:test_connection).and_return({ success: true })
       allow(client).to receive(:get).with('/api/v1/organizations').and_return({
-        data: { 'organizations' => [] }
-      })
+                                                                                data: { 'organizations' => [] }
+                                                                              })
       allow(cli).to receive(:error)
       allow(cli).to receive(:show_create_org_guidance)
       allow(cli).to receive(:exit)
@@ -325,7 +329,7 @@ RSpec.describe 'mysigner login' do
     end
 
     it 'shows no organizations error' do
-      expect(cli).to receive(:error).with("No organizations found for this token")
+      expect(cli).to receive(:error).with('No organizations found for this token')
       cli.login
     end
 
@@ -355,8 +359,8 @@ RSpec.describe 'mysigner login' do
       allow(config).to receive(:exists?).and_return(false)
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       allow(cli).to receive(:show_token_guidance)
-      allow(cli).to receive(:ask).with("API Token:", echo: false).and_return(api_token)
-      allow(client).to receive(:test_connection).and_raise(StandardError, "Something went wrong")
+      allow(cli).to receive(:ask).with('API Token:', echo: false).and_return(api_token)
+      allow(client).to receive(:test_connection).and_raise(StandardError, 'Something went wrong')
       allow(cli).to receive(:handle_unexpected_error)
       allow(cli).to receive(:exit)
     end

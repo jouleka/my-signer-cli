@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'faraday'
 require 'faraday/retry'
 require 'json'
@@ -57,7 +59,7 @@ module Mysigner
       get('/api/v1/status')
     rescue ClientError => e
       raise e
-    rescue => e
+    rescue StandardError => e
       raise ConnectionError, "Failed to connect: #{e.message}"
     end
 
@@ -69,9 +71,7 @@ module Mysigner
         f.request :json
 
         # Add X-User-Email header if email is present
-        if @user_email
-          f.headers['X-User-Email'] = @user_email
-        end
+        f.headers['X-User-Email'] = @user_email if @user_email
 
         # Retry failed requests
         f.request :retry, {
@@ -80,7 +80,7 @@ module Mysigner
           interval_randomness: 0.5,
           backoff_factor: 2,
           retry_statuses: [429, 502, 503, 504],
-          methods: [:get, :post, :patch, :delete]
+          methods: %i[get post patch delete]
         }
 
         # Response middleware
@@ -120,21 +120,28 @@ module Mysigner
 
       case response.status
       when 401
-        raise UnauthorizedError.new("Unauthorized: #{error_message}", error_code: error_code, suggestion: suggestion, details: error_data['details'], timestamp: timestamp)
+        raise UnauthorizedError.new("Unauthorized: #{error_message}", error_code: error_code, suggestion: suggestion,
+                                                                      details: error_data['details'], timestamp: timestamp)
       when 403
-        raise ForbiddenError.new("Forbidden: #{error_message}", error_code: error_code, suggestion: suggestion, details: error_data['details'], timestamp: timestamp)
+        raise ForbiddenError.new("Forbidden: #{error_message}", error_code: error_code, suggestion: suggestion,
+                                                                details: error_data['details'], timestamp: timestamp)
       when 404
-        raise NotFoundError.new("Not found: #{error_message}", error_code: error_code, suggestion: suggestion, details: error_data['details'], timestamp: timestamp)
+        raise NotFoundError.new("Not found: #{error_message}", error_code: error_code, suggestion: suggestion,
+                                                               details: error_data['details'], timestamp: timestamp)
       when 409
-        raise ValidationError.new(error_message, error_data['details'], suggestion: suggestion, error_code: error_code, timestamp: timestamp)
+        raise ValidationError.new(error_message, error_data['details'], suggestion: suggestion, error_code: error_code,
+                                                                        timestamp: timestamp)
       when 422
-        raise ValidationError.new(error_message, error_data['details'], suggestion: suggestion, error_code: error_code, timestamp: timestamp)
+        raise ValidationError.new(error_message, error_data['details'], suggestion: suggestion, error_code: error_code,
+                                                                        timestamp: timestamp)
       when 429
         raise RateLimitError.new(error_message, error_data['retry_after'])
       when 500..599
-        raise ServerError.new("Server error (#{response.status}): #{error_message}", error_code: error_code, timestamp: timestamp)
+        raise ServerError.new("Server error (#{response.status}): #{error_message}", error_code: error_code,
+                                                                                     timestamp: timestamp)
       else
-        raise ClientError.new("Request failed (#{response.status}): #{error_message}", error_code: error_code, timestamp: timestamp)
+        raise ClientError.new("Request failed (#{response.status}): #{error_message}", error_code: error_code,
+                                                                                       timestamp: timestamp)
       end
     end
 
@@ -146,15 +153,16 @@ module Mysigner
         # Check if it's a wrapped timeout error
         if error.wrapped_exception.is_a?(Net::OpenTimeout) || error.wrapped_exception.is_a?(Net::ReadTimeout)
           raise TimeoutError, "Request timeout: #{error.message}"
-        else
-          raise ConnectionError, "Connection failed: #{error.message}"
         end
+
+        raise ConnectionError, "Connection failed: #{error.message}"
+
       when Faraday::UnauthorizedError
-        raise UnauthorizedError, "Invalid or missing API token"
+        raise UnauthorizedError, 'Invalid or missing API token'
       when Faraday::ForbiddenError
-        raise ForbiddenError, "Access forbidden"
+        raise ForbiddenError, 'Access forbidden'
       when Faraday::ResourceNotFound
-        raise NotFoundError, "Resource not found"
+        raise NotFoundError, 'Resource not found'
       when Faraday::ClientError
         raise ClientError, "Client error: #{error.message}"
       when Faraday::ServerError
@@ -177,13 +185,14 @@ module Mysigner
       @timestamp = timestamp
     end
   end
+
   class ConnectionError < ClientError; end
   class TimeoutError < ClientError; end
   class UnauthorizedError < ClientError; end
   class ForbiddenError < ClientError; end
   class NotFoundError < ClientError; end
   class ServerError < ClientError; end
-  
+
   class ValidationError < ClientError
     def initialize(message, details = nil, suggestion: nil, error_code: nil, timestamp: nil)
       super(message, error_code: error_code, suggestion: suggestion, details: details, timestamp: timestamp)
@@ -199,4 +208,3 @@ module Mysigner
     end
   end
 end
-

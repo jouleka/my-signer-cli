@@ -69,17 +69,18 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
 
     describe 'app-groups (list)' do
       context 'when app groups exist' do
-        let(:app_groups_response) {
+        let(:app_groups_response) do
           {
             data: {
               'app_groups' => [
-                { 'id' => '1', 'identifier' => 'group.com.example.shared', 'name' => 'Shared Data', 'team_id' => 'ABC123' },
+                { 'id' => '1', 'identifier' => 'group.com.example.shared', 'name' => 'Shared Data',
+                  'team_id' => 'ABC123' },
                 { 'id' => '2', 'identifier' => 'group.com.example.widgets', 'name' => 'Widgets' }
               ],
               'pagination' => { 'page' => 1, 'total_pages' => 1, 'total' => 2 }
             }
           }
-        }
+        end
 
         before do
           allow(client).to receive(:get)
@@ -123,9 +124,9 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
       end
 
       context 'when no app groups found' do
-        let(:empty_response) {
+        let(:empty_response) do
           { data: { 'app_groups' => [] } }
-        }
+        end
 
         before do
           allow(client).to receive(:get)
@@ -150,7 +151,7 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
       end
 
       context 'with search query' do
-        let(:search_response) {
+        let(:search_response) do
           {
             data: {
               'app_groups' => [
@@ -158,7 +159,7 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
               ]
             }
           }
-        }
+        end
 
         before do
           cli.options = { page: 1, per_page: 50, search: 'shared' }
@@ -196,7 +197,7 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
 
     describe 'app-group register' do
       context 'with valid identifier' do
-        let(:success_response) {
+        let(:success_response) do
           {
             data: {
               'app_group' => {
@@ -205,7 +206,7 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
               }
             }
           }
-        }
+        end
 
         before do
           cli.options = {}
@@ -242,7 +243,7 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
       end
 
       context 'with custom name' do
-        let(:success_response) {
+        let(:success_response) do
           {
             data: {
               'app_group' => {
@@ -251,7 +252,7 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
               }
             }
           }
-        }
+        end
 
         before do
           cli.options = { name: 'My Shared Data' }
@@ -354,7 +355,7 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
 
     describe 'app-group delete' do
       context 'when app group exists' do
-        let(:list_response) {
+        let(:list_response) do
           {
             data: {
               'app_groups' => [
@@ -362,7 +363,7 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
               ]
             }
           }
-        }
+        end
 
         before do
           cli.options = {}
@@ -403,9 +404,9 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
       end
 
       context 'when app group not found' do
-        let(:empty_response) {
+        let(:empty_response) do
           { data: { 'app_groups' => [] } }
-        }
+        end
 
         before do
           cli.options = {}
@@ -442,7 +443,7 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
       end
 
       context 'when delete fails' do
-        let(:list_response) {
+        let(:list_response) do
           {
             data: {
               'app_groups' => [
@@ -450,7 +451,7 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
               ]
             }
           }
-        }
+        end
 
         before do
           cli.options = {}
@@ -499,12 +500,12 @@ RSpec.describe 'mysigner app-groups and app-group', type: :cli do
 
   describe 'help text' do
     it 'has description for app-groups' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'app-groups']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help app-groups]) }
       expect(help_output).to include('App Group')
     end
 
     it 'has description for app-group' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'app-group']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help app-group]) }
       expect(help_output).to include('App Group')
     end
   end

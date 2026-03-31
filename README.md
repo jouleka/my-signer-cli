@@ -69,9 +69,10 @@ bundle exec rake install
 
 ```bash
 mysigner login
-# Enter your API token when prompted
-# Enter your API URL (default: http://localhost:3000)
-# Select your organization
+# Enter your API URL (default: https://mysigner.dev or localhost if available)
+# Enter your email address
+# Paste your API token
+# The CLI validates the token and auto-detects its organization
 ```
 
 ### 3. Ship Your App
@@ -162,7 +163,7 @@ mysigner upload testflight IPA_PATH        # Upload existing IPA
 mysigner doctor                            # Run health check (fixes common issues)
 mysigner doctor --platform ios             # Check iOS setup only
 mysigner doctor --platform android         # Check Android setup only
-mysigner status                            # Check connection and show stats
+mysigner status                            # Check connection, credentials, and ASC setup
 ```
 
 ### Authentication
@@ -177,7 +178,7 @@ mysigner onboard            # Guided setup wizard
 
 ```bash
 mysigner orgs               # List accessible organizations
-mysigner org:switch ID      # Switch active organization
+mysigner switch             # Switch active organization
 ```
 
 ### Devices
@@ -186,9 +187,9 @@ mysigner org:switch ID      # Switch active organization
 mysigner devices                           # List all devices
 mysigner devices --platform ios            # Filter by platform
 mysigner devices --search "iPhone"         # Search devices
-mysigner device show ID                    # Show device details
+mysigner device detect                     # Detect connected iOS devices
 mysigner device add NAME UDID              # Register new device
-mysigner device rename ID "New Name"       # Update device name
+mysigner device update ID "New Name"       # Update device name
 ```
 
 ### Provisioning Profiles
@@ -196,9 +197,7 @@ mysigner device rename ID "New Name"       # Update device name
 ```bash
 mysigner profiles                          # List all profiles
 mysigner profiles --type development       # Filter by type
-mysigner profile show ID                   # Show profile details
 mysigner profile download ID               # Download .mobileprovision
-mysigner profile create                    # Create new profile (interactive)
 mysigner profile delete ID                 # Delete profile
 ```
 
@@ -207,16 +206,15 @@ mysigner profile delete ID                 # Delete profile
 ```bash
 mysigner certificates                      # List all certificates
 mysigner certificates --type development   # Filter by type
-mysigner certificate show ID               # Show certificate details
+mysigner certificate check                 # Check local keychain certificates
 mysigner certificate download ID           # Download .cer file
 ```
 
 ### Bundle IDs
 
 ```bash
-mysigner bundle-ids                        # List all bundle IDs
-mysigner bundle-ids --search "com.example" # Search bundle IDs
-mysigner bundle-id show ID                 # Show bundle ID details
+mysigner bundleid list                     # List all bundle IDs
+mysigner bundleid register com.example.app # Register a bundle ID
 ```
 
 ### Android Keystores
@@ -346,7 +344,7 @@ mysigner config set KEY VAL # Update configuration value
 - ✅ Config management (`~/.mysigner/config.yml`)
 - ✅ API client (Faraday with retry & error handling)
 - ✅ Core commands (login, logout, config, status, orgs, switch, onboard)
-- ✅ Resource commands (devices, profiles, certificates, bundle-ids)
+- ✅ Resource commands (devices, profiles, certificates, bundleid)
 - ✅ **iOS Build & Ship** (`mysigner ship testflight`, `mysigner ship appstore`)
 - ✅ **Android Build & Ship** (`mysigner ship internal/alpha/beta/production`)
 - ✅ Android keystore management (`mysigner keystore upload/download/activate`)
@@ -531,7 +529,7 @@ This is currently a private project. Contributions are not being accepted at thi
 ## Related Projects
 
 - **[My Signer API](https://github.com/jurgenleka/my-signer)** - The backend API and web dashboard
-- **[My Signer Docs](https://github.com/jurgenleka/my-signer/blob/main/PROJECT_DOCS.md)** - Documentation organization
+- **[My Signer Docs](https://github.com/jurgenleka/my-signer/tree/main/app/views/docs)** - In-app documentation source
 
 ---
 

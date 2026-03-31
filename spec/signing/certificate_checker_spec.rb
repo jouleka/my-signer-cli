@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'mysigner/signing/certificate_checker'
 require 'tempfile'
@@ -23,25 +25,26 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
         PEM
       end
 
-      let(:openssl_output1) { "notAfter=Dec 31 23:59:59 2025 GMT" }
-      let(:openssl_output2) { "notAfter=Jun 15 23:59:59 2024 GMT" }
+      let(:openssl_output1) { 'notAfter=Dec 31 23:59:59 2025 GMT' }
+      let(:openssl_output2) { 'notAfter=Jun 15 23:59:59 2024 GMT' }
 
       before do
         # Stub security find-identity
         allow(Open3).to receive(:capture3).with('security find-identity -v -p codesigning')
-          .and_return([security_output, '', double(success?: true)])
+                                          .and_return([security_output, '', double(success?: true)])
 
         # Stub security find-certificate for cert 1
         allow(Open3).to receive(:capture3).with('security find-certificate -c "Apple Development: John Doe (ABCD123456)" -p')
-          .and_return([cert1_pem, '', double(success?: true)])
+                                          .and_return([cert1_pem, '', double(success?: true)])
 
         # Stub security find-certificate for cert 2
         allow(Open3).to receive(:capture3).with('security find-certificate -c "Apple Distribution: John Doe (ABCD123456)" -p')
-          .and_return([cert1_pem, '', double(success?: true)])
+                                          .and_return([cert1_pem, '', double(success?: true)])
 
         # Stub openssl for both certs
         allow(Open3).to receive(:capture3).with(/openssl x509/)
-          .and_return([openssl_output1, '', double(success?: true)], [openssl_output2, '', double(success?: true)])
+                                          .and_return([openssl_output1, '',
+                                                       double(success?: true)], [openssl_output2, '', double(success?: true)])
 
         # Stub Tempfile
         tempfile1 = double('tempfile1', write: nil, close: nil, path: '/tmp/cert1.pem', unlink: nil)
@@ -56,20 +59,20 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
 
       it 'parses certificate names' do
         certs = checker.check!
-        expect(certs[0][:name]).to eq("Apple Development: John Doe (ABCD123456)")
-        expect(certs[1][:name]).to eq("Apple Distribution: John Doe (ABCD123456)")
+        expect(certs[0][:name]).to eq('Apple Development: John Doe (ABCD123456)')
+        expect(certs[1][:name]).to eq('Apple Distribution: John Doe (ABCD123456)')
       end
 
       it 'extracts team IDs' do
         certs = checker.check!
-        expect(certs[0][:team_id]).to eq("ABCD123456")
-        expect(certs[1][:team_id]).to eq("ABCD123456")
+        expect(certs[0][:team_id]).to eq('ABCD123456')
+        expect(certs[1][:team_id]).to eq('ABCD123456')
       end
 
       it 'determines certificate types' do
         certs = checker.check!
-        expect(certs[0][:type]).to eq("Development")
-        expect(certs[1][:type]).to eq("Distribution")
+        expect(certs[0][:type]).to eq('Development')
+        expect(certs[1][:type]).to eq('Distribution')
       end
 
       it 'calculates days until expiry' do
@@ -91,15 +94,16 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
 
       before do
         allow(Open3).to receive(:capture3).with('security find-identity -v -p codesigning')
-          .and_return([security_output, '', double(success?: true)])
+                                          .and_return([security_output, '', double(success?: true)])
 
         allow(Open3).to receive(:capture3).with('security find-certificate -c "Apple Development: Test (TEAM123)" -p')
-          .and_return(["-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----", '', double(success?: true)])
+                                          .and_return(["-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----", '',
+                                                       double(success?: true)])
 
         # Certificate expiring in 15 days
-        future_date = (Time.now + (15 * 86400)).strftime('%b %d %H:%M:%S %Y GMT')
+        future_date = (Time.now + (15 * 86_400)).strftime('%b %d %H:%M:%S %Y GMT')
         allow(Open3).to receive(:capture3).with(/openssl x509/)
-          .and_return(["notAfter=#{future_date}", '', double(success?: true)])
+                                          .and_return(["notAfter=#{future_date}", '', double(success?: true)])
 
         tempfile = double('tempfile', write: nil, close: nil, path: '/tmp/cert.pem', unlink: nil)
         allow(Tempfile).to receive(:new).and_return(tempfile)
@@ -123,15 +127,16 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
 
       before do
         allow(Open3).to receive(:capture3).with('security find-identity -v -p codesigning')
-          .and_return([security_output, '', double(success?: true)])
+                                          .and_return([security_output, '', double(success?: true)])
 
         allow(Open3).to receive(:capture3).with('security find-certificate -c "Apple Development: Expired (TEAM123)" -p')
-          .and_return(["-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----", '', double(success?: true)])
+                                          .and_return(["-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----", '',
+                                                       double(success?: true)])
 
         # Certificate expired 30 days ago
-        past_date = (Time.now - (30 * 86400)).strftime('%b %d %H:%M:%S %Y GMT')
+        past_date = (Time.now - (30 * 86_400)).strftime('%b %d %H:%M:%S %Y GMT')
         allow(Open3).to receive(:capture3).with(/openssl x509/)
-          .and_return(["notAfter=#{past_date}", '', double(success?: true)])
+                                          .and_return(["notAfter=#{past_date}", '', double(success?: true)])
 
         tempfile = double('tempfile', write: nil, close: nil, path: '/tmp/cert.pem', unlink: nil)
         allow(Tempfile).to receive(:new).and_return(tempfile)
@@ -151,7 +156,7 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
     context 'with no certificates' do
       before do
         allow(Open3).to receive(:capture3).with('security find-identity -v -p codesigning')
-          .and_return(['0 valid identities found', '', double(success?: true)])
+                                          .and_return(['0 valid identities found', '', double(success?: true)])
       end
 
       it 'returns empty array' do
@@ -163,11 +168,13 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
     context 'when security command fails' do
       before do
         allow(Open3).to receive(:capture3).with('security find-identity -v -p codesigning')
-          .and_return(['', 'Error: unable to access keychain', double(success?: false)])
+                                          .and_return(['', 'Error: unable to access keychain', double(success?: false)])
       end
 
       it 'raises CheckError' do
-        expect { checker.check! }.to raise_error(Mysigner::Signing::CertificateChecker::CheckError, /Failed to query certificates/)
+        expect do
+          checker.check!
+        end.to raise_error(Mysigner::Signing::CertificateChecker::CheckError, /Failed to query certificates/)
       end
     end
 
@@ -178,11 +185,11 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
 
       before do
         allow(Open3).to receive(:capture3).with('security find-identity -v -p codesigning')
-          .and_return([security_output, '', double(success?: true)])
+                                          .and_return([security_output, '', double(success?: true)])
 
         # Certificate not found
         allow(Open3).to receive(:capture3).with('security find-certificate -c "Apple Development: Test (TEAM123)" -p')
-          .and_return(['', 'Not found', double(success?: false)])
+                                          .and_return(['', 'Not found', double(success?: false)])
       end
 
       it 'skips certificate with missing details' do
@@ -195,16 +202,16 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
   describe '#by_status' do
     before do
       checker.instance_variable_set(:@certificates, [
-        { name: 'Cert 1', status: :valid },
-        { name: 'Cert 2', status: :valid },
-        { name: 'Cert 3', status: :expiring_soon },
-        { name: 'Cert 4', status: :expired }
-      ])
+                                      { name: 'Cert 1', status: :valid },
+                                      { name: 'Cert 2', status: :valid },
+                                      { name: 'Cert 3', status: :expiring_soon },
+                                      { name: 'Cert 4', status: :expired }
+                                    ])
     end
 
     it 'groups certificates by status' do
       by_status = checker.by_status
-      
+
       expect(by_status[:valid].count).to eq(2)
       expect(by_status[:expiring_soon].count).to eq(1)
       expect(by_status[:expired].count).to eq(1)
@@ -215,9 +222,9 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
     context 'with all valid certificates' do
       before do
         checker.instance_variable_set(:@certificates, [
-          { name: 'Cert 1', status: :valid },
-          { name: 'Cert 2', status: :valid }
-        ])
+                                        { name: 'Cert 1', status: :valid },
+                                        { name: 'Cert 2', status: :valid }
+                                      ])
       end
 
       it 'returns false' do
@@ -228,9 +235,9 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
     context 'with expiring soon certificate' do
       before do
         checker.instance_variable_set(:@certificates, [
-          { name: 'Cert 1', status: :valid },
-          { name: 'Cert 2', status: :expiring_soon }
-        ])
+                                        { name: 'Cert 1', status: :valid },
+                                        { name: 'Cert 2', status: :expiring_soon }
+                                      ])
       end
 
       it 'returns true' do
@@ -241,9 +248,9 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
     context 'with expired certificate' do
       before do
         checker.instance_variable_set(:@certificates, [
-          { name: 'Cert 1', status: :valid },
-          { name: 'Cert 2', status: :expired }
-        ])
+                                        { name: 'Cert 1', status: :valid },
+                                        { name: 'Cert 2', status: :expired }
+                                      ])
       end
 
       it 'returns true' do
@@ -254,29 +261,29 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
 
   describe 'certificate type detection' do
     it 'detects development certificates' do
-      expect(checker.send(:determine_cert_type, "Apple Development: John Doe")).to eq("Development")
+      expect(checker.send(:determine_cert_type, 'Apple Development: John Doe')).to eq('Development')
     end
 
     it 'detects distribution certificates' do
-      expect(checker.send(:determine_cert_type, "Apple Distribution: Company")).to eq("Distribution")
+      expect(checker.send(:determine_cert_type, 'Apple Distribution: Company')).to eq('Distribution')
     end
 
     it 'detects Developer ID certificates' do
-      expect(checker.send(:determine_cert_type, "Developer ID Application: Company")).to eq("Developer ID")
+      expect(checker.send(:determine_cert_type, 'Developer ID Application: Company')).to eq('Developer ID')
     end
 
     it 'returns Unknown for unrecognized types' do
-      expect(checker.send(:determine_cert_type, "Random Certificate")).to eq("Unknown")
+      expect(checker.send(:determine_cert_type, 'Random Certificate')).to eq('Unknown')
     end
   end
 
   describe 'team ID extraction' do
     it 'extracts team ID from certificate name' do
-      expect(checker.send(:extract_team_id, "Apple Development: John Doe (ABCD123456)")).to eq("ABCD123456")
+      expect(checker.send(:extract_team_id, 'Apple Development: John Doe (ABCD123456)')).to eq('ABCD123456')
     end
 
     it 'returns nil for certificates without team ID' do
-      expect(checker.send(:extract_team_id, "Apple Development: John Doe")).to be_nil
+      expect(checker.send(:extract_team_id, 'Apple Development: John Doe')).to be_nil
     end
   end
 
@@ -296,4 +303,3 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
     end
   end
 end
-

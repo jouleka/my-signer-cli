@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'open3'
 require 'time'
 
@@ -42,23 +44,21 @@ module Mysigner
         cmd = 'security find-identity -v -p codesigning'
         stdout, stderr, status = Open3.capture3(cmd)
 
-        unless status.success?
-          raise CheckError, "Failed to query certificates: #{stderr}"
-        end
+        raise CheckError, "Failed to query certificates: #{stderr}" unless status.success?
 
         certificates = []
-        
+
         # Parse output: "  1) HASH \"Certificate Name\""
         stdout.each_line do |line|
           next unless line =~ /\d+\)\s+([A-F0-9]+)\s+"([^"]+)"/
-          
-          hash = $1
-          name = $2
-          
+
+          hash = ::Regexp.last_match(1)
+          name = ::Regexp.last_match(2)
+
           # Get certificate details
           details = get_certificate_details(name)
           next unless details
-          
+
           certificates << {
             hash: hash,
             name: name,
@@ -76,12 +76,10 @@ module Mysigner
       def get_certificate_details(name)
         # Get certificate in PEM format by name
         cmd = "security find-certificate -c \"#{name}\" -p"
-        stdout, stderr, status = Open3.capture3(cmd)
+        stdout, _, status = Open3.capture3(cmd)
 
         # If not found, return nil
-        if !status.success? || stdout.empty?
-          return nil
-        end
+        return nil if !status.success? || stdout.empty?
 
         # Save to temp file and use openssl to read expiry
         require 'tempfile'
@@ -92,12 +90,12 @@ module Mysigner
 
           # Get expiry date using openssl
           cmd = "openssl x509 -in #{temp.path} -noout -enddate"
-          out, err, stat = Open3.capture3(cmd)
+          out, _, stat = Open3.capture3(cmd)
 
           if stat.success? && out =~ /notAfter=(.+)/
-            expiry_str = $1.strip
+            expiry_str = ::Regexp.last_match(1).strip
             expires_at = Time.parse(expiry_str)
-            days_until_expiry = ((expires_at - Time.now) / 86400).to_i
+            days_until_expiry = ((expires_at - Time.now) / 86_400).to_i
 
             return {
               expires_at: expires_at,
@@ -113,11 +111,9 @@ module Mysigner
 
       def extract_team_id(name)
         # Team ID is usually in parentheses at the end
-        if name =~ /\(([A-Z0-9]{10})\)$/
-          $1
-        else
-          nil
-        end
+        return unless name =~ /\(([A-Z0-9]{10})\)$/
+
+        ::Regexp.last_match(1)
       end
 
       def determine_cert_type(name)
@@ -134,7 +130,7 @@ module Mysigner
       end
 
       def determine_status(days_until_expiry)
-        if days_until_expiry < 0
+        if days_until_expiry.negative?
           STATUS_EXPIRED
         elsif days_until_expiry < 30
           STATUS_EXPIRING_SOON
@@ -145,4 +141,3 @@ module Mysigner
     end
   end
 end
-

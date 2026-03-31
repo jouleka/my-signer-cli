@@ -1,3 +1,6 @@
+# frozen_string_literal: true
+
+require 'English'
 require 'fileutils'
 require 'tmpdir'
 
@@ -9,31 +12,27 @@ module Mysigner
       def initialize(archive_path, output_dir: nil)
         @archive_path = File.expand_path(archive_path)
         @output_dir = output_dir || File.dirname(@archive_path)
-        
+
         validate_archive!
       end
 
       def export!(method: :appstore, team_id: nil, signing_style: 'automatic')
         say_exporting(method)
-        
+
         # Generate export options plist
         options_plist = generate_export_options(method, team_id, signing_style)
-        
+
         begin
           # Run xcodebuild -exportArchive
           success = execute_export(options_plist)
-          
-          unless success
-            raise ExportError, "Export failed. Check output above for errors."
-          end
-          
+
+          raise ExportError, 'Export failed. Check output above for errors.' unless success
+
           # Find the generated .ipa file
           ipa_path = find_ipa_file
-          
-          unless ipa_path
-            raise ExportError, "Export reported success but .ipa file not found in: #{@output_dir}"
-          end
-          
+
+          raise ExportError, "Export reported success but .ipa file not found in: #{@output_dir}" unless ipa_path
+
           ipa_path
         ensure
           # Clean up temp plist
@@ -44,42 +43,40 @@ module Mysigner
       private
 
       def validate_archive!
-        unless File.exist?(@archive_path)
-          raise ExportError, "Archive not found: #{@archive_path}"
-        end
-        
-        unless File.directory?(@archive_path) && @archive_path.end_with?('.xcarchive')
-          raise ExportError, "Invalid archive: #{@archive_path} (must be a .xcarchive directory)"
-        end
+        raise ExportError, "Archive not found: #{@archive_path}" unless File.exist?(@archive_path)
+
+        return if File.directory?(@archive_path) && @archive_path.end_with?('.xcarchive')
+
+        raise ExportError, "Invalid archive: #{@archive_path} (must be a .xcarchive directory)"
       end
 
       def generate_export_options(method, team_id, signing_style)
         require 'plist'
-        
+
         options = {
           'method' => export_method_string(method),
           'uploadBitcode' => false,
           'uploadSymbols' => false,
           'compileBitcode' => false
         }
-        
+
         # Add team ID if provided
         options['teamID'] = team_id if team_id
-        
+
         # Signing style
         if signing_style.to_s.downcase == 'manual'
           options['signingStyle'] = 'manual'
-          # Note: For manual signing, we'd need to specify provisioningProfiles
+          # NOTE: For manual signing, we'd need to specify provisioningProfiles
           # But since the archive was already signed during build, we can often omit this
         else
           options['signingStyle'] = 'automatic'
           options['signingCertificate'] = 'Apple Distribution'
         end
-        
+
         # Create temp plist file
         plist_path = File.join(Dir.tmpdir, "exportOptions-#{Time.now.to_i}.plist")
         File.write(plist_path, options.to_plist)
-        
+
         plist_path
       end
 
@@ -100,7 +97,7 @@ module Mysigner
 
       def execute_export(options_plist)
         FileUtils.mkdir_p(@output_dir)
-        puts ""
+        puts ''
 
         cmd = [
           'xcodebuild',
@@ -112,39 +109,38 @@ module Mysigner
         ].join(' ')
 
         # Run command and capture output
-        IO.popen(cmd, err: [:child, :out]) do |io|
+        IO.popen(cmd, err: %i[child out]) do |io|
           io.each_line do |line|
             next if line.strip.empty?
-            
+
             # Show errors and warnings
             if line.include?('error:') || line.include?('warning:')
               puts line
             # Show progress markers
-            elsif line.include?('Exporting') || line.include?('Processing') || 
+            elsif line.include?('Exporting') || line.include?('Processing') ||
                   line.include?('Validating')
               print '.'
             end
           end
         end
 
-        puts "" # New line after dots
-        
-        $?.success?
+        puts '' # New line after dots
+
+        $CHILD_STATUS.success?
       end
 
       def find_ipa_file
         # Look for .ipa files in output directory
         ipa_files = Dir.glob(File.join(@output_dir, '*.ipa'))
-        
+
         # Return the most recently created one
         ipa_files.max_by { |f| File.mtime(f) }
       end
 
       def say_exporting(method)
         puts "📦 Exporting archive for #{method}..."
-        puts ""
+        puts ''
       end
     end
   end
 end
-

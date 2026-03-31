@@ -74,12 +74,13 @@ RSpec.describe 'mysigner keystore', type: :cli do
 
     describe 'keystore list' do
       context 'when keystores exist' do
-        let(:keystores) {
+        let(:keystores) do
           [
-            { 'id' => 1, 'name' => 'Release Key', 'key_alias' => 'release', 'package_name' => 'com.example.app', 'active' => true },
+            { 'id' => 1, 'name' => 'Release Key', 'key_alias' => 'release', 'package_name' => 'com.example.app',
+              'active' => true },
             { 'id' => 2, 'name' => 'Debug Key', 'key_alias' => 'debug', 'active' => false }
           ]
-        }
+        end
 
         before do
           allow(keystore_manager).to receive(:list).and_return(keystores)
@@ -161,9 +162,9 @@ RSpec.describe 'mysigner keystore', type: :cli do
 
     describe 'keystore upload' do
       let(:keystore_path) { '/path/to/keystore.jks' }
-      let(:upload_result) {
+      let(:upload_result) do
         { 'id' => 1, 'name' => 'My Key', 'key_alias' => 'key0', 'active' => true }
-      }
+      end
 
       context 'with valid keystore' do
         before do
@@ -302,9 +303,9 @@ RSpec.describe 'mysigner keystore', type: :cli do
     end
 
     describe 'keystore download' do
-      let(:download_result) {
+      let(:download_result) do
         { path: '/tmp/keystore.jks', name: 'Release Key', key_alias: 'release' }
-      }
+      end
 
       context 'when keystore exists' do
         before do
@@ -421,9 +422,9 @@ RSpec.describe 'mysigner keystore', type: :cli do
 
     describe 'keystore delete' do
       context 'when keystore exists' do
-        let(:keystores) {
+        let(:keystores) do
           [{ 'id' => 1, 'name' => 'Release Key', 'key_alias' => 'release' }]
-        }
+        end
 
         before do
           allow(keystore_manager).to receive(:list).and_return(keystores)
@@ -475,8 +476,9 @@ RSpec.describe 'mysigner keystore', type: :cli do
           # and tries to find nil in the list. Return a dummy keystore to prevent
           # NilError when it tries to access keystore['name']
           allow(keystore_manager).to receive(:list).and_return([
-            { 'id' => nil, 'name' => 'Dummy', 'key_alias' => 'dummy' }
-          ])
+                                                                 { 'id' => nil, 'name' => 'Dummy',
+                                                                   'key_alias' => 'dummy' }
+                                                               ])
           allow(cli).to receive(:yes?).and_return(false)
         end
 
@@ -513,9 +515,9 @@ RSpec.describe 'mysigner keystore', type: :cli do
       end
 
       context 'when delete fails' do
-        let(:keystores) {
+        let(:keystores) do
           [{ 'id' => 1, 'name' => 'Release Key', 'key_alias' => 'release' }]
-        }
+        end
 
         before do
           allow(keystore_manager).to receive(:list).and_return(keystores)
@@ -539,9 +541,9 @@ RSpec.describe 'mysigner keystore', type: :cli do
 
     describe 'keystore activate' do
       context 'when keystore exists' do
-        let(:activate_result) {
+        let(:activate_result) do
           { 'id' => 1, 'name' => 'Release Key', 'active' => true }
-        }
+        end
 
         before do
           allow(keystore_manager).to receive(:activate).and_return(activate_result)
@@ -654,7 +656,7 @@ RSpec.describe 'mysigner keystore', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'keystore']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help keystore]) }
       expect(help_output).to include('keystore')
     end
   end
@@ -665,7 +667,7 @@ RSpec.describe 'mysigner keystore', type: :cli do
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
 
-      output = capture_stdout { Mysigner::CLI.start(['keystore', 'list']) }
+      output = capture_stdout { Mysigner::CLI.start(%w[keystore list]) }
       expect(output).to include('Not logged in')
     end
   end

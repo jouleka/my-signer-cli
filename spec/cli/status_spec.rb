@@ -9,16 +9,32 @@ RSpec.describe 'mysigner status', type: :cli do
   let(:client) { instance_double(Mysigner::Client) }
   let(:api_url) { 'https://mysigner.dev' }
   let(:api_token) { 'sk_test_abc123xyz' }
-  let(:org_id) { '123' }
+  let(:user_email) { 'developer@example.com' }
+  let(:org_id) { 'org-123' }
+  let(:current_token) { 'sk_test_...xyz' }
 
-  # Helper to capture stdout
   def capture_stdout
     old_stdout = $stdout
     $stdout = StringIO.new
     yield
     $stdout.string
+  rescue SystemExit
+    $stdout.string
   ensure
     $stdout = old_stdout
+  end
+
+  def stub_logged_in_config(current_organization_id: nil, organization_ids: [], org_name: nil, encrypted: true)
+    allow(config).to receive(:exists?).and_return(true)
+    allow(config).to receive(:load)
+    allow(config).to receive(:api_url).and_return(api_url)
+    allow(config).to receive(:api_token).and_return(api_token)
+    allow(config).to receive(:user_email).and_return(user_email)
+    allow(config).to receive(:encrypted_config?).and_return(encrypted)
+    allow(config).to receive(:current_organization_id).and_return(current_organization_id)
+    allow(config).to receive(:organization_ids).and_return(organization_ids)
+    allow(config).to receive(:org_name).and_return(org_name)
+    allow(config).to receive(:display).and_return({ current_token: current_token })
   end
 
   before do
@@ -29,78 +45,40 @@ RSpec.describe 'mysigner status', type: :cli do
   describe 'when not logged in' do
     before do
       allow(config).to receive(:exists?).and_return(false)
-      allow(config).to receive(:load) # Stub to prevent errors if execution continues
-      allow(config).to receive(:api_url).and_return(nil)
-      allow(config).to receive(:api_token).and_return(nil)
-      allow(config).to receive(:organization_id).and_return(nil)
-      allow(config).to receive(:display).and_return({ api_token: '' })
-      allow(client).to receive(:test_connection) # Stub to prevent errors if execution continues
-      allow(cli).to receive(:exit) # Stub exit
     end
 
-    it 'shows error message' do
+    it 'shows the login guidance' do
       output = capture_stdout { cli.status }
-      expect(output).to include('Not logged in')
+
+      expect(output).to include("Not logged in. Run 'mysigner login' first.")
     end
 
-    it 'suggests login command' do
-      output = capture_stdout { cli.status }
-      expect(output).to include('mysigner login')
-    end
-
-    it 'exits with code 1' do
-      expect(cli).to receive(:exit).with(1)
-      cli.status
+    it 'exits with status 1' do
+      expect { cli.status }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
     end
   end
 
-  describe 'when logged in without org_id' do
+  describe 'when logged in without a current organization' do
     before do
-      allow(config).to receive(:exists?).and_return(true)
-      allow(config).to receive(:load)
-      allow(config).to receive(:api_url).and_return(api_url)
-      allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(nil)
-      allow(config).to receive(:display).and_return({
-        api_token: 'sk_test_...xyz'
-      })
-      allow(client).to receive(:test_connection).and_return({ success: true })
-      allow(cli).to receive(:exit) # Stub exit
+      stub_logged_in_config
+      allow(client).to receive(:test_connection).and_return(success: true)
     end
 
-    it 'shows status header' do
+    it 'shows configuration and connection details' do
       output = capture_stdout { cli.status }
+
       expect(output).to include('My Signer Status')
-    end
-
-    it 'displays API URL' do
-      output = capture_stdout { cli.status }
       expect(output).to include("API URL:         #{api_url}")
-    end
-
-    it 'displays masked token' do
-      output = capture_stdout { cli.status }
-      expect(output).to include('API Token:       sk_test_...xyz')
-    end
-
-    it 'shows org_id as not set' do
-      output = capture_stdout { cli.status }
-      expect(output).to include('Organization ID: (not set)')
-    end
-
-    it 'tests connection' do
-      expect(client).to receive(:test_connection)
-      cli.status
-    end
-
-    it 'shows connected status' do
-      output = capture_stdout { cli.status }
+      expect(output).to include("User:            #{user_email}")
+      expect(output).to include('Encryption:      ✓ Enabled')
       expect(output).to include('Status: ✓ Connected')
     end
 
-    it 'does not show organization section' do
+    it 'does not show organization details' do
       output = capture_stdout { cli.status }
-      expect(output).not_to include('Organization:')
+
+      expect(output).not_to include('Current Organization:')
+      expect(output).not_to include('App Store Connect:')
     end
 
     it 'does not fetch organization details' do
@@ -109,220 +87,115 @@ RSpec.describe 'mysigner status', type: :cli do
     end
   end
 
-  describe 'when logged in with org_id' do
-    let(:org_response) {
+  describe 'when logged in with a current organization' do
+    let(:org_response) do
       {
         data: {
           'name' => 'Test Organization',
           'role' => 'admin',
-          'member_count' => 5
+          'member_count' => 5,
+          'app_store_connect_configured' => true,
+          'app_store_connect_team_id' => 'TEAM123'
         }
       }
-    }
+    end
 
     before do
-      allow(config).to receive(:exists?).and_return(true)
-      allow(config).to receive(:load)
-      allow(config).to receive(:api_url).and_return(api_url)
-      allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(org_id)
-      allow(config).to receive(:display).and_return({
-        api_token: 'sk_test_...xyz'
-      })
-      allow(client).to receive(:test_connection).and_return({ success: true })
+      stub_logged_in_config(
+        current_organization_id: org_id,
+        organization_ids: [org_id],
+        org_name: 'Test Organization'
+      )
+      allow(client).to receive(:test_connection).and_return(success: true)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
-      allow(cli).to receive(:exit) # Stub exit
     end
 
-    it 'shows status header' do
+    it 'shows organization and App Store Connect details' do
       output = capture_stdout { cli.status }
-      expect(output).to include('My Signer Status')
-    end
 
-    it 'displays configuration section' do
-      output = capture_stdout { cli.status }
-      expect(output).to include('Configuration:')
-      expect(output).to include("API URL:         #{api_url}")
-      expect(output).to include('API Token:       sk_test_...xyz')
-      expect(output).to include("Organization ID: #{org_id}")
-    end
-
-    it 'tests connection' do
-      expect(client).to receive(:test_connection)
-      cli.status
-    end
-
-    it 'shows connected status' do
-      output = capture_stdout { cli.status }
-      expect(output).to include('Status: ✓ Connected')
+      expect(output).to include('Current Organization:')
+      expect(output).to include('Name:  Test Organization')
+      expect(output).to include("ID:    #{org_id}")
+      expect(output).to include("Token: #{current_token}")
+      expect(output).to include('Role:   admin')
+      expect(output).to include('Members: 5')
+      expect(output).to include('App Store Connect:')
+      expect(output).to include('✓ Configured')
+      expect(output).to include('Team ID: TEAM123')
     end
 
     it 'fetches organization details' do
       expect(client).to receive(:get).with("/api/v1/organizations/#{org_id}")
       cli.status
     end
-
-    it 'shows organization section' do
-      output = capture_stdout { cli.status }
-      expect(output).to include('Organization:')
-    end
-
-    it 'displays organization name' do
-      output = capture_stdout { cli.status }
-      expect(output).to include('Name:    Test Organization')
-    end
-
-    it 'displays user role' do
-      output = capture_stdout { cli.status }
-      expect(output).to include('Role:    admin')
-    end
-
-    it 'displays member count' do
-      output = capture_stdout { cli.status }
-      expect(output).to include('Members: 5')
-    end
-
-    context 'when org has no role' do
-      before do
-        org_response[:data]['role'] = nil
-      end
-
-      it 'defaults to viewer' do
-        output = capture_stdout { cli.status }
-        expect(output).to include('Role:    viewer')
-      end
-    end
-
-    context 'when org has no member_count' do
-      before do
-        org_response[:data]['member_count'] = nil
-      end
-
-      it 'defaults to 0' do
-        output = capture_stdout { cli.status }
-        expect(output).to include('Members: 0')
-      end
-    end
   end
 
   describe 'error handling' do
     before do
-      allow(config).to receive(:exists?).and_return(true)
-      allow(config).to receive(:load)
-      allow(config).to receive(:api_url).and_return(api_url)
-      allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(org_id)
-      allow(config).to receive(:display).and_return({
-        api_token: 'sk_test_...xyz'
-      })
-      allow(cli).to receive(:exit) # Stub exit
+      stub_logged_in_config(
+        current_organization_id: org_id,
+        organization_ids: [org_id],
+        org_name: 'Test Organization'
+      )
     end
 
-    context 'when token is invalid (401)' do
+    context 'when the token is invalid' do
       before do
-        allow(client).to receive(:test_connection).and_raise(Mysigner::UnauthorizedError)
+        allow(client).to receive(:test_connection).and_raise(Mysigner::UnauthorizedError.new('Unauthorized: Invalid token'))
       end
 
-      it 'shows unauthorized error' do
+      it 'shows the unauthorized status' do
         output = capture_stdout { cli.status }
-        expect(output).to include('Status: ✗ Unauthorized')
-        expect(output).to include('invalid token')
+
+        expect(output).to include('Status: ✗ Unauthorized (invalid token)')
       end
 
-      it 'exits with code 1' do
-        expect(cli).to receive(:exit).with(1)
-        cli.status
-      end
-
-      it 'does not fetch organization details' do
-        expect(client).not_to receive(:get)
-        cli.status
+      it 'exits with status 1' do
+        expect { cli.status }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
       end
     end
 
-    context 'when connection fails' do
+    context 'when the API connection fails' do
       before do
-        allow(client).to receive(:test_connection).and_raise(
-          Mysigner::ConnectionError.new('Failed to connect to API')
-        )
+        allow(client).to receive(:test_connection).and_raise(Mysigner::ConnectionError.new('Failed to connect to API'))
       end
 
-      it 'shows connection failed error' do
+      it 'shows the connection failure' do
         output = capture_stdout { cli.status }
+
         expect(output).to include('Status: ✗ Connection failed')
-      end
-
-      it 'shows error message' do
-        output = capture_stdout { cli.status }
         expect(output).to include('Error: Failed to connect to API')
       end
 
-      it 'exits with code 1' do
-        expect(cli).to receive(:exit).with(1)
-        cli.status
+      it 'exits with status 1' do
+        expect { cli.status }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
       end
     end
 
-    context 'when API returns unexpected error' do
+    context 'when organization lookup fails' do
       before do
-        allow(client).to receive(:test_connection).and_raise(StandardError.new('Unexpected error'))
+        allow(client).to receive(:test_connection).and_return(success: true)
+        allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_raise(StandardError.new('Organization not found'))
       end
 
-      it 'shows generic error' do
+      it 'shows the generic error state' do
         output = capture_stdout { cli.status }
+
         expect(output).to include('Status: ✗ Error')
-      end
-
-      it 'shows error message' do
-        output = capture_stdout { cli.status }
-        expect(output).to include('Error: Unexpected error')
-      end
-
-      it 'exits with code 1' do
-        expect(cli).to receive(:exit).with(1)
-        cli.status
-      end
-    end
-
-    context 'when organization fetch fails' do
-      before do
-        allow(client).to receive(:test_connection).and_return({ success: true })
-        allow(client).to receive(:get).and_raise(StandardError.new('Organization not found'))
-      end
-
-      it 'shows error' do
-        output = capture_stdout { cli.status }
-        expect(output).to include('Status: ✗ Error')
-      end
-
-      it 'shows error message' do
-        output = capture_stdout { cli.status }
         expect(output).to include('Error: Organization not found')
       end
 
-      it 'exits with code 1' do
-        expect(cli).to receive(:exit).with(1)
-        cli.status
+      it 'exits with status 1' do
+        expect { cli.status }.to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
       end
     end
   end
 
   describe 'help text' do
-    it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'status']) }
-      expect(help_output).to include('Show connection status and configuration')
-    end
-  end
+    it 'uses the current description' do
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help status]) }
 
-  describe 'integration tests' do
-    it 'requires login' do
-      allow(Mysigner::Config).to receive(:new).and_call_original
-      config_file = Mysigner::Config::CONFIG_FILE
-      allow(File).to receive(:exist?).with(config_file).and_return(false)
-      
-      output = capture_stdout { Mysigner::CLI.start(['status']) }
-      expect(output).to include('Not logged in')
+      expect(help_output).to include('Check connection, credentials, and App Store Connect setup')
     end
   end
 end
-

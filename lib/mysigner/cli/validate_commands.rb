@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 module Mysigner
   class CLI < Thor
     module ValidateCommands
       def self.included(base)
         base.class_eval do
-          desc "validate", "Validate signing configuration on the server"
+          desc 'validate', 'Validate signing configuration on the server'
           long_desc <<~DESC
             Check if your bundle ID, certificate, and provisioning profile exist and
             are valid on the My Signer server.
@@ -42,15 +44,15 @@ module Mysigner
             signing_type = options[:type]
 
             unless bundle_id
-              error "Bundle ID is required. Use --bundle-id or run from an Xcode project directory."
-              say ""
-              say "Example: mysigner validate --bundle-id com.example.app --type development", :yellow
+              error 'Bundle ID is required. Use --bundle-id or run from an Xcode project directory.'
+              say ''
+              say 'Example: mysigner validate --bundle-id com.example.app --type development', :yellow
               exit 1
             end
 
             unless signing_type
-              error "Signing type is required. Use --type with one of: development, appstore, adhoc, inhouse"
-              say ""
+              error 'Signing type is required. Use --type with one of: development, appstore, adhoc, inhouse'
+              say ''
               say "Example: mysigner validate --bundle-id #{bundle_id} --type development", :yellow
               exit 1
             end
@@ -62,11 +64,11 @@ module Mysigner
               exit 1
             end
 
-            say "🔍 Validating signing configuration...", :cyan
-            say ""
+            say '🔍 Validating signing configuration...', :cyan
+            say ''
             say "  Bundle ID: #{bundle_id}", :white
             say "  Type:      #{signing_type}", :white
-            say ""
+            say ''
 
             begin
               response = client.post(
@@ -93,17 +95,17 @@ module Mysigner
                 end
               end
 
-              say ""
+              say ''
 
               if valid
-                say "✓ All checks passed! Signing configuration is valid.", :green
+                say '✓ All checks passed! Signing configuration is valid.', :green
               else
-                say "✗ Validation failed. Some checks did not pass.", :red
+                say '✗ Validation failed. Some checks did not pass.', :red
 
                 suggestions = result['suggestions'] || []
                 if suggestions.any?
-                  say ""
-                  say "💡 Suggestions:", :cyan
+                  say ''
+                  say '💡 Suggestions:', :cyan
                   suggestions.each do |suggestion|
                     say "   → #{suggestion}", :yellow
                   end
@@ -113,26 +115,24 @@ module Mysigner
               end
             rescue Mysigner::NotFoundError => e
               error "Not found: #{e.message}"
-              say ""
-              say "💡 Make sure your bundle ID is synced:", :cyan
+              say ''
+              say '💡 Make sure your bundle ID is synced:', :cyan
               say "   → Run 'mysigner sync ios' to sync from Apple Developer Portal", :yellow
               say "   → Run 'mysigner bundleid list' to list registered bundle IDs", :yellow
               exit 1
             rescue Mysigner::ValidationError => e
               error "Validation error: #{e.message}"
-              if e.details
-                e.details.each do |field, errors|
-                  errors_text = errors.is_a?(Array) ? errors.join(', ') : errors.to_s
-                  say "  #{field}: #{errors_text}", :red
-                end
+              e.details&.each do |field, errors|
+                errors_text = errors.is_a?(Array) ? errors.join(', ') : errors.to_s
+                say "  #{field}: #{errors_text}", :red
               end
               exit 1
             rescue Mysigner::ClientError => e
               error "Validation request failed: #{e.message}"
-              say ""
-              say "💡 Try these steps:", :cyan
-              say "   → Check your network connection", :yellow
-              say "   → Verify API token: mysigner status", :yellow
+              say ''
+              say '💡 Try these steps:', :cyan
+              say '   → Check your network connection', :yellow
+              say '   → Verify API token: mysigner status', :yellow
               exit 1
             end
           end

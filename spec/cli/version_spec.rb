@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'mysigner/cli'
 require 'open3'
@@ -38,18 +40,18 @@ RSpec.describe 'mysigner version' do
     end
 
     it 'displays repository URL' do
-      expect { cli.version }.to output(%r{Repository:.*github\.com}).to_stdout
+      expect { cli.version }.to output(/Repository:.*github\.com/).to_stdout
     end
 
     it 'displays issues URL' do
-      expect { cli.version }.to output(%r{Issues:.*github\.com.*issues}).to_stdout
+      expect { cli.version }.to output(/Issues:.*github\.com.*issues/).to_stdout
     end
 
     it 'formats output with proper spacing' do
       output = ''
       expect { output = capture_stdout { cli.version } }.not_to raise_error
       lines = output.split("\n")
-      
+
       # Should have blank lines for readability
       expect(lines[1]).to be_empty
       expect(lines[5]).to be_empty
@@ -59,7 +61,7 @@ RSpec.describe 'mysigner version' do
       output = ''
       expect { output = capture_stdout { cli.version } }.not_to raise_error
       lines = output.split("\n").reject(&:empty?)
-      
+
       expect(lines[0]).to match(/My Signer CLI/)
       expect(lines[1]).to match(/Ruby:/)
       expect(lines[2]).to match(/Install:/)
@@ -105,7 +107,7 @@ RSpec.describe 'mysigner version' do
 
   describe 'integration tests' do
     it 'runs successfully via shell' do
-      stdout, stderr, status = Open3.capture3("#{exe_path} version 2>&1")
+      _, _, status = Open3.capture3("#{exe_path} version 2>&1")
       expect(status.success?).to be true
     end
 

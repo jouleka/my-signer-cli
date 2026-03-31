@@ -70,7 +70,7 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
       output = capture_stdout do
         catch(:system_exit) { cli.ship('invalid_target') }
       end
-      expect(output).to include("Invalid target")
+      expect(output).to include('Invalid target')
     end
 
     it 'exits with code 1' do
@@ -80,13 +80,13 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
   end
 
   describe 'ship workflow' do
-    let(:project_info) {
+    let(:project_info) do
       {
         path: '/path/to/MyApp.xcodeproj',
         type: :project,
         framework: :native
       }
-    }
+    end
     let(:parser) { instance_double(Mysigner::Build::Parser) }
     let(:main_target) { double('target', name: 'MyApp') }
     let(:validator) { instance_double(Mysigner::Signing::Validator) }
@@ -95,7 +95,7 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
     let(:uploader) { instance_double(Mysigner::Upload::Uploader) }
     let(:archive_path) { '/path/to/MyApp.xcarchive' }
     let(:ipa_path) { '/path/to/MyApp.ipa' }
-    let(:org_response) {
+    let(:org_response) do
       {
         data: {
           'app_store_connect_configured' => true,
@@ -105,7 +105,7 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
           'app_store_connect_team_id' => 'TEAM123'
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -115,38 +115,38 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(config).to receive(:user_email).and_return('test@example.com')
       allow(config).to receive(:current_organization_id).and_return(org_id)
-      
+
       # Set default options
       cli.options = { configuration: 'Release', scheme: nil, wait: false, team: nil }
-      
+
       # Mock project detection
       allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
-      
+
       # Mock parser
       allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:main_target).and_return(main_target)
       allow(parser).to receive(:bundle_id).and_return('com.example.myapp')
       allow(parser).to receive(:team_id).and_return('TEAM123')
       allow(parser).to receive(:code_sign_style).and_return('Automatic')
-      
+
       # Mock validator
       allow(Mysigner::Signing::Validator).to receive(:new).and_return(validator)
       allow(validator).to receive(:validate!)
-      
+
       # Mock executor
       allow(Mysigner::Build::Executor).to receive(:new).and_return(executor)
       allow(executor).to receive(:build!).and_return(archive_path)
-      
+
       # Mock exporter
       allow(Mysigner::Export::Exporter).to receive(:new).and_return(exporter)
       allow(exporter).to receive(:export!).and_return(ipa_path)
-      
+
       # Mock IPA file size
       allow(File).to receive(:size).with(ipa_path).and_return(10_000_000) # 10MB
-      
+
       # Mock API credential fetch
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
-      
+
       # Mock uploader
       allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
       allow(uploader).to receive(:upload!).and_return({ success: true })
@@ -386,13 +386,13 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
       let(:validator) { instance_double(Mysigner::Signing::Validator) }
       let(:executor) { instance_double(Mysigner::Build::Executor) }
       let(:exporter) { instance_double(Mysigner::Export::Exporter) }
-      let(:org_response) {
+      let(:org_response) do
         {
           data: {
             'app_store_connect_configured' => false
           }
         }
-      }
+      end
 
       before do
         allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
@@ -429,12 +429,12 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'ship']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help ship]) }
       expect(help_output).to include('Build your project, sign it, and upload')
     end
 
     it 'shows options' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'ship']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help ship]) }
       expect(help_output).to include('--configuration')
       expect(help_output).to include('--scheme')
       expect(help_output).to include('--wait')
@@ -447,10 +447,9 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
-      
-      output = capture_stdout { Mysigner::CLI.start(['ship', 'testflight']) }
+
+      output = capture_stdout { Mysigner::CLI.start(%w[ship testflight]) }
       expect(output).to include('Not logged in')
     end
   end
 end
-

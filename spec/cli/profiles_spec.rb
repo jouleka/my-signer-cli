@@ -38,11 +38,12 @@ RSpec.describe 'mysigner profiles', type: :cli do
       allow(config).to receive(:organization_id).and_return('123')
       # Stub to prevent errors if execution continues
       allow(client).to receive(:get).and_return({
-        data: {
-          'profiles' => [],
-          'pagination' => { 'page' => 1, 'per_page' => 50, 'total_pages' => 0, 'total' => 0 }
-        }
-      })
+                                                  data: {
+                                                    'profiles' => [],
+                                                    'pagination' => { 'page' => 1, 'per_page' => 50,
+                                                                      'total_pages' => 0, 'total' => 0 }
+                                                  }
+                                                })
     end
 
     it 'shows error message' do
@@ -62,7 +63,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
   end
 
   describe 'when no profiles found' do
-    let(:empty_response) {
+    let(:empty_response) do
       {
         data: {
           'profiles' => [],
@@ -74,7 +75,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -83,7 +84,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_return(empty_response)
-      
+
       cli.options = { page: 1, per_page: 50 }
     end
 
@@ -109,7 +110,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
   end
 
   describe 'list profiles' do
-    let(:profiles_response) {
+    let(:profiles_response) do
       {
         data: {
           'profiles' => [
@@ -138,7 +139,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -147,7 +148,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_return(profiles_response)
-      
+
       cli.options = { page: 1, per_page: 50 }
     end
 
@@ -222,7 +223,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
   end
 
   describe 'with type filter' do
-    let(:profiles_response) {
+    let(:profiles_response) do
       {
         data: {
           'profiles' => [
@@ -243,7 +244,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -272,7 +273,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
   end
 
   describe 'with status filter' do
-    let(:profiles_response) {
+    let(:profiles_response) do
       {
         data: {
           'profiles' => [
@@ -293,7 +294,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -322,7 +323,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
   end
 
   describe 'with search query' do
-    let(:profiles_response) {
+    let(:profiles_response) do
       {
         data: {
           'profiles' => [
@@ -343,7 +344,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -371,7 +372,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
   end
 
   describe 'with pagination' do
-    let(:profiles_response) {
+    let(:profiles_response) do
       {
         data: {
           'profiles' => [
@@ -391,7 +392,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -400,7 +401,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_return(profiles_response)
-      
+
       cli.options = { page: 1, per_page: 1 }
     end
 
@@ -428,7 +429,7 @@ RSpec.describe 'mysigner profiles', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_raise(Mysigner::ClientError.new('Connection failed'))
-      
+
       cli.options = { page: 1, per_page: 50 }
     end
 
@@ -446,27 +447,27 @@ RSpec.describe 'mysigner profiles', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'profiles']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help profiles]) }
       expect(help_output).to include('List all provisioning profiles')
     end
 
     it 'shows type option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'profiles']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help profiles]) }
       expect(help_output).to include('--type')
     end
 
     it 'shows status option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'profiles']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help profiles]) }
       expect(help_output).to include('--status')
     end
 
     it 'shows search option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'profiles']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help profiles]) }
       expect(help_output).to include('--search')
     end
 
     it 'shows pagination options' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'profiles']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help profiles]) }
       expect(help_output).to include('--page')
       expect(help_output).to include('--per-page')
     end
@@ -477,10 +478,9 @@ RSpec.describe 'mysigner profiles', type: :cli do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
-      
+
       output = capture_stdout { Mysigner::CLI.start(['profiles']) }
       expect(output).to include('Not logged in')
     end
   end
 end
-

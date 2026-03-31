@@ -56,14 +56,14 @@ RSpec.describe 'mysigner config', type: :cli do
   end
 
   describe 'when logged in with full config' do
-    let(:display_config) {
+    let(:display_config) do
       {
         api_url: 'https://mysigner.dev',
         user_email: 'test@example.com',
         current_organization: 'Test Org (ID: 123)',
         current_token: 'sk_test_...xyz'
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -122,14 +122,14 @@ RSpec.describe 'mysigner config', type: :cli do
   end
 
   describe 'when logged in without org_id' do
-    let(:display_config) {
+    let(:display_config) do
       {
         api_url: 'https://mysigner.dev',
         user_email: 'test@example.com',
         current_organization: '(not set)',
         current_token: '(not set)'
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -166,14 +166,14 @@ RSpec.describe 'mysigner config', type: :cli do
   end
 
   describe 'when config has localhost API URL' do
-    let(:display_config) {
+    let(:display_config) do
       {
         api_url: 'http://localhost:3000',
         user_email: 'dev@example.com',
         current_organization: 'Dev Org (ID: 456)',
         current_token: 'sk_dev_...abc'
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -216,7 +216,7 @@ RSpec.describe 'mysigner config', type: :cli do
     end
 
     context 'when display has extra keys' do
-      let(:display_config) {
+      let(:display_config) do
         {
           api_url: 'https://mysigner.dev',
           user_email: 'test@example.com',
@@ -225,7 +225,7 @@ RSpec.describe 'mysigner config', type: :cli do
           custom_key: 'custom_value',
           another_setting: 'test'
         }
-      }
+      end
 
       before do
         allow(config).to receive(:exists?).and_return(true)
@@ -245,7 +245,7 @@ RSpec.describe 'mysigner config', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'config']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help config]) }
       expect(help_output).to include('Show current configuration')
     end
   end
@@ -255,10 +255,9 @@ RSpec.describe 'mysigner config', type: :cli do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file_path = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file_path).and_return(false)
-      
+
       output = capture_stdout { Mysigner::CLI.start(['config']) }
       expect(output).to include('No configuration found')
     end
   end
 end
-

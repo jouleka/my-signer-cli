@@ -1,5 +1,6 @@
-require 'set'
+# frozen_string_literal: true
 
+require 'English'
 module Mysigner
   module Build
     class Executor
@@ -20,7 +21,8 @@ module Mysigner
       #   - team_id: Development team ID to override project setting
       #   - bundle_id: Bundle ID to override project setting
       #   - skip_extensions: If true, disable code signing for extension targets
-      def build!(target_name = nil, configuration = 'Release', scheme: nil, signing_style: nil, team_id: nil, bundle_id: nil, skip_extensions: false)
+      def build!(target_name = nil, configuration = 'Release', scheme: nil, signing_style: nil, team_id: nil,
+                 bundle_id: nil, skip_extensions: false)
         target = target_name || @parser.main_target.name
         scheme_name = scheme || target
         @signing_style = signing_style
@@ -31,7 +33,7 @@ module Mysigner
         # Use Xcode's default DerivedData location to keep project clean
         # This matches Xcode's behavior and avoids polluting the project directory
         output_dir = File.join(@project_info[:directory], 'build')
-        FileUtils.mkdir_p(output_dir) unless Dir.exist?(output_dir)
+        FileUtils.mkdir_p(output_dir)
 
         # Generate archive path with timestamp
         timestamp = Time.now.strftime('%Y%m%d-%H%M%S')
@@ -44,14 +46,10 @@ module Mysigner
         # Execute build
         success = execute_with_output(cmd)
 
-        unless success
-          raise BuildError, "Build failed. Check output above for errors."
-        end
+        raise BuildError, 'Build failed. Check output above for errors.' unless success
 
         # Verify archive was created
-        unless File.exist?(archive_path)
-          raise BuildError, "Build reported success but archive not found at: #{archive_path}"
-        end
+        raise BuildError, "Build reported success but archive not found at: #{archive_path}" unless File.exist?(archive_path)
 
         archive_path
       end
@@ -59,14 +57,14 @@ module Mysigner
       private
 
       def build_command(scheme, configuration, archive_path)
-        cmd = ['xcodebuild', 'archive']
+        cmd = %w[xcodebuild archive]
 
         # Workspace or project
-        if @project_info[:type] == :workspace
-          cmd += ['-workspace', @project_info[:path]]
-        else
-          cmd += ['-project', @project_info[:path]]
-        end
+        cmd += if @project_info[:type] == :workspace
+                 ['-workspace', @project_info[:path]]
+               else
+                 ['-project', @project_info[:path]]
+               end
 
         # Scheme and configuration
         cmd += [
@@ -78,26 +76,22 @@ module Mysigner
         # SDK selection based on platform
         platform = @parser.target_platform(scheme)
         sdk = case platform
-        when :macos
-          'macosx'
-        when :tvos
-          'appletvos'
-        when :watchos
-          'watchos'
-        else
-          'iphoneos'  # default to iOS
-        end
+              when :macos
+                'macosx'
+              when :tvos
+                'appletvos'
+              when :watchos
+                'watchos'
+              else
+                'iphoneos' # default to iOS
+              end
         cmd += ['-sdk', sdk]
 
         # Override team ID if provided
-        if @team_id
-          cmd += ["DEVELOPMENT_TEAM=#{@team_id}"]
-        end
-        
+        cmd += ["DEVELOPMENT_TEAM=#{@team_id}"] if @team_id
+
         # Override bundle ID if provided
-        if @bundle_id
-          cmd += ["PRODUCT_BUNDLE_IDENTIFIER=#{@bundle_id}"]
-        end
+        cmd += ["PRODUCT_BUNDLE_IDENTIFIER=#{@bundle_id}"] if @bundle_id
 
         # Handle signing based on style
         case @signing_style
@@ -131,13 +125,13 @@ module Mysigner
       end
 
       def execute_with_output(cmd)
-        puts "🏗️  Running: xcodebuild archive..."
-        puts ""
+        puts '🏗️  Running: xcodebuild archive...'
+        puts ''
 
         @build_errors = []
 
         # Run command and capture output in real-time
-        IO.popen(cmd, err: [:child, :out]) do |io|
+        IO.popen(cmd, err: %i[child out]) do |io|
           io.each_line do |line|
             # Filter output to show only important messages
             next if line.strip.empty?
@@ -166,11 +160,10 @@ module Mysigner
           end
         end
 
-        puts "" # New line after dots
+        puts '' # New line after dots
 
-        $?.success?
+        $CHILD_STATUS.success?
       end
     end
   end
 end
-

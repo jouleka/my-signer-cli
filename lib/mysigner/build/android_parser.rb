@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Mysigner
   module Build
     class AndroidParser
@@ -57,42 +59,41 @@ module Mysigner
       # Get all build types (debug, release, etc.)
       def build_types
         types = []
-        
+
         # Match buildTypes block
         if @gradle_content =~ /buildTypes\s*\{(.*?)\n\s*\}/m
-          block = $1
+          block = ::Regexp.last_match(1)
           # Find all type names (e.g., "release {" or "debug {")
           block.scan(/(\w+)\s*\{/) do |match|
             types << match[0] unless %w[debug release].include?(match[0]) && types.include?(match[0])
             types << match[0]
           end
         end
-        
+
         # Default build types if none found
-        types = ['debug', 'release'] if types.empty?
+        types = %w[debug release] if types.empty?
         types.uniq
       end
 
       # Get all product flavors
       def product_flavors
         flavors = []
-        
+
         if @gradle_content =~ /productFlavors\s*\{(.*?)\n\s{4}\}/m
-          block = $1
+          block = ::Regexp.last_match(1)
           block.scan(/(\w+)\s*\{/) do |match|
             flavors << match[0]
           end
         end
-        
+
         flavors
       end
 
       # Get signing config for a build type
       def signing_config(build_type = 'release')
         # Look for signingConfig in the build type block
-        if @gradle_content =~ /#{build_type}\s*\{[^}]*signingConfig\s*(?:=\s*)?signingConfigs\.(\w+)/m
-          return $1
-        end
+        return ::Regexp.last_match(1) if @gradle_content =~ /#{build_type}\s*\{[^}]*signingConfig\s*(?:=\s*)?signingConfigs\.(\w+)/m
+
         nil
       end
 
@@ -104,30 +105,28 @@ module Mysigner
       # Get signing configs defined in the project
       def signing_configs
         configs = []
-        
+
         if @gradle_content =~ /signingConfigs\s*\{(.*?)\n\s{4}\}/m
-          block = $1
+          block = ::Regexp.last_match(1)
           block.scan(/(\w+)\s*\{/) do |match|
             configs << match[0]
           end
         end
-        
+
         configs
       end
 
       # Get keystore path from signing config
       def keystore_path(config_name = 'release')
-        if @gradle_content =~ /#{config_name}\s*\{[^}]*storeFile\s*(?:=\s*)?(?:file\()?"?([^")\n]+)"?\)?/m
-          return $1
-        end
+        return ::Regexp.last_match(1) if @gradle_content =~ /#{config_name}\s*\{[^}]*storeFile\s*(?:=\s*)?(?:file\()?"?([^")\n]+)"?\)?/m
+
         nil
       end
 
       # Get keystore alias from signing config
       def keystore_alias(config_name = 'release')
-        if @gradle_content =~ /#{config_name}\s*\{[^}]*keyAlias\s*(?:=\s*)?["']?([^"'\n]+)["']?/m
-          return $1.strip
-        end
+        return ::Regexp.last_match(1).strip if @gradle_content =~ /#{config_name}\s*\{[^}]*keyAlias\s*(?:=\s*)?["']?([^"'\n]+)["']?/m
+
         nil
       end
 
@@ -137,15 +136,11 @@ module Mysigner
         strings_path = File.join(android_directory, 'app/src/main/res/values/strings.xml')
         if File.exist?(strings_path)
           content = File.read(strings_path)
-          if content =~ /<string\s+name="app_name"[^>]*>([^<]+)<\/string>/
-            return $1
-          end
+          return ::Regexp.last_match(1) if content =~ %r{<string\s+name="app_name"[^>]*>([^<]+)</string>}
         end
 
         # Fallback to manifest label
-        if @manifest_content && @manifest_content =~ /android:label="([^"]+)"/
-          return $1
-        end
+        return ::Regexp.last_match(1) if @manifest_content && @manifest_content =~ /android:label="([^"]+)"/
 
         # Fallback to directory name
         File.basename(@project_info[:directory])
@@ -217,7 +212,7 @@ module Mysigner
 
       def read_gradle_file
         gradle_path = @project_info[:app_build_gradle]
-        
+
         unless gradle_path && File.exist?(gradle_path)
           # Try to find it
           android_dir = android_directory
@@ -228,12 +223,14 @@ module Mysigner
         end
 
         return '' unless File.exist?(gradle_path)
+
         File.read(gradle_path)
       end
 
       def read_manifest_file
         manifest_path = File.join(android_directory, 'app/src/main/AndroidManifest.xml')
         return nil unless File.exist?(manifest_path)
+
         File.read(manifest_path)
       end
 
@@ -241,7 +238,7 @@ module Mysigner
         # Handle both Groovy and Kotlin DSL syntax
         # Groovy: applicationId "com.example.app" or applicationId = "com.example.app"
         # Kotlin: applicationId = "com.example.app"
-        
+
         patterns = [
           /#{property}\s*=?\s*["']([^"']+)["']/,
           /#{property}\s+["']([^"']+)["']/,
@@ -250,9 +247,7 @@ module Mysigner
         ]
 
         patterns.each do |pattern|
-          if @gradle_content =~ pattern
-            return $1
-          end
+          return ::Regexp.last_match(1) if @gradle_content =~ pattern
         end
 
         nil
@@ -260,11 +255,9 @@ module Mysigner
 
       def extract_package_from_manifest
         return nil unless @manifest_content
-        
-        if @manifest_content =~ /package="([^"]+)"/
-          return $1
-        end
-        
+
+        return ::Regexp.last_match(1) if @manifest_content =~ /package="([^"]+)"/
+
         nil
       end
 
@@ -272,19 +265,19 @@ module Mysigner
         # Check for app.json in project root
         project_dir = @project_info[:directory]
         app_json_path = File.join(project_dir, 'app.json')
-        
+
         return nil unless File.exist?(app_json_path)
-        
+
         begin
           require 'json'
           config = JSON.parse(File.read(app_json_path))
-          
+
           # Expo config can be nested under 'expo' key or at root
           expo_config = config['expo'] || config
-          
+
           # Get Android package name
           expo_config.dig('android', 'package')
-        rescue
+        rescue StandardError
           nil
         end
       end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Mysigner
   module Build
     class Configurator
@@ -15,7 +17,7 @@ module Mysigner
         target = @parser.find_target(target_name)
         bundle_id = @parser.bundle_id(target_name, configuration)
 
-        raise "Bundle ID not found in project" if bundle_id.to_s.empty?
+        raise 'Bundle ID not found in project' if bundle_id.to_s.empty?
 
         # Map build type to profile type
         profile_type = map_build_type_to_profile_type(build_type)
@@ -30,21 +32,21 @@ module Mysigner
         # Set manual signing
         config.build_settings['CODE_SIGN_STYLE'] = 'Manual'
         config.build_settings['PROVISIONING_PROFILE_SPECIFIER'] = profile['name']
-        
+
         # Set code sign identity based on type
         code_sign_identity = case build_type
-        when :development
-          'iPhone Developer'
-        else
-          'iPhone Distribution'
-        end
+                             when :development
+                               'iPhone Developer'
+                             else
+                               'iPhone Distribution'
+                             end
         config.build_settings['CODE_SIGN_IDENTITY'] = code_sign_identity
 
         # Ensure development team is set
         team_id = @parser.team_id(target_name, configuration)
-        if team_id.to_s.empty?
+        if team_id.to_s.empty? && profile['team_id']
           # Try to get from profile or use organization default
-          config.build_settings['DEVELOPMENT_TEAM'] = profile['team_id'] if profile['team_id']
+          config.build_settings['DEVELOPMENT_TEAM'] = profile['team_id']
         end
 
         # Save project
@@ -93,9 +95,9 @@ module Mysigner
               type: profile_type
             }
           )
-          
+
           return response[:profile] if response[:profile]
-        rescue Mysigner::NotFoundError => e
+        rescue Mysigner::NotFoundError
           # Profile matching returned no match, fall through to manual search
         end
 
@@ -110,11 +112,11 @@ module Mysigner
         )
 
         profiles = response[:profiles] || []
-        
+
         if profiles.empty?
-          raise ProfileNotFoundError, 
-            "No active #{profile_type} profile found for bundle ID '#{bundle_id}'. " \
-            "Create one at the My Signer dashboard or run 'mysigner profiles'"
+          raise ProfileNotFoundError,
+                "No active #{profile_type} profile found for bundle ID '#{bundle_id}'. " \
+                "Create one at the My Signer dashboard or run 'mysigner profiles'"
         end
 
         # Return the profile expiring furthest in the future
@@ -123,4 +125,3 @@ module Mysigner
     end
   end
 end
-

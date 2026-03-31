@@ -1,0 +1,55 @@
+inherit_from: .rubocop_todo.yml
+
+inherit_mode:
+  merge:
+    - Exclude
+
+AllCops:
+  TargetRubyVersion: 3.2
+  NewCops: enable
+  SuggestExtensions: false
+
+Layout/LineLength:
+  Max: 150
+
+# Metrics cops — relaxed for existing code, tighten incrementally
+Metrics/MethodLength:
+  Max: 50
+Metrics/AbcSize:
+  Max: 60
+Metrics/CyclomaticComplexity:
+  Max: 20
+Metrics/PerceivedComplexity:
+  Max: 20
+Metrics/ClassLength:
+  Max: 500
+Metrics/ModuleLength:
+  Max: 500
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+    - "*.gemspec"
+Metrics/BlockNesting:
+  Max: 5
+Metrics/ParameterLists:
+  Max: 6
+
+Style/Documentation:
+  Enabled: false
+Style/MultilineBlockChain:
+  Enabled: false
+Style/SafeNavigationChainLength:
+  Enabled: false
+
+Gemspec/DevelopmentDependencies:
+  Enabled: false
+
+Naming/PredicateMethod:
+  Enabled: false
+Naming/PredicatePrefix:
+  Enabled: false
+Naming/AccessorMethodName:
+  Enabled: false
+
+Lint/DuplicateBranch:
+  Enabled: false

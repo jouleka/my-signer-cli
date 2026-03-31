@@ -106,7 +106,7 @@ RSpec.describe 'mysigner device add', type: :cli do
   end
 
   describe 'successful device registration with default platform' do
-    let(:device_response) {
+    let(:device_response) do
       {
         data: {
           'device' => {
@@ -119,7 +119,7 @@ RSpec.describe 'mysigner device add', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -128,7 +128,7 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:post).and_return(device_response)
-      
+
       cli.options = { platform: 'IOS' }
     end
 
@@ -174,7 +174,7 @@ RSpec.describe 'mysigner device add', type: :cli do
   end
 
   describe 'successful device registration with custom platform' do
-    let(:device_response) {
+    let(:device_response) do
       {
         data: {
           'device' => {
@@ -187,7 +187,7 @@ RSpec.describe 'mysigner device add', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -196,7 +196,7 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:post).and_return(device_response)
-      
+
       cli.options = { platform: 'mac_os' }
     end
 
@@ -219,12 +219,12 @@ RSpec.describe 'mysigner device add', type: :cli do
   end
 
   describe 'when validation fails' do
-    let(:validation_error) {
+    let(:validation_error) do
       Mysigner::ValidationError.new('Validation failed', {
-        'udid' => ['is invalid', 'must be 40 characters'],
-        'name' => ['is too short']
-      })
-    }
+                                      'udid' => ['is invalid', 'must be 40 characters'],
+                                      'name' => ['is too short']
+                                    })
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -233,7 +233,7 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:post).and_raise(validation_error)
-      
+
       cli.options = { platform: 'IOS' }
     end
 
@@ -258,9 +258,9 @@ RSpec.describe 'mysigner device add', type: :cli do
   end
 
   describe 'when validation fails without details' do
-    let(:validation_error) {
+    let(:validation_error) do
       Mysigner::ValidationError.new('Invalid device data')
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -269,7 +269,7 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:post).and_raise(validation_error)
-      
+
       cli.options = { platform: 'IOS' }
     end
 
@@ -286,9 +286,9 @@ RSpec.describe 'mysigner device add', type: :cli do
   end
 
   describe 'when device already exists' do
-    let(:client_error) {
+    let(:client_error) do
       Mysigner::ClientError.new('Device with this UDID already exists')
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -297,7 +297,7 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:post).and_raise(client_error)
-      
+
       cli.options = { platform: 'IOS' }
     end
 
@@ -313,9 +313,9 @@ RSpec.describe 'mysigner device add', type: :cli do
   end
 
   describe 'when API fails' do
-    let(:client_error) {
+    let(:client_error) do
       Mysigner::ClientError.new('Connection timeout')
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -324,7 +324,7 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:post).and_raise(client_error)
-      
+
       cli.options = { platform: 'IOS' }
     end
 
@@ -368,18 +368,18 @@ RSpec.describe 'mysigner device add', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'device']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help device]) }
       expect(help_output).to include('Manage devices')
     end
 
     it 'shows subcommands' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'device']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help device]) }
       expect(help_output).to include('add')
       expect(help_output).to include('update')
     end
 
     it 'shows platform option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'device']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help device]) }
       expect(help_output).to include('--platform')
     end
   end
@@ -389,10 +389,9 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
-      
-      output = capture_stdout { Mysigner::CLI.start(['device', 'add', 'iPhone', '00008110-000123456789ABCD']) }
+
+      output = capture_stdout { Mysigner::CLI.start(%w[device add iPhone 00008110-000123456789ABCD]) }
       expect(output).to include('Not logged in')
     end
   end
 end
-

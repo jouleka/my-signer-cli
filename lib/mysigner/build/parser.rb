@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'xcodeproj'
 
 module Mysigner
@@ -32,8 +34,8 @@ module Mysigner
       def extension_targets
         @project.targets.select do |target|
           target.product_type&.include?('app-extension') ||
-          target.product_type&.include?('widget-extension') ||
-          target.product_type == 'com.apple.product-type.watchkit2-extension'
+            target.product_type&.include?('widget-extension') ||
+            target.product_type == 'com.apple.product-type.watchkit2-extension'
         end
       end
 
@@ -55,7 +57,7 @@ module Mysigner
       # Get detailed info about a target
       def target_info(target_name, configuration = 'Release')
         target = find_target(target_name)
-        
+
         {
           name: target.name,
           type: product_type(target_name),
@@ -78,17 +80,18 @@ module Mysigner
       def target_platform(target_name = nil)
         target = find_target(target_name)
         sdk = target.sdk
-        
+
         return :macos if sdk&.include?('macosx')
         return :tvos if sdk&.include?('appletvos')
         return :watchos if sdk&.include?('watchos')
-        :ios  # default
+
+        :ios # default
       end
 
       # Detect product type (app, framework, library)
       def product_type(target_name = nil)
         target = find_target(target_name)
-        
+
         case target.product_type
         when 'com.apple.product-type.application'
           :app
@@ -114,9 +117,9 @@ module Mysigner
       def build_settings(target_name = nil, configuration = 'Release')
         target = find_target(target_name)
         config = target.build_configurations.find { |c| c.name == configuration }
-        
+
         raise "Configuration '#{configuration}' not found" unless config
-        
+
         config.build_settings
       end
 
@@ -160,7 +163,7 @@ module Mysigner
       def signing_configured?(target_name = nil, configuration = 'Release')
         profile = provisioning_profile(target_name, configuration)
         identity = code_sign_identity(target_name, configuration)
-        
+
         !profile.to_s.empty? && !identity.to_s.empty?
       end
 
@@ -172,13 +175,11 @@ module Mysigner
 
       # Find a target by name (public method for use by other classes)
       def find_target(target_name)
-        if target_name.nil?
-          return main_target
-        end
+        return main_target if target_name.nil?
 
         target = @project.targets.find { |t| t.name == target_name }
         raise "Target '#{target_name}' not found" unless target
-        
+
         target
       end
 
@@ -187,13 +188,13 @@ module Mysigner
           # Workspace contains multiple projects
           # Get the main project (not Pods)
           workspace = Xcodeproj::Workspace.new_from_xcworkspace(@project_info[:path])
-          
+
           project_ref = workspace.file_references.find do |ref|
             !ref.path.include?('Pods') && ref.path.end_with?('.xcodeproj')
           end
-          
-          raise "No main project found in workspace" unless project_ref
-          
+
+          raise 'No main project found in workspace' unless project_ref
+
           project_path = File.join(File.dirname(@project_info[:path]), project_ref.path)
           Xcodeproj::Project.open(project_path)
         else
@@ -203,4 +204,3 @@ module Mysigner
     end
   end
 end
-

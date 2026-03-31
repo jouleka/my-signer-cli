@@ -1,3 +1,7 @@
+# frozen_string_literal: true
+
+require 'English'
+
 require 'yaml'
 require 'fileutils'
 require 'openssl'
@@ -7,33 +11,68 @@ require 'securerandom'
 
 module Mysigner
   class Config
-    CONFIG_DIR = File.expand_path("~/.mysigner").freeze
-    CONFIG_FILE = File.join(CONFIG_DIR, "config.yml").freeze
-    KEYCHAIN_SERVICE = "com.mysigner.cli".freeze
-    KEYCHAIN_ACCOUNT = "config_encryption_key".freeze
+    CONFIG_DIR = File.expand_path('~/.mysigner').freeze
+    CONFIG_FILE = File.join(CONFIG_DIR, 'config.yml').freeze
+    KEYCHAIN_SERVICE = 'com.mysigner.cli'
+    KEYCHAIN_ACCOUNT = 'config_encryption_key'
 
-    attr_accessor :api_url, :user_email, :current_organization_id
+    # Environment variable names for CI/CD support
+    ENV_API_TOKEN = 'MYSIGNER_API_TOKEN'
+    ENV_API_URL = 'MYSIGNER_API_URL'
+    ENV_EMAIL = 'MYSIGNER_EMAIL'
+    ENV_ORG_ID = 'MYSIGNER_ORG_ID'
+
+    attr_accessor :api_url, :user_email, :current_organization_id, :encryption_enabled
     attr_reader :organizations
-    attr_accessor :encryption_enabled
 
     def initialize
       @api_url = nil
       @user_email = nil
       @current_organization_id = nil
       @organizations = {}
-      @encryption_enabled = true  # Enable by default for security
+      @encryption_enabled = true # Enable by default for security
+      @from_env = false
       load if exists?
+    end
+
+    # Check if all required env vars are set for CI/CD mode
+    def self.env_configured?
+      ENV.fetch(ENV_API_TOKEN, nil) && !ENV[ENV_API_TOKEN].empty? &&
+        ENV.fetch(ENV_ORG_ID, nil) && !ENV[ENV_ORG_ID].empty?
+    end
+
+    # Create a Config from environment variables (for CI/CD)
+    def self.from_env
+      config = allocate
+      config.instance_variable_set(:@encryption_enabled, false)
+      config.instance_variable_set(:@from_env, true)
+
+      org_id = ENV.fetch(ENV_ORG_ID, nil)
+      token = ENV.fetch(ENV_API_TOKEN, nil)
+      config.instance_variable_set(:@api_url, ENV[ENV_API_URL] || 'https://mysigner.dev')
+      config.instance_variable_set(:@user_email, ENV.fetch(ENV_EMAIL, nil))
+      config.instance_variable_set(:@current_organization_id, org_id.to_i)
+      config.instance_variable_set(:@organizations, {
+                                     org_id.to_s => { 'name' => 'CI', 'token' => token }
+                                   })
+
+      config
+    end
+
+    # Whether this config was loaded from environment variables
+    def from_env?
+      @from_env
     end
 
     # Get API token for current organization (or specific org)
     def api_token(org_id = nil)
       org_id ||= @current_organization_id
       return nil if org_id.nil?
-      
+
       org_data = @organizations[org_id.to_s]
       token = org_data&.dig('token')
       return nil if token.nil?
-      
+
       # Decrypt if encrypted
       encrypted?(token) ? decrypt_token(token) : token
     end
@@ -57,7 +96,7 @@ module Mysigner
     def org_name(org_id = nil)
       org_id ||= @current_organization_id
       return nil if org_id.nil?
-      
+
       org_data = @organizations[org_id.to_s]
       org_data&.dig('name')
     end
@@ -81,17 +120,17 @@ module Mysigner
       return false unless exists?
 
       data = YAML.load_file(CONFIG_FILE)
-      
+
       @api_url = data['api_url']
       @user_email = data['user_email']
       @current_organization_id = data['current_organization_id']
       @organizations = data['organizations'] || {}
-      
+
       # Auto-detect encryption from config
       @encryption_enabled = encrypted_config?
-      
+
       true
-    rescue => e
+    rescue StandardError => e
       raise ConfigError, "Failed to load config: #{e.message}"
     end
 
@@ -107,9 +146,9 @@ module Mysigner
       }
 
       File.write(CONFIG_FILE, data.to_yaml)
-      File.chmod(0600, CONFIG_FILE) # Make file readable only by owner
+      File.chmod(0o600, CONFIG_FILE) # Make file readable only by owner
       true
-    rescue => e
+    rescue StandardError => e
       raise ConfigError, "Failed to save config: #{e.message}"
     end
 
@@ -119,12 +158,10 @@ module Mysigner
       @user_email = nil
       @current_organization_id = nil
       @organizations = {}
-      
-      if exists?
-        File.delete(CONFIG_FILE)
-      end
+
+      File.delete(CONFIG_FILE) if exists?
       true
-    rescue => e
+    rescue StandardError => e
       raise ConfigError, "Failed to clear config: #{e.message}"
     end
 
@@ -136,8 +173,8 @@ module Mysigner
     # Check if configuration is complete (has required fields)
     def valid?
       !@api_url.nil? && !@api_url.empty? &&
-      !@current_organization_id.nil? &&
-      has_token_for_org?(@current_organization_id)
+        !@current_organization_id.nil? &&
+        has_token_for_org?(@current_organization_id)
     end
 
     # Get config as hash
@@ -153,14 +190,14 @@ module Mysigner
     def display
       current_org_name = org_name(@current_organization_id) || '(not set)'
       current_token = api_token(@current_organization_id)
-      
+
       display_data = {
         api_url: @api_url || '(not set)',
         user_email: @user_email || '(not set)',
         current_organization: "#{current_org_name} (ID: #{@current_organization_id || 'not set'})",
         current_token: current_token ? mask_token(current_token) : '(not set)'
       }
-      
+
       # Show all organizations
       if @organizations.any?
         display_data[:all_organizations] = @organizations.map do |org_id, org_data|
@@ -168,24 +205,24 @@ module Mysigner
           "#{org_data['name']} (ID: #{org_id}) #{token_status}"
         end.join(', ')
       end
-      
+
       display_data
     end
 
     # Enable encryption and re-encrypt all tokens
     def enable_encryption!
       return true if @encryption_enabled
-      
+
       @encryption_enabled = true
-      
+
       # Re-encrypt all existing tokens
-      @organizations.each do |org_id, org_data|
+      @organizations.each_value do |org_data|
         token = org_data['token']
         next if token.nil? || encrypted?(token)
-        
+
         org_data['token'] = encrypt_token(token)
       end
-      
+
       save
       true
     end
@@ -193,15 +230,15 @@ module Mysigner
     # Disable encryption and decrypt all tokens
     def disable_encryption!
       return true unless @encryption_enabled
-      
+
       # Decrypt all tokens first
-      @organizations.each do |org_id, org_data|
+      @organizations.each_value do |org_data|
         token = org_data['token']
         next if token.nil? || !encrypted?(token)
-        
+
         org_data['token'] = decrypt_token(token)
       end
-      
+
       @encryption_enabled = false
       save
       true
@@ -215,12 +252,13 @@ module Mysigner
     private
 
     def ensure_config_dir_exists
-      FileUtils.mkdir_p(CONFIG_DIR) unless Dir.exist?(CONFIG_DIR)
+      FileUtils.mkdir_p(CONFIG_DIR)
     end
 
     def mask_token(token)
       return token if token.length < 8
-      "#{token[0..3]}...#{token[-4..-1]}"
+
+      "#{token[0..3]}...#{token[-4..]}"
     end
 
     # Encryption methods
@@ -230,34 +268,34 @@ module Mysigner
       cipher.encrypt
       cipher.key = key
       iv = cipher.random_iv
-      
+
       encrypted = cipher.update(token) + cipher.final
       auth_tag = cipher.auth_tag
-      
+
       # Format: encrypted:base64(iv):base64(auth_tag):base64(encrypted_data)
       "encrypted:#{Base64.strict_encode64(iv)}:#{Base64.strict_encode64(auth_tag)}:#{Base64.strict_encode64(encrypted)}"
     end
 
     def decrypt_token(encrypted_token)
       return encrypted_token unless encrypted?(encrypted_token)
-      
+
       # Parse format
       parts = encrypted_token.split(':', 4)
       return encrypted_token if parts.length != 4 || parts[0] != 'encrypted'
-      
+
       iv = Base64.strict_decode64(parts[1])
       auth_tag = Base64.strict_decode64(parts[2])
       encrypted_data = Base64.strict_decode64(parts[3])
-      
+
       key = get_or_create_encryption_key
       decipher = OpenSSL::Cipher.new('aes-256-gcm')
       decipher.decrypt
       decipher.key = key
       decipher.iv = iv
       decipher.auth_tag = auth_tag
-      
+
       decipher.update(encrypted_data) + decipher.final
-    rescue => e
+    rescue StandardError => e
       raise ConfigError, "Failed to decrypt token: #{e.message}"
     end
 
@@ -269,7 +307,7 @@ module Mysigner
       # Try to get key from keychain
       key = get_key_from_keychain
       return key if key
-      
+
       # Generate new key and store in keychain
       new_key = SecureRandom.bytes(32) # 256-bit key
       store_key_in_keychain(new_key)
@@ -280,32 +318,31 @@ module Mysigner
       # Use macOS security command to get key from keychain
       cmd = "security find-generic-password -s '#{KEYCHAIN_SERVICE}' -a '#{KEYCHAIN_ACCOUNT}' -w 2>/dev/null"
       result = `#{cmd}`.strip
-      
-      return nil if result.empty? || $?.exitstatus != 0
-      
+
+      return nil if result.empty? || $CHILD_STATUS.exitstatus != 0
+
       # Decode from base64
       Base64.strict_decode64(result)
-    rescue => e
+    rescue StandardError
       nil
     end
 
     def store_key_in_keychain(key)
       # Encode key as base64
       encoded_key = Base64.strict_encode64(key)
-      
+
       # Delete existing key if present
       `security delete-generic-password -s '#{KEYCHAIN_SERVICE}' -a '#{KEYCHAIN_ACCOUNT}' 2>/dev/null`
-      
+
       # Add new key to keychain
       cmd = "security add-generic-password -s '#{KEYCHAIN_SERVICE}' -a '#{KEYCHAIN_ACCOUNT}' -w '#{encoded_key}'"
       system(cmd)
-      
-      $?.exitstatus == 0
-    rescue => e
+
+      $CHILD_STATUS.exitstatus.zero?
+    rescue StandardError => e
       raise ConfigError, "Failed to store encryption key in keychain: #{e.message}"
     end
   end
 
   class ConfigError < StandardError; end
 end
-

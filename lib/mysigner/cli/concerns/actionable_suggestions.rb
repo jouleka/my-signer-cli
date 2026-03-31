@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Mysigner
   class CLI < Thor
     module Concerns
@@ -14,12 +16,12 @@ module Mysigner
               /no.*processed.*build/i,
               /waiting.*for.*build/i
             ],
-            title: "Build Not Found",
+            title: 'Build Not Found',
             suggestions: [
-              "Upload a build first: mysigner ship testflight",
-              "If already uploaded, wait 5-15 minutes for Apple to process it",
-              "Use --wait flag to poll for processing: mysigner ship appstore --wait",
-              "Sync your builds: mysigner sync ios"
+              'Upload a build first: mysigner ship testflight',
+              'If already uploaded, wait 5-15 minutes for Apple to process it',
+              'Use --wait flag to poll for processing: mysigner ship appstore --wait',
+              'Sync your builds: mysigner sync ios'
             ]
           },
 
@@ -30,12 +32,12 @@ module Mysigner
               /processing.*complete/i,
               /not.*ready/i
             ],
-            title: "Build Still Processing",
+            title: 'Build Still Processing',
             suggestions: [
-              "Apple typically takes 5-15 minutes to process builds",
-              "Use --wait flag to automatically wait: mysigner ship appstore --wait",
-              "Check App Store Connect for processing status",
-              "Increase timeout: mysigner ship appstore --wait --asc-timeout-seconds 1800"
+              'Apple typically takes 5-15 minutes to process builds',
+              'Use --wait flag to automatically wait: mysigner ship appstore --wait',
+              'Check App Store Connect for processing status',
+              'Increase timeout: mysigner ship appstore --wait --asc-timeout-seconds 1800'
             ]
           },
 
@@ -46,12 +48,12 @@ module Mysigner
               /provisioning.*expired/i,
               /certificate.*expired/i
             ],
-            title: "Expired Profile or Certificate",
+            title: 'Expired Profile or Certificate',
             suggestions: [
-              "List your profiles: mysigner profiles",
-              "Check expiration dates in My Signer dashboard",
-              "Regenerate expired profiles in Apple Developer Portal",
-              "Download fresh profile: mysigner profile download <ID>"
+              'List your profiles: mysigner profiles',
+              'Check expiration dates in My Signer dashboard',
+              'Regenerate expired profiles in Apple Developer Portal',
+              'Download fresh profile: mysigner profile download <ID>'
             ]
           },
 
@@ -62,12 +64,12 @@ module Mysigner
               /missing.*profile/i,
               /unable.*find.*profile/i
             ],
-            title: "Provisioning Profile Not Found",
+            title: 'Provisioning Profile Not Found',
             suggestions: [
-              "List available profiles: mysigner profiles",
-              "Sync profiles from Apple: mysigner sync ios",
-              "Create profile in Apple Developer Portal",
-              "Check if profile is for correct Bundle ID"
+              'List available profiles: mysigner profiles',
+              'Sync profiles from Apple: mysigner sync ios',
+              'Create profile in Apple Developer Portal',
+              'Check if profile is for correct Bundle ID'
             ]
           },
 
@@ -78,11 +80,11 @@ module Mysigner
               /no.*signing.*certificate/i,
               /missing.*certificate/i
             ],
-            title: "Signing Certificate Not Found",
+            title: 'Signing Certificate Not Found',
             suggestions: [
-              "List certificates: mysigner certificates",
-              "Download and install: mysigner certificate download <ID>",
-              "Check Keychain Access for installed certificates",
+              'List certificates: mysigner certificates',
+              'Download and install: mysigner certificate download <ID>',
+              'Check Keychain Access for installed certificates',
               "Run 'mysigner doctor' to diagnose signing issues"
             ]
           },
@@ -94,12 +96,12 @@ module Mysigner
               /bundle.*identifier.*not.*match/i,
               /app.*id.*not.*found/i
             ],
-            title: "Bundle ID Issue",
+            title: 'Bundle ID Issue',
             suggestions: [
-              "Verify Bundle ID in Xcode matches Apple Developer Portal",
-              "List Bundle IDs: mysigner bundleid list",
-              "Register new Bundle ID: mysigner bundleid register <ID>",
-              "Check My Signer dashboard for registered apps"
+              'Verify Bundle ID in Xcode matches Apple Developer Portal',
+              'List Bundle IDs: mysigner bundleid list',
+              'Register new Bundle ID: mysigner bundleid register <ID>',
+              'Check My Signer dashboard for registered apps'
             ]
           },
 
@@ -110,12 +112,12 @@ module Mysigner
               /app.*not.*found/i,
               /unable.*find.*app/i
             ],
-            title: "App Not Found",
+            title: 'App Not Found',
             suggestions: [
-              "Ensure app exists in App Store Connect",
-              "Create app in App Store Connect first",
-              "Verify Bundle ID matches: check your Xcode project",
-              "Sync from App Store Connect: mysigner sync ios"
+              'Ensure app exists in App Store Connect',
+              'Create app in App Store Connect first',
+              'Verify Bundle ID matches: check your Xcode project',
+              'Sync from App Store Connect: mysigner sync ios'
             ]
           },
 
@@ -125,11 +127,11 @@ module Mysigner
               /version.*already.*exists/i,
               /duplicate.*version/i
             ],
-            title: "Version Already Exists",
+            title: 'Version Already Exists',
             suggestions: [
-              "Increment version in Xcode (CFBundleShortVersionString)",
-              "Or increment build number (CFBundleVersion)",
-              "Check existing versions in App Store Connect"
+              'Increment version in Xcode (CFBundleShortVersionString)',
+              'Or increment build number (CFBundleVersion)',
+              'Check existing versions in App Store Connect'
             ]
           },
 
@@ -141,12 +143,12 @@ module Mysigner
               /support.*url.*required/i,
               /cannot.*submit.*missing/i
             ],
-            title: "Missing App Store Metadata",
+            title: 'Missing App Store Metadata',
             suggestions: [
-              "Configure release in My Signer dashboard",
+              'Configure release in My Signer dashboard',
               "Provide What's New via CLI: --whats-new \"Your text\"",
-              "Ensure support URL is set in App Store Connect",
-              "Complete app information in App Store Connect"
+              'Ensure support URL is set in App Store Connect',
+              'Complete app information in App Store Connect'
             ]
           },
 
@@ -157,12 +159,12 @@ module Mysigner
               /no.*xcarchive/i,
               /.xcarchive.*not.*found/i
             ],
-            title: "Archive Not Found",
+            title: 'Archive Not Found',
             suggestions: [
-              "Build your app first: mysigner build",
-              "Or use: mysigner ship testflight (handles build automatically)",
-              "Check if archive path is correct",
-              "Verify Xcode build succeeded"
+              'Build your app first: mysigner build',
+              'Or use: mysigner ship testflight (handles build automatically)',
+              'Check if archive path is correct',
+              'Verify Xcode build succeeded'
             ]
           },
 
@@ -171,12 +173,12 @@ module Mysigner
               /ipa.*not.*found/i,
               /no.*ipa.*file/i
             ],
-            title: "IPA File Not Found",
+            title: 'IPA File Not Found',
             suggestions: [
-              "Export IPA from archive: mysigner export <archive_path>",
-              "Or use: mysigner ship testflight (handles export automatically)",
-              "Check if export succeeded",
-              "Verify export method matches profile type"
+              'Export IPA from archive: mysigner export <archive_path>',
+              'Or use: mysigner ship testflight (handles export automatically)',
+              'Check if export succeeded',
+              'Verify export method matches profile type'
             ]
           }
         }.freeze
@@ -190,12 +192,12 @@ module Mysigner
               /no.*keystore/i,
               /missing.*keystore/i
             ],
-            title: "Keystore Not Found",
+            title: 'Keystore Not Found',
             suggestions: [
-              "Upload keystore: mysigner keystore upload <path>",
-              "List keystores: mysigner keystore list",
-              "Download keystore: mysigner keystore download <ID>",
-              "Check keystore path in build.gradle"
+              'Upload keystore: mysigner keystore upload <path>',
+              'List keystores: mysigner keystore list',
+              'Download keystore: mysigner keystore download <ID>',
+              'Check keystore path in build.gradle'
             ]
           },
 
@@ -205,11 +207,11 @@ module Mysigner
               /wrong.*password/i,
               /incorrect.*password/i
             ],
-            title: "Keystore Password Issue",
+            title: 'Keystore Password Issue',
             suggestions: [
-              "Verify keystore password is correct",
-              "Check password in My Signer dashboard",
-              "Update keystore password: mysigner keystore update <ID>"
+              'Verify keystore password is correct',
+              'Check password in My Signer dashboard',
+              'Update keystore password: mysigner keystore update <ID>'
             ]
           },
 
@@ -219,14 +221,14 @@ module Mysigner
               /package.*not.*found/i,
               /first.*build.*uploaded.*manually/i
             ],
-            title: "First Upload Required",
+            title: 'First Upload Required',
             suggestions: [
-              "Google Play requires the FIRST build to be uploaded manually:",
-              "  1. Build AAB: mysigner android build",
-              "  2. Go to Play Console → Your App → Internal testing",
+              'Google Play requires the FIRST build to be uploaded manually:',
+              '  1. Build AAB: mysigner android build',
+              '  2. Go to Play Console → Your App → Internal testing',
               "  3. Click 'Create release' and upload the AAB",
-              "  4. Save the release (no need to roll out)",
-              "After that, mysigner ship will work for future uploads"
+              '  4. Save the release (no need to roll out)',
+              'After that, mysigner ship will work for future uploads'
             ]
           },
 
@@ -237,11 +239,11 @@ module Mysigner
               /already.*used/i,
               /duplicate.*version.*code/i
             ],
-            title: "Version Code Conflict",
+            title: 'Version Code Conflict',
             suggestions: [
-              "Version code already exists on Google Play",
-              "Run the command again - mysigner auto-increments the version",
-              "Or manually increment versionCode in build.gradle"
+              'Version code already exists on Google Play',
+              'Run the command again - mysigner auto-increments the version',
+              'Or manually increment versionCode in build.gradle'
             ]
           },
 
@@ -252,13 +254,13 @@ module Mysigner
               /service.*account.*json.*not.*found/i,
               /no.*credentials/i
             ],
-            title: "Service Account Not Found",
+            title: 'Service Account Not Found',
             suggestions: [
-              "Set up Google Play credentials in My Signer dashboard:",
-              "  1. Go to Play Console → API access → Service accounts",
-              "  2. Create a service account with Editor access",
-              "  3. Download the JSON key",
-              "  4. Upload to My Signer dashboard → Google Play Settings"
+              'Set up Google Play credentials in My Signer dashboard:',
+              '  1. Go to Play Console → API access → Service accounts',
+              '  2. Create a service account with Editor access',
+              '  3. Download the JSON key',
+              '  4. Upload to My Signer dashboard → Google Play Settings'
             ]
           },
 
@@ -269,14 +271,14 @@ module Mysigner
               /forbidden/i,
               /access.*denied/i
             ],
-            title: "Service Account Permission Denied",
+            title: 'Service Account Permission Denied',
             suggestions: [
-              "Service account lacks required permissions",
-              "In Play Console → API access:",
-              "  1. Find your service account",
+              'Service account lacks required permissions',
+              'In Play Console → API access:',
+              '  1. Find your service account',
               "  2. Click 'Manage Play Console permissions'",
               "  3. Grant 'Admin' or 'Release manager' access to the app",
-              "Note: Permission changes take ~15 minutes to propagate"
+              'Note: Permission changes take ~15 minutes to propagate'
             ]
           },
 
@@ -287,13 +289,13 @@ module Mysigner
               /precondition.*check.*failed/i,
               /track.*not.*ready/i
             ],
-            title: "Track Not Set Up in Play Console",
+            title: 'Track Not Set Up in Play Console',
             suggestions: [
-              "Complete track setup in Google Play Console:",
-              "  For PRODUCTION: Complete store listing, content rating, pricing",
-              "  For BETA/ALPHA: Create testing track and add testers",
-              "  For INTERNAL: Add internal testers",
-              "Your AAB was uploaded - go to Play Console to finish setup"
+              'Complete track setup in Google Play Console:',
+              '  For PRODUCTION: Complete store listing, content rating, pricing',
+              '  For BETA/ALPHA: Create testing track and add testers',
+              '  For INTERNAL: Add internal testers',
+              'Your AAB was uploaded - go to Play Console to finish setup'
             ]
           },
 
@@ -304,12 +306,12 @@ module Mysigner
               /no.*aab.*file/i,
               /app.*bundle.*not.*found/i
             ],
-            title: "AAB File Not Found",
+            title: 'AAB File Not Found',
             suggestions: [
-              "Build your Android app first: mysigner android build",
-              "Or use: mysigner ship internal (handles build automatically)",
-              "Check if Gradle build succeeded",
-              "Verify AAB path in build output"
+              'Build your Android app first: mysigner android build',
+              'Or use: mysigner ship internal (handles build automatically)',
+              'Check if Gradle build succeeded',
+              'Verify AAB path in build output'
             ]
           },
 
@@ -320,28 +322,72 @@ module Mysigner
               /wrong.*key/i,
               /incorrect.*signature/i
             ],
-            title: "Signing Key Mismatch",
+            title: 'Signing Key Mismatch',
             suggestions: [
-              "AAB is signed with a different key than expected",
+              'AAB is signed with a different key than expected',
               "Verify keystore matches what's registered in Play Console",
-              "Check active keystore: mysigner keystore list --active",
-              "If using Google Play App Signing, upload the correct upload key"
+              'Check active keystore: mysigner keystore list --active',
+              'If using Google Play App Signing, upload the correct upload key'
             ]
           }
         }.freeze
 
         # API/Connection error patterns
         API_ERROR_PATTERNS = {
+          plan_upgrade_required: {
+            patterns: [
+              /plan_upgrade_required/i,
+              /upgrade.*required/i,
+              /requires?.*(free|pro|team|paid)/i
+            ],
+            title: 'Plan Upgrade Required',
+            suggestions: [
+              'This feature is blocked by your current plan',
+              'Upgrade from the My Signer pricing page or dashboard to continue',
+              "Use 'mysigner switch' if you need to change to a different organization first"
+            ]
+          },
+
+          quota_exhausted: {
+            patterns: [
+              /quota_exhausted/i,
+              /quota.*exceeded/i,
+              /limit.*reached/i,
+              /storage.*limit/i,
+              /upload.*limit/i
+            ],
+            title: 'Plan Limit Reached',
+            suggestions: [
+              'Your organization has reached a plan limit for this feature',
+              'Free up capacity or upgrade your plan in the My Signer dashboard',
+              'Check the pricing page for the next plan tier and included limits'
+            ]
+          },
+
+          seat_limit_reached: {
+            patterns: [
+              /seat.*limit/i,
+              /invite.*limit/i,
+              /member.*limit/i
+            ],
+            title: 'Seat Limit Reached',
+            suggestions: [
+              'Your organization has reached its member or invite limit',
+              'Remove unused members or invitations, or upgrade to a plan with more seats',
+              "Use 'mysigner orgs' or the dashboard to confirm you are in the correct organization"
+            ]
+          },
+
           rate_limited: {
             patterns: [
               /rate.*limit/i,
               /too.*many.*requests/i,
               /429/
             ],
-            title: "Rate Limited",
+            title: 'Rate Limited',
             suggestions: [
-              "Too many API requests - wait a moment and try again",
-              "If problem persists, check API status"
+              'Too many API requests - wait a moment and try again',
+              'If problem persists, check API status'
             ]
           },
 
@@ -351,11 +397,11 @@ module Mysigner
               /internal.*error/i,
               /500|502|503|504/
             ],
-            title: "Server Error",
+            title: 'Server Error',
             suggestions: [
-              "My Signer server encountered an error",
-              "Try again in a few moments",
-              "If problem persists, check service status or contact support"
+              'My Signer server encountered an error',
+              'Try again in a few moments',
+              'If problem persists, check service status or contact support'
             ]
           },
 
@@ -364,11 +410,11 @@ module Mysigner
               /timeout/i,
               /timed.*out/i
             ],
-            title: "Request Timeout",
+            title: 'Request Timeout',
             suggestions: [
-              "Request took too long to complete",
-              "Check your network connection",
-              "Try again - this may be temporary"
+              'Request took too long to complete',
+              'Check your network connection',
+              'Try again - this may be temporary'
             ]
           }
         }.freeze
@@ -384,10 +430,8 @@ module Mysigner
                        IOS_ERROR_PATTERNS.merge(ANDROID_ERROR_PATTERNS).merge(API_ERROR_PATTERNS)
                      end
 
-          patterns.each do |_key, error_info|
-            if error_info[:patterns].any? { |pattern| error_message =~ pattern }
-              return error_info
-            end
+          patterns.each_value do |error_info|
+            return error_info if error_info[:patterns].any? { |pattern| error_message =~ pattern }
           end
 
           nil
@@ -398,33 +442,33 @@ module Mysigner
           return nil unless error_info
 
           lines = []
-          lines << ""
-          lines << "=" * 70
+          lines << ''
+          lines << ('=' * 70)
           lines << "  💡 #{error_info[:title]}: How to fix"
-          lines << "=" * 70
-          lines << ""
+          lines << ('=' * 70)
+          lines << ''
 
           error_info[:suggestions].each do |suggestion|
             # Preserve indentation for multi-line suggestions
-            if suggestion.start_with?("  ")
-              lines << "  #{suggestion}"
-            else
-              lines << "    → #{suggestion}"
-            end
+            lines << if suggestion.start_with?('  ')
+                       "  #{suggestion}"
+                     else
+                       "    → #{suggestion}"
+                     end
           end
 
-          lines << ""
-          lines << "  📚 More help:"
+          lines << ''
+          lines << '  📚 More help:'
           lines << "    • Run 'mysigner doctor' to check your setup"
           lines << "    • Run 'mysigner help <command>' for command options"
-          lines << ""
+          lines << ''
 
           lines.join("\n")
         end
 
         # Display actionable suggestions for an error (helper for CLI commands)
-        def show_actionable_suggestions(error_message, platform: nil)
-          error_info = find_suggestions_for_error(error_message.to_s, platform: platform)
+        def show_actionable_suggestions(error_or_message, platform: nil)
+          error_info = find_suggestions_for_error(actionable_error_lookup_text(error_or_message), platform: platform)
           return false unless error_info
 
           output = format_actionable_suggestions(error_info)
@@ -434,64 +478,74 @@ module Mysigner
 
         # Enhanced error display that includes suggestions
         def display_error_with_suggestions(error, platform: nil, context: {})
-          say ""
-          say "=" * 80, :red
+          say ''
+          say '=' * 80, :red
           say "✗ #{context[:title] || 'Error'}", :red
-          say "=" * 80, :red
-          say ""
+          say '=' * 80, :red
+          say ''
           say "Error: #{error.message}", :red
-          say ""
+          say ''
+
+          if error.respond_to?(:suggestion) && error.suggestion
+            say "Suggestion: #{error.suggestion}", :yellow
+            say ''
+          end
 
           # Show actionable suggestions if available
-          show_actionable_suggestions(error.message, platform: platform)
+          show_actionable_suggestions(error, platform: platform)
 
           # Show additional context
-          if context[:archive_path] && File.exist?(context[:archive_path])
-            say "Archive saved at: #{context[:archive_path]}", :yellow
-          end
+          say "Archive saved at: #{context[:archive_path]}", :yellow if context[:archive_path] && File.exist?(context[:archive_path])
 
-          if context[:ipa_path] && File.exist?(context[:ipa_path])
-            say "IPA saved at: #{context[:ipa_path]}", :yellow
-          end
+          say "IPA saved at: #{context[:ipa_path]}", :yellow if context[:ipa_path] && File.exist?(context[:ipa_path])
 
-          if context[:aab_path] && File.exist?(context[:aab_path])
-            say "AAB saved at: #{context[:aab_path]}", :yellow
-          end
+          say "AAB saved at: #{context[:aab_path]}", :yellow if context[:aab_path] && File.exist?(context[:aab_path])
 
           # Debug info
           if ENV['DEBUG']
-            say ""
-            say "Debug info:", :yellow
+            say ''
+            say 'Debug info:', :yellow
             say "  Error class: #{error.class}", :yellow
-            say "  Backtrace:", :yellow
+            say '  Backtrace:', :yellow
             error.backtrace&.first(5)&.each do |line|
               say "    #{line}", :yellow
             end
           else
-            say "💡 For more details, run with DEBUG=1", :yellow
+            say '💡 For more details, run with DEBUG=1', :yellow
           end
 
-          say ""
+          say ''
+        end
+
+        def actionable_error_lookup_text(error_or_message)
+          return error_or_message.to_s unless error_or_message.respond_to?(:message)
+
+          [
+            (error_or_message.error_code if error_or_message.respond_to?(:error_code)),
+            error_or_message.message,
+            (error_or_message.suggestion if error_or_message.respond_to?(:suggestion))
+          ].compact.join(' ')
         end
 
         # Quick reference suggestions for common operations
         QUICK_REFERENCE = {
           sync: {
-            ios: "mysigner sync ios",
-            android: "mysigner sync android"
+            ios: 'mysigner sync ios',
+            android: 'mysigner sync android'
           },
-          profiles: "mysigner profiles",
-          certificates: "mysigner certificates",
-          keystores: "mysigner keystore list",
-          doctor: "mysigner doctor",
-          onboard: "mysigner onboard",
-          login: "mysigner login"
+          profiles: 'mysigner profiles',
+          certificates: 'mysigner certificates',
+          keystores: 'mysigner keystore list',
+          doctor: 'mysigner doctor',
+          onboard: 'mysigner onboard',
+          login: 'mysigner login'
         }.freeze
 
         # Get quick reference command
         def quick_ref(operation, platform: nil)
           ref = QUICK_REFERENCE[operation]
           return ref unless ref.is_a?(Hash)
+
           platform ? ref[platform] : ref[:ios]
         end
       end

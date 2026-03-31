@@ -91,14 +91,14 @@ RSpec.describe 'mysigner tracks', type: :cli do
       end
 
       describe 'when no tracks found' do
-        let(:empty_response) {
+        let(:empty_response) do
           {
             data: {
               'package_name' => package_name,
               'tracks' => []
             }
           }
-        }
+        end
 
         before do
           allow(client).to receive(:get).and_return(empty_response)
@@ -127,7 +127,7 @@ RSpec.describe 'mysigner tracks', type: :cli do
       end
 
       describe 'list tracks with data' do
-        let(:tracks_response) {
+        let(:tracks_response) do
           {
             data: {
               'package_name' => package_name,
@@ -139,7 +139,7 @@ RSpec.describe 'mysigner tracks', type: :cli do
                   'releases' => [
                     {
                       'status' => 'completed',
-                      'versionCodes' => ['100', '101']
+                      'versionCodes' => %w[100 101]
                     }
                   ],
                   'updated_at' => '2024-01-15T10:30:00Z'
@@ -159,7 +159,7 @@ RSpec.describe 'mysigner tracks', type: :cli do
               ]
             }
           }
-        }
+        end
 
         before do
           allow(client).to receive(:get).and_return(tracks_response)
@@ -214,7 +214,7 @@ RSpec.describe 'mysigner tracks', type: :cli do
       end
 
       describe 'with sort option' do
-        let(:tracks_response) {
+        let(:tracks_response) do
           {
             data: {
               'package_name' => package_name,
@@ -225,7 +225,7 @@ RSpec.describe 'mysigner tracks', type: :cli do
               ]
             }
           }
-        }
+        end
 
         before do
           allow(client).to receive(:get).and_return(tracks_response)
@@ -318,7 +318,7 @@ RSpec.describe 'mysigner tracks', type: :cli do
       end
 
       describe 'show track details' do
-        let(:track_response) {
+        let(:track_response) do
           {
             data: {
               'id' => 1,
@@ -327,7 +327,7 @@ RSpec.describe 'mysigner tracks', type: :cli do
               'releases' => [
                 {
                   'status' => 'completed',
-                  'versionCodes' => ['100', '101'],
+                  'versionCodes' => %w[100 101],
                   'name' => '1.0.0',
                   'releaseNotes' => [
                     { 'language' => 'en-US', 'text' => 'Bug fixes and improvements' }
@@ -338,7 +338,7 @@ RSpec.describe 'mysigner tracks', type: :cli do
               'updated_at' => '2024-01-15T10:30:00Z'
             }
           }
-        }
+        end
 
         before do
           allow(client).to receive(:get).and_return(track_response)
@@ -407,7 +407,7 @@ RSpec.describe 'mysigner tracks', type: :cli do
       end
 
       describe 'track with no releases' do
-        let(:track_response) {
+        let(:track_response) do
           {
             data: {
               'id' => 1,
@@ -417,7 +417,7 @@ RSpec.describe 'mysigner tracks', type: :cli do
               'updated_at' => '2024-01-15T10:30:00Z'
             }
           }
-        }
+        end
 
         before do
           allow(client).to receive(:get).and_return(track_response)
@@ -499,17 +499,17 @@ RSpec.describe 'mysigner tracks', type: :cli do
 
   describe 'help text' do
     it 'tracks command has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'tracks']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help tracks]) }
       expect(help_output).to include('List Google Play tracks')
     end
 
     it 'track command has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'track']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help track]) }
       expect(help_output).to include('Show details for a specific Google Play track')
     end
 
     it 'tracks shows sort option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'tracks']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help tracks]) }
       expect(help_output).to include('--sort')
     end
   end

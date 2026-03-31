@@ -105,7 +105,7 @@ RSpec.describe 'mysigner device update', type: :cli do
   end
 
   describe 'successful device update' do
-    let(:get_response) {
+    let(:get_response) do
       {
         data: {
           'id' => device_id,
@@ -116,9 +116,9 @@ RSpec.describe 'mysigner device update', type: :cli do
           'status' => 'ENABLED'
         }
       }
-    }
+    end
 
-    let(:patch_response) {
+    let(:patch_response) do
       {
         data: {
           'device' => {
@@ -131,7 +131,7 @@ RSpec.describe 'mysigner device update', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -141,7 +141,7 @@ RSpec.describe 'mysigner device update', type: :cli do
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}/devices/#{device_id}").and_return(get_response)
       allow(client).to receive(:patch).and_return(patch_response)
-      
+
       cli.options = { platform: 'IOS' }
     end
 
@@ -205,7 +205,7 @@ RSpec.describe 'mysigner device update', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_raise(Mysigner::NotFoundError)
-      
+
       cli.options = { platform: 'IOS' }
     end
 
@@ -222,7 +222,7 @@ RSpec.describe 'mysigner device update', type: :cli do
   end
 
   describe 'when API fails' do
-    let(:get_response) {
+    let(:get_response) do
       {
         data: {
           'id' => device_id,
@@ -233,7 +233,7 @@ RSpec.describe 'mysigner device update', type: :cli do
           'status' => 'ENABLED'
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -243,7 +243,7 @@ RSpec.describe 'mysigner device update', type: :cli do
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_return(get_response)
       allow(client).to receive(:patch).and_raise(Mysigner::ClientError.new('Connection timeout'))
-      
+
       cli.options = { platform: 'IOS' }
     end
 
@@ -261,12 +261,12 @@ RSpec.describe 'mysigner device update', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'device']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help device]) }
       expect(help_output).to include('Manage devices')
     end
 
     it 'shows subcommands' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'device']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help device]) }
       expect(help_output).to include('add')
       expect(help_output).to include('update')
     end
@@ -277,10 +277,9 @@ RSpec.describe 'mysigner device update', type: :cli do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
-      
+
       output = capture_stdout { Mysigner::CLI.start(['device', 'update', device_id, 'New Name']) }
       expect(output).to include('Not logged in')
     end
   end
 end
-

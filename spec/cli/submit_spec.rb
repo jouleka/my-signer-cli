@@ -86,8 +86,8 @@ RSpec.describe 'mysigner submit', type: :cli do
         allow(Mysigner::Upload::AppStoreAutomation).to receive(:new).and_return(automation)
         allow(Mysigner::Upload::AppStoreSubmission).to receive(:new).and_return(submission)
         allow(submission).to receive(:submit_for_review!).and_return({
-          automation: { submitted: true }
-        })
+                                                                       automation: { submitted: true }
+                                                                     })
       end
 
       context 'with bundle ID auto-detect' do
@@ -120,7 +120,7 @@ RSpec.describe 'mysigner submit', type: :cli do
         end
 
         it 'uses the provided bundle ID' do
-          expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |client, org, build_info, **opts|
+          expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |_client, _org, build_info, **_opts|
             expect(build_info[:bundle_id]).to eq('com.explicit.app')
             submission
           end
@@ -134,7 +134,7 @@ RSpec.describe 'mysigner submit', type: :cli do
         end
 
         it 'uses the provided version' do
-          expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |client, org, build_info, **opts|
+          expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |_client, _org, build_info, **_opts|
             expect(build_info[:version]).to eq('2.0.0')
             expect(build_info[:build_number]).to eq('42')
             submission
@@ -149,7 +149,7 @@ RSpec.describe 'mysigner submit', type: :cli do
         end
 
         it 'sets release type in metadata' do
-          expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |client, org, build_info, **opts|
+          expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |_client, _org, _build_info, **opts|
             expect(opts[:metadata_overrides]['release_type']).to eq('AFTER_APPROVAL')
             submission
           end
@@ -163,7 +163,7 @@ RSpec.describe 'mysigner submit', type: :cli do
         end
 
         it 'sets release type to MANUAL' do
-          expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |client, org, build_info, **opts|
+          expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |_client, _org, _build_info, **opts|
             expect(opts[:metadata_overrides]['release_type']).to eq('MANUAL')
             submission
           end
@@ -191,12 +191,12 @@ RSpec.describe 'mysigner submit', type: :cli do
 
         context 'with valid --scheduled-date' do
           before do
-            future_date = (Time.now + 86400 * 7).utc.iso8601  # 7 days from now
+            future_date = (Time.now + (86_400 * 7)).utc.iso8601 # 7 days from now
             cli.options = { release_type: 'SCHEDULED', scheduled_date: future_date }
           end
 
           it 'sets scheduled release date' do
-            expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |client, org, build_info, **opts|
+            expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |_client, _org, _build_info, **opts|
               expect(opts[:metadata_overrides]['release_type']).to eq('SCHEDULED')
               expect(opts[:metadata_overrides]['earliest_release_date']).not_to be_nil
               submission
@@ -208,7 +208,7 @@ RSpec.describe 'mysigner submit', type: :cli do
 
       context 'with --scheduled-date in the past' do
         before do
-          past_date = (Time.now - 86400).utc.iso8601  # 1 day ago
+          past_date = (Time.now - 86_400).utc.iso8601 # 1 day ago
           cli.options = { scheduled_date: past_date }
         end
 
@@ -225,7 +225,7 @@ RSpec.describe 'mysigner submit', type: :cli do
 
       context 'with --scheduled-date less than 1 hour in future' do
         before do
-          near_future = (Time.now + 1800).utc.iso8601  # 30 minutes from now
+          near_future = (Time.now + 1800).utc.iso8601 # 30 minutes from now
           cli.options = { scheduled_date: near_future }
         end
 
@@ -308,7 +308,7 @@ RSpec.describe 'mysigner submit', type: :cli do
         end
 
         it 'includes whats_new in metadata' do
-          expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |client, org, build_info, **opts|
+          expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |_client, _org, _build_info, **opts|
             expect(opts[:metadata_overrides]['whats_new']).to eq('New features and bug fixes')
             submission
           end
@@ -322,7 +322,7 @@ RSpec.describe 'mysigner submit', type: :cli do
         end
 
         it 'includes support_url in metadata' do
-          expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |client, org, build_info, **opts|
+          expect(Mysigner::Upload::AppStoreSubmission).to receive(:new) do |_client, _org, _build_info, **opts|
             expect(opts[:metadata_overrides]['support_url']).to eq('https://support.example.com')
             submission
           end
@@ -333,8 +333,9 @@ RSpec.describe 'mysigner submit', type: :cli do
       context 'when submission is skipped' do
         before do
           allow(submission).to receive(:submit_for_review!).and_return({
-            automation: { submitted: false, skip_reason: 'No eligible build found' }
-          })
+                                                                         automation: { submitted: false,
+                                                                                       skip_reason: 'No eligible build found' }
+                                                                       })
         end
 
         it 'shows skip message' do
@@ -410,7 +411,7 @@ RSpec.describe 'mysigner submit', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'submit']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help submit]) }
       expect(help_output).to include('Submit')
     end
   end

@@ -4,6 +4,7 @@ require 'spec_helper'
 require 'stringio'
 require 'mysigner/build/detector'
 require 'mysigner/build/android_executor'
+require 'mysigner/build/android_parser'
 require 'mysigner/signing/keystore_manager'
 
 RSpec.describe 'mysigner android', type: :cli do
@@ -79,9 +80,9 @@ RSpec.describe 'mysigner android', type: :cli do
 
     describe 'android init' do
       context 'native Android project' do
-        let(:project_info) {
+        let(:project_info) do
           { path: '/project/android', type: :gradle, framework: :native }
-        }
+        end
 
         before do
           allow(Mysigner::Build::Detector).to receive(:detect_android).and_return(project_info)
@@ -90,8 +91,9 @@ RSpec.describe 'mysigner android', type: :cli do
           allow(parser).to receive(:app_name).and_return('My App')
           allow(client).to receive(:get).and_return({ data: { 'android_apps' => [] } })
           allow(client).to receive(:post).and_return({
-            data: { 'android_app' => { 'id' => 1, 'package_name' => 'com.example.myapp', 'name' => 'My App' } }
-          })
+                                                       data: { 'android_app' => { 'id' => 1,
+                                                                                  'package_name' => 'com.example.myapp', 'name' => 'My App' } }
+                                                     })
         end
 
         it 'shows detecting message' do
@@ -117,7 +119,7 @@ RSpec.describe 'mysigner android', type: :cli do
         it 'registers the app with API' do
           expect(client).to receive(:post).with(
             "/api/v1/organizations/#{org_id}/android_apps",
-            body: { package_name: 'com.example.myapp', name: 'My App' }
+            body: { android_app: { package_name: 'com.example.myapp', name: 'My App' } }
           )
           cli.android('init')
         end
@@ -135,9 +137,9 @@ RSpec.describe 'mysigner android', type: :cli do
       end
 
       context 'React Native project' do
-        let(:project_info) {
+        let(:project_info) do
           { path: '/project/android', type: :gradle, framework: :react_native }
-        }
+        end
 
         before do
           allow(Mysigner::Build::Detector).to receive(:detect_android).and_return(project_info)
@@ -146,8 +148,9 @@ RSpec.describe 'mysigner android', type: :cli do
           allow(parser).to receive(:app_name).and_return('RN App')
           allow(client).to receive(:get).and_return({ data: { 'android_apps' => [] } })
           allow(client).to receive(:post).and_return({
-            data: { 'android_app' => { 'id' => 1, 'package_name' => 'com.example.rnapp' } }
-          })
+                                                       data: { 'android_app' => { 'id' => 1,
+                                                                                  'package_name' => 'com.example.rnapp' } }
+                                                     })
         end
 
         it 'shows React Native project type' do
@@ -162,15 +165,16 @@ RSpec.describe 'mysigner android', type: :cli do
             Mysigner::Build::Detector::NoProjectError.new('No project')
           )
           allow(cli).to receive(:parse_expo_config).and_return({
-            package_name: 'com.example.expoapp',
-            name: 'Expo App',
-            version_code: 1,
-            version: '1.0.0'
-          })
+                                                                 package_name: 'com.example.expoapp',
+                                                                 name: 'Expo App',
+                                                                 version_code: 1,
+                                                                 version: '1.0.0'
+                                                               })
           allow(client).to receive(:get).and_return({ data: { 'android_apps' => [] } })
           allow(client).to receive(:post).and_return({
-            data: { 'android_app' => { 'id' => 1, 'package_name' => 'com.example.expoapp' } }
-          })
+                                                       data: { 'android_app' => { 'id' => 1,
+                                                                                  'package_name' => 'com.example.expoapp' } }
+                                                     })
         end
 
         it 'detects Expo project' do
@@ -235,12 +239,12 @@ RSpec.describe 'mysigner android', type: :cli do
       end
 
       context 'app already registered' do
-        let(:project_info) {
+        let(:project_info) do
           { path: '/project/android', type: :gradle, framework: :native }
-        }
-        let(:existing_app) {
+        end
+        let(:existing_app) do
           { 'id' => 42, 'package_name' => 'com.example.myapp', 'name' => 'My App', 'builds_count' => 5 }
-        }
+        end
 
         before do
           allow(Mysigner::Build::Detector).to receive(:detect_android).and_return(project_info)
@@ -248,8 +252,8 @@ RSpec.describe 'mysigner android', type: :cli do
           allow(parser).to receive(:application_id).and_return('com.example.myapp')
           allow(parser).to receive(:app_name).and_return('My App')
           allow(client).to receive(:get).and_return({
-            data: { 'android_apps' => [existing_app] }
-          })
+                                                      data: { 'android_apps' => [existing_app] }
+                                                    })
         end
 
         it 'shows already registered message' do
@@ -270,9 +274,9 @@ RSpec.describe 'mysigner android', type: :cli do
       end
 
       context 'validation error' do
-        let(:project_info) {
+        let(:project_info) do
           { path: '/project/android', type: :gradle, framework: :native }
-        }
+        end
 
         before do
           allow(Mysigner::Build::Detector).to receive(:detect_android).and_return(project_info)
@@ -302,8 +306,9 @@ RSpec.describe 'mysigner android', type: :cli do
       context 'with valid package name' do
         before do
           allow(client).to receive(:post).and_return({
-            data: { 'android_app' => { 'id' => 1, 'package_name' => 'com.example.newapp', 'name' => nil } }
-          })
+                                                       data: { 'android_app' => { 'id' => 1,
+                                                                                  'package_name' => 'com.example.newapp', 'name' => nil } }
+                                                     })
         end
 
         it 'shows registering message' do
@@ -319,7 +324,7 @@ RSpec.describe 'mysigner android', type: :cli do
         it 'registers with API' do
           expect(client).to receive(:post).with(
             "/api/v1/organizations/#{org_id}/android_apps",
-            body: { package_name: 'com.example.newapp' }
+            body: { android_app: { package_name: 'com.example.newapp' } }
           )
           cli.android('add', 'com.example.newapp')
         end
@@ -334,8 +339,9 @@ RSpec.describe 'mysigner android', type: :cli do
         before do
           cli.options = { name: 'Custom App Name' }
           allow(client).to receive(:post).and_return({
-            data: { 'android_app' => { 'id' => 1, 'package_name' => 'com.example.app', 'name' => 'Custom App Name' } }
-          })
+                                                       data: { 'android_app' => { 'id' => 1,
+                                                                                  'package_name' => 'com.example.app', 'name' => 'Custom App Name' } }
+                                                     })
         end
 
         it 'shows the custom name' do
@@ -346,7 +352,7 @@ RSpec.describe 'mysigner android', type: :cli do
         it 'sends name to API' do
           expect(client).to receive(:post).with(
             "/api/v1/organizations/#{org_id}/android_apps",
-            body: { package_name: 'com.example.app', name: 'Custom App Name' }
+            body: { android_app: { package_name: 'com.example.app', name: 'Custom App Name' } }
           )
           cli.android('add', 'com.example.app')
         end
@@ -426,7 +432,7 @@ RSpec.describe 'mysigner android', type: :cli do
       end
 
       context 'native Android project' do
-        let(:project_info) {
+        let(:project_info) do
           {
             path: '/project/android',
             type: :gradle,
@@ -434,7 +440,7 @@ RSpec.describe 'mysigner android', type: :cli do
             directory: '/project',
             android_directory: '/project/android'
           }
-        }
+        end
 
         before do
           allow(Mysigner::Build::Detector).to receive(:detect_android).and_return(project_info)
@@ -495,12 +501,12 @@ RSpec.describe 'mysigner android', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'android']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help android]) }
       expect(help_output).to include('Android')
     end
 
     it 'shows subcommands' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'android']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help android]) }
       expect(help_output).to include('init')
       expect(help_output).to include('add')
       expect(help_output).to include('build')
@@ -513,7 +519,7 @@ RSpec.describe 'mysigner android', type: :cli do
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
 
-      output = capture_stdout { Mysigner::CLI.start(['android', 'init']) }
+      output = capture_stdout { Mysigner::CLI.start(%w[android init]) }
       expect(output).to include('Not logged in')
     end
   end

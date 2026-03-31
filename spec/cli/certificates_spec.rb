@@ -36,8 +36,10 @@ RSpec.describe 'mysigner certificates', type: :cli do
       allow(config).to receive(:organization_id).and_return('123')
       # Stub to prevent errors if execution continues
       allow(client).to receive(:get).and_return({
-        data: { 'certificates' => [], 'pagination' => { 'page' => 1, 'total_pages' => 0, 'total' => 0 } }
-      })
+                                                  data: { 'certificates' => [],
+                                                          'pagination' => { 'page' => 1, 'total_pages' => 0,
+                                                                            'total' => 0 } }
+                                                })
     end
 
     it 'shows error message' do
@@ -57,14 +59,14 @@ RSpec.describe 'mysigner certificates', type: :cli do
   end
 
   describe 'when no certificates found' do
-    let(:api_response) {
+    let(:api_response) do
       {
         data: {
           'certificates' => [],
           'pagination' => { 'page' => 1, 'total_pages' => 0, 'total' => 0 }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -93,7 +95,7 @@ RSpec.describe 'mysigner certificates', type: :cli do
   end
 
   describe 'listing certificates successfully' do
-    let(:api_response) {
+    let(:api_response) do
       {
         data: {
           'certificates' => [
@@ -117,7 +119,7 @@ RSpec.describe 'mysigner certificates', type: :cli do
           'pagination' => { 'page' => 1, 'total_pages' => 1, 'total' => 2 }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -188,7 +190,7 @@ RSpec.describe 'mysigner certificates', type: :cli do
   end
 
   describe 'filtering by type' do
-    let(:api_response) {
+    let(:api_response) do
       {
         data: {
           'certificates' => [
@@ -204,7 +206,7 @@ RSpec.describe 'mysigner certificates', type: :cli do
           'pagination' => { 'page' => 1, 'total_pages' => 1, 'total' => 1 }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -231,14 +233,14 @@ RSpec.describe 'mysigner certificates', type: :cli do
   end
 
   describe 'filtering by status' do
-    let(:api_response) {
+    let(:api_response) do
       {
         data: {
           'certificates' => [],
           'pagination' => { 'page' => 1, 'total_pages' => 0, 'total' => 0 }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -260,14 +262,14 @@ RSpec.describe 'mysigner certificates', type: :cli do
   end
 
   describe 'searching certificates' do
-    let(:api_response) {
+    let(:api_response) do
       {
         data: {
           'certificates' => [],
           'pagination' => { 'page' => 1, 'total_pages' => 0, 'total' => 0 }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -289,7 +291,7 @@ RSpec.describe 'mysigner certificates', type: :cli do
   end
 
   describe 'pagination' do
-    let(:api_response) {
+    let(:api_response) do
       {
         data: {
           'certificates' => [
@@ -305,7 +307,7 @@ RSpec.describe 'mysigner certificates', type: :cli do
           'pagination' => { 'page' => 1, 'total_pages' => 3, 'total' => 150 }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -366,19 +368,19 @@ RSpec.describe 'mysigner certificates', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'certificates']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help certificates]) }
       expect(help_output).to include('List signing certificates')
     end
 
     it 'shows filter options' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'certificates']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help certificates]) }
       expect(help_output).to include('--type')
       expect(help_output).to include('--status')
       expect(help_output).to include('--search')
     end
 
     it 'shows pagination options' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'certificates']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help certificates]) }
       expect(help_output).to include('--page')
       expect(help_output).to include('--per-page')
     end
@@ -389,10 +391,9 @@ RSpec.describe 'mysigner certificates', type: :cli do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
-      
+
       output = capture_stdout { Mysigner::CLI.start(['certificates']) }
       expect(output).to include('Not logged in')
     end
   end
 end
-

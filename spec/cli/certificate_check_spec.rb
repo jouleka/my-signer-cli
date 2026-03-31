@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'mysigner/cli'
 require 'mysigner/signing/certificate_checker'
@@ -14,7 +16,7 @@ RSpec.describe 'mysigner certificate check', type: :integration do
     allow(cli).to receive(:create_client).and_return(client)
     allow(config).to receive(:api_token).and_return('test-token')
     allow(config).to receive(:organization_id).and_return('org-123')
-    
+
     # Stub CertificateChecker
     allow(Mysigner::Signing::CertificateChecker).to receive(:new).and_return(checker)
   end
@@ -55,16 +57,16 @@ RSpec.describe 'mysigner certificate check', type: :integration do
     before do
       allow(checker).to receive(:check!).and_return(valid_certs)
       allow(checker).to receive(:by_status).and_return({
-        valid: valid_certs,
-        expiring_soon: [],
-        expired: []
-      })
+                                                         valid: valid_certs,
+                                                         expiring_soon: [],
+                                                         expired: []
+                                                       })
       allow(checker).to receive(:has_issues?).and_return(false)
     end
 
     it 'shows valid certificates' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('✓ Valid Certificates (2)')
       expect(output).to include('Apple Development: John Doe (TEAM123)')
       expect(output).to include('Apple Distribution: Company Inc (TEAM123)')
@@ -72,7 +74,7 @@ RSpec.describe 'mysigner certificate check', type: :integration do
 
     it 'displays certificate details' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('Type: Development')
       expect(output).to include('Type: Distribution')
       expect(output).to include('Team: TEAM123')
@@ -82,14 +84,14 @@ RSpec.describe 'mysigner certificate check', type: :integration do
 
     it 'shows success status' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('Total: 2 certificates')
       expect(output).to include('Status: ✓ All certificates valid')
     end
 
     it 'does not show warnings or errors' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).not_to include('Expiring Soon')
       expect(output).not_to include('Expired')
     end
@@ -113,29 +115,29 @@ RSpec.describe 'mysigner certificate check', type: :integration do
     before do
       allow(checker).to receive(:check!).and_return(expiring_certs)
       allow(checker).to receive(:by_status).and_return({
-        valid: [],
-        expiring_soon: expiring_certs,
-        expired: []
-      })
+                                                         valid: [],
+                                                         expiring_soon: expiring_certs,
+                                                         expired: []
+                                                       })
       allow(checker).to receive(:has_issues?).and_return(true)
     end
 
     it 'shows expiring soon warning' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('⚠️  Expiring Soon (1)')
       expect(output).to include('Apple Development: Test (TEAM123)')
     end
 
     it 'displays expiry warning message' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('Renew these certificates soon to avoid build failures!')
     end
 
     it 'shows action required status' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('Status: ⚠️  Action required')
     end
   end
@@ -158,36 +160,36 @@ RSpec.describe 'mysigner certificate check', type: :integration do
     before do
       allow(checker).to receive(:check!).and_return(expired_certs)
       allow(checker).to receive(:by_status).and_return({
-        valid: [],
-        expiring_soon: [],
-        expired: expired_certs
-      })
+                                                         valid: [],
+                                                         expiring_soon: [],
+                                                         expired: expired_certs
+                                                       })
       allow(checker).to receive(:has_issues?).and_return(true)
     end
 
     it 'shows expired certificates' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('✗ Expired Certificates (1)')
       expect(output).to include('Apple Distribution: Expired (TEAM123)')
     end
 
     it 'displays days since expiry' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('300 days ago')
     end
 
     it 'provides renewal link' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('These certificates will cause build failures')
       expect(output).to include('https://developer.apple.com/account/resources/certificates/list')
     end
 
     it 'shows action required status' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('Status: ⚠️  Action required')
     end
   end
@@ -228,16 +230,16 @@ RSpec.describe 'mysigner certificate check', type: :integration do
     before do
       allow(checker).to receive(:check!).and_return(mixed_certs)
       allow(checker).to receive(:by_status).and_return({
-        valid: [mixed_certs[0]],
-        expiring_soon: [mixed_certs[1]],
-        expired: [mixed_certs[2]]
-      })
+                                                         valid: [mixed_certs[0]],
+                                                         expiring_soon: [mixed_certs[1]],
+                                                         expired: [mixed_certs[2]]
+                                                       })
       allow(checker).to receive(:has_issues?).and_return(true)
     end
 
     it 'shows all certificate sections' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('✓ Valid Certificates (1)')
       expect(output).to include('⚠️  Expiring Soon (1)')
       expect(output).to include('✗ Expired Certificates (1)')
@@ -245,13 +247,13 @@ RSpec.describe 'mysigner certificate check', type: :integration do
 
     it 'displays correct total count' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('Total: 3 certificates')
     end
 
     it 'shows action required status' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('Status: ⚠️  Action required')
     end
   end
@@ -263,13 +265,13 @@ RSpec.describe 'mysigner certificate check', type: :integration do
 
     it 'shows no certificates message' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('No code signing certificates found in local Keychain')
     end
 
     it 'provides installation instructions' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('⚠️  Important:')
       expect(output).to include('This command checks certificates INSTALLED ON YOUR MAC')
       expect(output).to include('Certificates in My Signer API are not automatically installed locally')
@@ -280,7 +282,7 @@ RSpec.describe 'mysigner certificate check', type: :integration do
 
     it 'does not show certificate sections' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).not_to include('Valid Certificates')
       expect(output).not_to include('Total:')
     end
@@ -296,13 +298,13 @@ RSpec.describe 'mysigner certificate check', type: :integration do
 
     it 'shows error message' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('Certificate check failed: Keychain is locked')
     end
 
     it 'provides troubleshooting guidance' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('This usually means:')
       expect(output).to include('Keychain is locked')
       expect(output).to include('No certificates installed')
@@ -333,16 +335,16 @@ RSpec.describe 'mysigner certificate check', type: :integration do
     before do
       allow(checker).to receive(:check!).and_return(cert_no_team)
       allow(checker).to receive(:by_status).and_return({
-        valid: cert_no_team,
-        expiring_soon: [],
-        expired: []
-      })
+                                                         valid: cert_no_team,
+                                                         expiring_soon: [],
+                                                         expired: []
+                                                       })
       allow(checker).to receive(:has_issues?).and_return(false)
     end
 
     it 'shows Unknown for missing team ID' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('Team: Unknown')
     end
   end
@@ -350,7 +352,7 @@ RSpec.describe 'mysigner certificate check', type: :integration do
   describe 'help documentation' do
     it 'documents check action in certificate command help' do
       help_output = capture_output { cli.help('certificate') }
-      
+
       expect(help_output).to include('check')
       expect(help_output).to include('Check certificates installed in your Mac\'s Keychain')
       expect(help_output).to include('scans your LOCAL Keychain')
@@ -358,7 +360,7 @@ RSpec.describe 'mysigner certificate check', type: :integration do
 
     it 'documents download action in certificate command help' do
       help_output = capture_output { cli.help('certificate') }
-      
+
       expect(help_output).to include('download')
     end
   end
@@ -381,28 +383,28 @@ RSpec.describe 'mysigner certificate check', type: :integration do
     before do
       allow(checker).to receive(:check!).and_return(valid_certs)
       allow(checker).to receive(:by_status).and_return({
-        valid: valid_certs,
-        expiring_soon: [],
-        expired: []
-      })
+                                                         valid: valid_certs,
+                                                         expiring_soon: [],
+                                                         expired: []
+                                                       })
       allow(checker).to receive(:has_issues?).and_return(false)
     end
 
     it 'calls checker check! method' do
       expect(checker).to receive(:check!)
-      
+
       capture_output { cli.certificate('check') }
     end
 
     it 'calls checker by_status method' do
       expect(checker).to receive(:by_status)
-      
+
       capture_output { cli.certificate('check') }
     end
 
     it 'calls checker has_issues? method' do
       expect(checker).to receive(:has_issues?)
-      
+
       capture_output { cli.certificate('check') }
     end
   end
@@ -425,37 +427,36 @@ RSpec.describe 'mysigner certificate check', type: :integration do
     before do
       allow(checker).to receive(:check!).and_return(certs)
       allow(checker).to receive(:by_status).and_return({
-        valid: certs,
-        expiring_soon: [],
-        expired: []
-      })
+                                                         valid: certs,
+                                                         expiring_soon: [],
+                                                         expired: []
+                                                       })
       allow(checker).to receive(:has_issues?).and_return(false)
     end
 
     it 'formats expiry date correctly' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('Expires: 2025-12-31')
     end
 
     it 'includes separator line' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('─' * 80)
     end
 
     it 'shows certificate count in summary' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('Total: 1 certificate installed locally')
     end
-    
+
     it 'shows tip about API certificates' do
       output = capture_output { cli.certificate('check') }
-      
+
       expect(output).to include('💡 Tip: These are certificates INSTALLED ON YOUR MAC')
       expect(output).to include('To see all certificates in My Signer API, run: mysigner certificates')
     end
   end
 end
-

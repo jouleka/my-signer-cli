@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 module Mysigner
   class CLI < Thor
     module Concerns
       module Helpers
         # Helper for timing operations
-        def with_timing(label)
+        def with_timing(_label)
           start = Time.now
           result = yield
           duration = Time.now - start
@@ -35,10 +37,19 @@ module Mysigner
         end
 
         def load_config
+          # CI/CD mode: prefer environment variables when set
+          return Config.from_env if Config.env_configured?
+
           config = Config.new
 
           unless config.exists?
             error "Not logged in. Run 'mysigner login' first."
+            say ''
+            say 'Tip: For CI/CD, set these environment variables instead:', :yellow
+            say '  export MYSIGNER_API_TOKEN=your_token', :yellow
+            say '  export MYSIGNER_ORG_ID=your_org_id', :yellow
+            say '  export MYSIGNER_API_URL=https://mysigner.dev  # optional', :yellow
+            say '  export MYSIGNER_EMAIL=you@example.com          # optional', :yellow
             exit 1
           end
 

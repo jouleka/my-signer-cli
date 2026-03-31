@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Mysigner
   module Build
     class Detector
@@ -9,9 +11,7 @@ module Mysigner
       # @param platform [Symbol, nil] Force detection for specific platform (:ios, :android, or nil for auto-detect iOS)
       def self.detect(directory = Dir.pwd, platform: nil)
         # If platform is explicitly android, detect android
-        if platform == :android
-          return detect_android(directory)
-        end
+        return detect_android(directory) if platform == :android
 
         # Default behavior: detect iOS (backwards compatible)
         detect_ios(directory)
@@ -21,7 +21,7 @@ module Mysigner
       # Returns: { platform: :android, type: :gradle, path: String, framework: :capacitor/:react_native/:flutter/:native }
       def self.detect_android(directory = Dir.pwd)
         # 1. Check for Capacitor (most specific first)
-        if File.exist?("#{directory}/capacitor.config.json") || 
+        if File.exist?("#{directory}/capacitor.config.json") ||
            File.exist?("#{directory}/capacitor.config.ts")
           return detect_capacitor_android(directory)
         end
@@ -34,21 +34,21 @@ module Mysigner
             # Auto-run expo prebuild
             puts "\n📦 Expo managed workflow detected (no android/ folder)"
             puts "🔧 Running: npx expo prebuild --platform android\n\n"
-            
+
             result = system("cd #{directory} && npx expo prebuild --platform android")
-            
+
             unless result && Dir.exist?("#{directory}/android")
               raise NoProjectError, <<~ERROR
                 Failed to generate Android project with expo prebuild.
-                
+
                 Try running manually:
                   npx expo prebuild --platform android
-                
+
                 Alternative: Use EAS Build (Expo's cloud service)
                 Learn more: https://docs.expo.dev/bare/overview/
               ERROR
             end
-            
+
             puts "\n✓ Android project generated successfully\n\n"
           end
         end
@@ -56,15 +56,11 @@ module Mysigner
         # 3. Check for React Native
         if File.exist?("#{directory}/package.json") && Dir.exist?("#{directory}/android")
           content = File.read("#{directory}/package.json")
-          if content.include?('react-native')
-            return detect_react_native_android(directory)
-          end
+          return detect_react_native_android(directory) if content.include?('react-native')
         end
 
         # 3. Check for Flutter
-        if File.exist?("#{directory}/pubspec.yaml")
-          return detect_flutter_android(directory)
-        end
+        return detect_flutter_android(directory) if File.exist?("#{directory}/pubspec.yaml")
 
         # 4. Check for .NET MAUI / Xamarin
         maui_project = Dir.glob("#{directory}/*.csproj").first
@@ -81,8 +77,6 @@ module Mysigner
         app_gradle_kts = "#{directory}/app/build.gradle.kts"
         root_gradle = "#{directory}/build.gradle"
         root_gradle_kts = "#{directory}/build.gradle.kts"
-        settings_gradle = "#{directory}/settings.gradle"
-        settings_gradle_kts = "#{directory}/settings.gradle.kts"
 
         if File.exist?(app_gradle) || File.exist?(app_gradle_kts)
           return {
@@ -119,7 +113,7 @@ module Mysigner
       # Detect iOS project in directory (original detect behavior)
       def self.detect_ios(directory = Dir.pwd)
         # 1. Check for Capacitor (most specific first)
-        if File.exist?("#{directory}/capacitor.config.json") || 
+        if File.exist?("#{directory}/capacitor.config.json") ||
            File.exist?("#{directory}/capacitor.config.ts")
           return detect_capacitor(directory)
         end
@@ -132,21 +126,21 @@ module Mysigner
             # Auto-run expo prebuild
             puts "\n📦 Expo managed workflow detected (no ios/ folder)"
             puts "🔧 Running: npx expo prebuild --platform ios\n\n"
-            
+
             result = system("cd #{directory} && npx expo prebuild --platform ios")
-            
+
             unless result && Dir.exist?("#{directory}/ios")
               raise NoProjectError, <<~ERROR
                 Failed to generate iOS project with expo prebuild.
-                
+
                 Try running manually:
                   npx expo prebuild --platform ios
-                
+
                 Alternative: Use EAS Build (Expo's cloud service)
                 Learn more: https://docs.expo.dev/bare/overview/
               ERROR
             end
-            
+
             puts "\n✓ iOS project generated successfully\n\n"
           end
         end
@@ -154,15 +148,11 @@ module Mysigner
         # 3. Check for React Native
         if File.exist?("#{directory}/package.json") && Dir.exist?("#{directory}/ios")
           content = File.read("#{directory}/package.json")
-          if content.include?('react-native')
-            return detect_react_native(directory)
-          end
+          return detect_react_native(directory) if content.include?('react-native')
         end
 
         # 4. Check for Flutter
-        if File.exist?("#{directory}/pubspec.yaml")
-          return detect_flutter(directory)
-        end
+        return detect_flutter(directory) if File.exist?("#{directory}/pubspec.yaml")
 
         # 5. Check for native iOS project (workspace first, then project)
         workspace = Dir.glob("#{directory}/*.xcworkspace").first
@@ -187,18 +177,18 @@ module Mysigner
           }
         end
 
-        raise NoProjectError, "No Xcode project found in #{directory}. Run in a project directory or try 'mysigner init' first."
+        raise NoProjectError,
+              "No Xcode project found in #{directory}. Run in a project directory or try 'mysigner init' first."
       end
-
-      private
 
       # Android detection for cross-platform frameworks
 
       def self.detect_capacitor_android(directory)
         android_dir = "#{directory}/android"
-        
+
         unless Dir.exist?(android_dir)
-          raise NoProjectError, "Capacitor project detected but no android/ folder found. Run 'npx cap add android' first."
+          raise NoProjectError,
+                "Capacitor project detected but no android/ folder found. Run 'npx cap add android' first."
         end
 
         app_gradle = "#{android_dir}/app/build.gradle"
@@ -216,7 +206,8 @@ module Mysigner
           }
         end
 
-        raise NoProjectError, "Capacitor project detected but no Android build.gradle found. Run 'npx cap sync android' first."
+        raise NoProjectError,
+              "Capacitor project detected but no Android build.gradle found. Run 'npx cap sync android' first."
       end
 
       def self.detect_react_native_android(directory)
@@ -237,15 +228,13 @@ module Mysigner
           }
         end
 
-        raise NoProjectError, "React Native project detected but no Android build.gradle found in android/ directory."
+        raise NoProjectError, 'React Native project detected but no Android build.gradle found in android/ directory.'
       end
 
       def self.detect_flutter_android(directory)
         android_dir = "#{directory}/android"
 
-        unless Dir.exist?(android_dir)
-          raise NoProjectError, "Flutter project detected but no android/ folder found. Run 'flutter create .' first."
-        end
+        raise NoProjectError, "Flutter project detected but no android/ folder found. Run 'flutter create .' first." unless Dir.exist?(android_dir)
 
         app_gradle = "#{android_dir}/app/build.gradle"
         app_gradle_kts = "#{android_dir}/app/build.gradle.kts"
@@ -262,19 +251,20 @@ module Mysigner
           }
         end
 
-        raise NoProjectError, "Flutter project detected but no Android build.gradle found. Run 'flutter build apk' first."
+        raise NoProjectError,
+              "Flutter project detected but no Android build.gradle found. Run 'flutter build apk' first."
       end
 
       def self.detect_dotnet_android(directory, csproj_path)
         content = File.read(csproj_path)
-        
+
         framework_type = if content.include?('Maui')
-          :maui
-        elsif content.include?('Xamarin.Forms')
-          :xamarin_forms
-        else
-          :xamarin
-        end
+                           :maui
+                         elsif content.include?('Xamarin.Forms')
+                           :xamarin_forms
+                         else
+                           :xamarin
+                         end
 
         {
           platform: :android,
@@ -291,7 +281,7 @@ module Mysigner
 
       def self.detect_capacitor(directory)
         ios_dir = "#{directory}/ios/App"
-        
+
         # Capacitor always creates App.xcworkspace
         workspace = "#{ios_dir}/App.xcworkspace"
         project = "#{ios_dir}/App.xcodeproj"
@@ -348,7 +338,7 @@ module Mysigner
           }
         end
 
-        raise NoProjectError, "React Native project detected but no Xcode project found in ios/ directory."
+        raise NoProjectError, 'React Native project detected but no Xcode project found in ios/ directory.'
       end
 
       def self.detect_flutter(directory)
@@ -385,4 +375,3 @@ module Mysigner
     end
   end
 end
-

@@ -36,11 +36,12 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:organization_id).and_return('123')
       # Stub to prevent errors if execution continues
       allow(client).to receive(:get).and_return({
-        data: {
-          'devices' => [],
-          'pagination' => { 'page' => 1, 'per_page' => 50, 'total_pages' => 0, 'total' => 0 }
-        }
-      })
+                                                  data: {
+                                                    'devices' => [],
+                                                    'pagination' => { 'page' => 1, 'per_page' => 50,
+                                                                      'total_pages' => 0, 'total' => 0 }
+                                                  }
+                                                })
     end
 
     it 'shows error message' do
@@ -60,7 +61,7 @@ RSpec.describe 'mysigner devices', type: :cli do
   end
 
   describe 'when no devices found' do
-    let(:empty_response) {
+    let(:empty_response) do
       {
         data: {
           'devices' => [],
@@ -72,7 +73,7 @@ RSpec.describe 'mysigner devices', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -81,7 +82,7 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_return(empty_response)
-      
+
       cli.options = { page: 1, per_page: 50 }
     end
 
@@ -107,7 +108,7 @@ RSpec.describe 'mysigner devices', type: :cli do
   end
 
   describe 'list devices' do
-    let(:devices_response) {
+    let(:devices_response) do
       {
         data: {
           'devices' => [
@@ -136,7 +137,7 @@ RSpec.describe 'mysigner devices', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -145,7 +146,7 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_return(devices_response)
-      
+
       cli.options = { page: 1, per_page: 50 }
     end
 
@@ -214,7 +215,7 @@ RSpec.describe 'mysigner devices', type: :cli do
   end
 
   describe 'with platform filter' do
-    let(:devices_response) {
+    let(:devices_response) do
       {
         data: {
           'devices' => [
@@ -235,7 +236,7 @@ RSpec.describe 'mysigner devices', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -244,7 +245,7 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_return(devices_response)
-      
+
       cli.options = { page: 1, per_page: 50, platform: 'mac_os' }
     end
 
@@ -264,7 +265,7 @@ RSpec.describe 'mysigner devices', type: :cli do
   end
 
   describe 'with status filter' do
-    let(:devices_response) {
+    let(:devices_response) do
       {
         data: {
           'devices' => [
@@ -285,7 +286,7 @@ RSpec.describe 'mysigner devices', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -294,7 +295,7 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_return(devices_response)
-      
+
       cli.options = { page: 1, per_page: 50, status: 'enabled' }
     end
 
@@ -314,7 +315,7 @@ RSpec.describe 'mysigner devices', type: :cli do
   end
 
   describe 'with search query' do
-    let(:devices_response) {
+    let(:devices_response) do
       {
         data: {
           'devices' => [
@@ -335,7 +336,7 @@ RSpec.describe 'mysigner devices', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -344,7 +345,7 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_return(devices_response)
-      
+
       cli.options = { page: 1, per_page: 50, search: 'iPhone 15' }
     end
 
@@ -363,7 +364,7 @@ RSpec.describe 'mysigner devices', type: :cli do
   end
 
   describe 'with pagination' do
-    let(:devices_response) {
+    let(:devices_response) do
       {
         data: {
           'devices' => [
@@ -384,7 +385,7 @@ RSpec.describe 'mysigner devices', type: :cli do
           }
         }
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -393,7 +394,7 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_return(devices_response)
-      
+
       cli.options = { page: 1, per_page: 1 }
     end
 
@@ -421,7 +422,7 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(client).to receive(:get).and_raise(Mysigner::ClientError.new('Connection failed'))
-      
+
       cli.options = { page: 1, per_page: 50 }
     end
 
@@ -439,27 +440,27 @@ RSpec.describe 'mysigner devices', type: :cli do
 
   describe 'help text' do
     it 'has description' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'devices']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help devices]) }
       expect(help_output).to include('List devices')
     end
 
     it 'shows platform option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'devices']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help devices]) }
       expect(help_output).to include('--platform')
     end
 
     it 'shows status option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'devices']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help devices]) }
       expect(help_output).to include('--status')
     end
 
     it 'shows search option' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'devices']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help devices]) }
       expect(help_output).to include('--search')
     end
 
     it 'shows pagination options' do
-      help_output = capture_stdout { Mysigner::CLI.start(['help', 'devices']) }
+      help_output = capture_stdout { Mysigner::CLI.start(%w[help devices]) }
       expect(help_output).to include('--page')
       expect(help_output).to include('--per-page')
     end
@@ -470,10 +471,9 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
-      
+
       output = capture_stdout { Mysigner::CLI.start(['devices']) }
       expect(output).to include('Not logged in')
     end
   end
 end
-

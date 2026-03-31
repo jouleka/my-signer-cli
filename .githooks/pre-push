@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+echo "==> Running RSpec test suite before push..."
+OUTPUT=$(bundle exec rspec --format progress 2>&1)
+echo "$OUTPUT"
+
+# Check for failures in the RSpec summary line, not exit code
+# (CLI tests invoke exit(1) which leaks through Thor and taints the process exit code)
+if echo "$OUTPUT" | grep -qE "[1-9][0-9]* failures?"; then
+  echo "==> Tests FAILED! Push aborted."
+  exit 1
+fi
+
+if echo "$OUTPUT" | grep -q "0 failures"; then
+  echo "==> All tests passed! Pushing..."
+  exit 0
+fi
+
+# If we can't parse the output, something went wrong
+echo "==> Could not determine test results. Push aborted."
+exit 1

@@ -32,30 +32,30 @@ RSpec.describe 'mysigner ship android', type: :cli do
   end
 
   describe 'PartialUploadError handling' do
-    let(:project_info) {
+    let(:project_info) do
       {
         path: '/path/to/android',
         type: :gradle,
         framework: :react_native,
         build_gradle: '/path/to/android/app/build.gradle'
       }
-    }
+    end
     let(:parser) { instance_double(Mysigner::Build::AndroidParser) }
     let(:executor) { instance_double(Mysigner::Build::AndroidExecutor) }
     let(:keystore_manager) { instance_double(Mysigner::Signing::KeystoreManager) }
     let(:uploader) { instance_double(Mysigner::Upload::PlayStoreUploader) }
     let(:aab_path) { '/path/to/app-release.aab' }
 
-    let(:org_response) {
+    let(:org_response) do
       {
         data: {
           'google_play_configured' => true,
           'google_play_service_account' => '{"type":"service_account"}'
         }
       }
-    }
+    end
 
-    let(:apps_response) {
+    let(:apps_response) do
       {
         data: {
           'android_apps' => [
@@ -63,9 +63,9 @@ RSpec.describe 'mysigner ship android', type: :cli do
           ]
         }
       }
-    }
+    end
 
-    let(:keystore_data) {
+    let(:keystore_data) do
       {
         'id' => 1,
         'name' => 'test-keystore',
@@ -73,7 +73,7 @@ RSpec.describe 'mysigner ship android', type: :cli do
         'keystore_password' => 'password123',
         'key_password' => 'password123'
       }
-    }
+    end
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -119,11 +119,11 @@ RSpec.describe 'mysigner ship android', type: :cli do
       before do
         allow(Mysigner::Upload::PlayStoreUploader).to receive(:new).and_return(uploader)
         allow(uploader).to receive(:upload!).and_return({
-          success: true,
-          version_code: 6,
-          track: 'internal',
-          package_name: 'com.example.app'
-        })
+                                                          success: true,
+                                                          version_code: 6,
+                                                          track: 'internal',
+                                                          package_name: 'com.example.app'
+                                                        })
       end
 
       it 'saves build record to backend' do
