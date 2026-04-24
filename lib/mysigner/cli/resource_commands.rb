@@ -144,6 +144,23 @@ module Mysigner
               udid = args[1]
               platform = options[:platform].upcase
 
+              # Client-side UDID sanity check — catches obvious typos and
+              # copy-paste errors before they hit Apple's API (which, for IOS
+              # at least, has historically accepted synthetic/all-zeros UDIDs
+              # in sandbox environments). Skipped for non-IOS platforms.
+              if (platform == 'IOS') && !valid_ios_udid?(udid)
+                error "Invalid iOS UDID: #{udid}"
+                say ''
+                say 'iOS UDIDs must:', :yellow
+                say '  • Be either 25 chars (older devices) or 40 hex chars (newer)', :cyan
+                say '  • Be hexadecimal (0-9, A-F)', :cyan
+                say '  • Not be trivially synthetic (e.g. all zeros, single repeated char)', :cyan
+                say ''
+                say '💡 Get a real UDID:', :cyan
+                say '   mysigner device detect', :yellow
+                exit 1
+              end
+
               say '📱 Registering device...', :cyan
               say ''
 
@@ -296,7 +313,11 @@ module Mysigner
 
             # Also try xcrun xctrace (Xcode command line tools)
             if devices.empty? && system('which xcrun > /dev/null 2>&1')
-              output = `xcrun xctrace list devices 2>/dev/null`
+              # xctrace output can contain non-ASCII bytes (emoji in device
+              # names, accented characters). Force UTF-8 + scrub invalid
+              # sequences so `.strip` / `.each_line` don't raise
+              # Encoding::CompatibilityError under the default US-ASCII locale.
+              output = `xcrun xctrace list devices 2>/dev/null`.force_encoding('UTF-8').scrub
               in_devices_section = false
 
               output.each_line do |line|
@@ -591,14 +612,18 @@ module Mysigner
                 response = client.get("/api/v1/organizations/#{config.current_organization_id}/profiles/#{profile_id}")
                 profile = response[:data]
 
-                # Determine output path
+                # Determine output path. Default to ~/Downloads/ (created if
+                # missing) instead of the current working directory — users
+                # were ending up with .mobileprovision files sprinkled inside
+                # whatever project they ran the command from.
                 output_path = if options[:output]
                                 options[:output]
                               else
-                                # Use profile name, sanitize it for filename
                                 name = profile['name'] || "profile_#{profile['id']}"
                                 filename = name.gsub(/[^0-9A-Za-z.-]/, '_')
-                                "#{filename}.mobileprovision"
+                                downloads_dir = File.expand_path('~/Downloads')
+                                FileUtils.mkdir_p(downloads_dir)
+                                File.join(downloads_dir, "#{filename}.mobileprovision")
                               end
 
                 # Download the profile content using the client's connection with auth
@@ -924,14 +949,17 @@ module Mysigner
                 response = client.get("/api/v1/organizations/#{config.current_organization_id}/certificates/#{certificate_id}")
                 certificate = response[:data]
 
-                # Determine output path
+                # Determine output path. Default to ~/Downloads/ (mirrors
+                # profile download behavior) rather than the CWD to avoid
+                # dropping .cer files inside the user's project tree.
                 output_path = if options[:output]
                                 options[:output]
                               else
-                                # Use certificate name, sanitize it for filename
                                 name = certificate['name'] || "certificate_#{certificate['id']}"
                                 filename = name.gsub(/[^0-9A-Za-z.-]/, '_')
-                                "#{filename}.cer"
+                                downloads_dir = File.expand_path('~/Downloads')
+                                FileUtils.mkdir_p(downloads_dir)
+                                File.join(downloads_dir, "#{filename}.cer")
                               end
 
                 # Download the certificate content (binary response)
@@ -1127,14 +1155,33 @@ module Mysigner
               say '🔐 Uploading keystore...', :cyan
               say ''
 
-              # Get keystore details
+              # Phase 0: support non-TTY automation. `ask(echo: false)` raises
+              # Errno::ENOTTY on piped stdin, which made `keystore upload`
+              # unusable from CI. When stdin isn't a TTY, require passwords
+              # to come from env vars (MYSIGNER_KEYSTORE_PASSWORD /
+              # MYSIGNER_KEY_PASSWORD) so operators can script uploads
+              # without also having to wrap every invocation in `expect`.
               name = options[:name] || ask("Keystore name (e.g., 'Release Key'):")
               key_alias = options[:alias] || ask('Key alias:')
-              password = ask('Keystore password:', echo: false)
-              say ''
-              key_password = ask('Key password (press Enter if same as keystore):', echo: false)
-              say ''
-              key_password = password if key_password.empty?
+
+              if $stdin.tty?
+                password = ask('Keystore password:', echo: false)
+                say ''
+                key_password = ask('Key password (press Enter if same as keystore):', echo: false)
+                say ''
+                key_password = password if key_password.empty?
+              else
+                password = ENV.fetch('MYSIGNER_KEYSTORE_PASSWORD', nil)
+                key_password = ENV['MYSIGNER_KEY_PASSWORD'] || password
+                if password.nil? || password.empty?
+                  error 'Non-interactive upload requires MYSIGNER_KEYSTORE_PASSWORD (and optionally MYSIGNER_KEY_PASSWORD) in the environment.'
+                  say ''
+                  say 'Example:', :cyan
+                  say '  MYSIGNER_KEYSTORE_PASSWORD=... MYSIGNER_KEY_PASSWORD=... \\', :yellow
+                  say '    mysigner keystore upload ./release.jks --name "Release" --alias myalias', :yellow
+                  exit 1
+                end
+              end
 
               begin
                 result = manager.upload(
@@ -1742,35 +1789,64 @@ module Mysigner
               exit 1
             end
 
-            Dir.chdir(project_dir) do
-              args = ['flutter', 'build', 'appbundle', '--release']
+            # Phase 0: do NOT write plaintext key.properties into the user's
+            # project tree. Use a two-step build so we can inject signing via
+            # a Gradle init script on the Gradle step only. Env vars are set
+            # on the child process; passwords never appear in argv or on disk.
+            require_relative '../signing/gradle_signing_injector'
 
-              # Add version code override
-              args += ['--build-number', version_code_override.to_s] if version_code_override
+            injector = nil
+            env = {}
+            init_path = nil
 
-              # Add signing if keystore provided (Flutter reads key.properties from android/)
-              if keystore_info
-                # Create key.properties for Flutter
-                key_props = File.join(project_dir, 'android/key.properties')
-                File.write(key_props, <<~PROPS)
-                  storePassword=#{keystore_info[:password]}
-                  keyPassword=#{keystore_info[:key_password]}
-                  keyAlias=#{keystore_info[:key_alias]}
-                  storeFile=#{keystore_info[:path]}
-                PROPS
+            if keystore_info
+              injector = Mysigner::Signing::GradleSigningInjector.new
+              init_path = injector.write_init_script!
+              env = keystore_info[:signing_env_vars] || injector.env_vars(
+                keystore_path: keystore_info[:path],
+                store_password: keystore_info[:password],
+                key_password: keystore_info[:key_password],
+                key_alias: keystore_info[:key_alias]
+              )
+            end
+
+            begin
+              Dir.chdir(project_dir) do
+                if keystore_info
+                  # Step 1: Flutter prepares the Gradle project (no signing needed).
+                  prepare_args = ['flutter', 'build', 'appbundle', '--release', '--config-only']
+                  prepare_args += ['--build-number', version_code_override.to_s] if version_code_override
+                  unless system(env, *prepare_args)
+                    error 'Flutter prebuild (--config-only) failed'
+                    exit 1
+                  end
+
+                  # Step 2: invoke Gradle directly so we can pass --init-script.
+                  Dir.chdir(File.join(project_dir, 'android')) do
+                    gradle_args = ['./gradlew', 'bundleRelease', '--warning-mode=all', '--init-script', init_path]
+                    gradle_args << "-PversionCode=#{version_code_override}" if version_code_override
+                    unless system(env, *gradle_args)
+                      error 'Gradle bundleRelease failed'
+                      exit 1
+                    end
+                  end
+                else
+                  # No keystore: plain Flutter build (debug signing).
+                  args = ['flutter', 'build', 'appbundle', '--release']
+                  args += ['--build-number', version_code_override.to_s] if version_code_override
+                  unless system(*args)
+                    error 'Flutter build failed'
+                    exit 1
+                  end
+                end
               end
-
-              success = system(*args)
-              unless success
-                error 'Flutter build failed'
-                exit 1
-              end
+            ensure
+              injector&.cleanup!
             end
 
             # Flutter outputs to build/app/outputs/bundle/release/
             aab_path = File.join(project_dir, 'build/app/outputs/bundle/release/app-release.aab')
             unless File.exist?(aab_path)
-              # Try alternate paths
               alt_paths = Dir.glob(File.join(project_dir, 'build/app/outputs/bundle/*/*.aab'))
               aab_path = alt_paths.first if alt_paths.any?
             end
@@ -1858,47 +1934,45 @@ module Mysigner
             return nil unless config.exists?
 
             config.load
-            return nil unless config.api_token && config.organization_id
+            return nil unless config.api_token && config.current_organization_id
 
             client = Mysigner::Client.new(api_url: config.api_url, api_token: config.api_token,
                                           user_email: config.user_email)
-            keystore_manager = Signing::KeystoreManager.new(client, config.organization_id)
+            keystore_manager = Signing::KeystoreManager.new(client, config.current_organization_id)
 
             # Find app by package name to get its keystore
-            response = client.get("/api/v1/organizations/#{config.organization_id}/android_apps")
+            response = client.get("/api/v1/organizations/#{config.current_organization_id}/android_apps")
             apps = response[:data]['android_apps'] || []
             app = apps.find { |a| a['package_name'] == package_name }
 
-            if app
-              # Get active keystore for this app with secrets
-              keystore = keystore_manager.active_keystore(android_app_id: app['id'], include_secrets: true)
-              if keystore
-                # Download the keystore file
-                downloaded = keystore_manager.get_or_download(keystore['id'])
-                return {
-                  path: downloaded[:path],
-                  name: keystore['name'],
-                  password: keystore['keystore_password'],
-                  key_alias: keystore['key_alias'],
-                  key_password: keystore['key_password'] || keystore['keystore_password']
-                }
-              end
-            end
+            keystore = nil
+            keystore = keystore_manager.active_keystore(android_app_id: app['id']) if app
+            keystore ||= keystore_manager.active_keystore
+            return nil unless keystore
 
-            # Try to get any active keystore
-            keystore = keystore_manager.active_keystore(include_secrets: true)
-            if keystore
-              downloaded = keystore_manager.get_or_download(keystore['id'])
-              return {
-                path: downloaded[:path],
-                name: keystore['name'],
-                password: keystore['keystore_password'],
-                key_alias: keystore['key_alias'],
-                key_password: keystore['key_password'] || keystore['keystore_password']
+            # Phase 0: fetch passwords via narrow audit-logged /secrets endpoint
+            # instead of the deprecated ?include_secrets=true param on the list.
+            secrets = keystore_manager.fetch_secrets(keystore['id'])
+            downloaded = keystore_manager.get_or_download(keystore['id'])
+            password = secrets['keystore_password']
+            key_password = secrets['key_password'] || password
+            key_alias = secrets['key_alias'] || keystore['key_alias']
+            {
+              path: downloaded[:path],
+              name: keystore['name'],
+              password: password,
+              key_alias: key_alias,
+              key_password: key_password,
+              id: keystore['id'],
+              # Ready-to-spawn env vars consumed by GradleSigningInjector in
+              # build_gradle_aab / build_flutter_aab / Build::AndroidExecutor.
+              signing_env_vars: {
+                'MYSIGNER_STORE_FILE' => downloaded[:path],
+                'MYSIGNER_STORE_PASSWORD' => password,
+                'MYSIGNER_KEY_PASSWORD' => key_password,
+                'MYSIGNER_KEY_ALIAS' => key_alias
               }
-            end
-
-            nil
+            }
           rescue StandardError
             # Silently fail - we'll use debug signing
             nil
@@ -1912,45 +1986,84 @@ module Mysigner
               exit 1
             end
 
+            require 'tmpdir'
+            pw_tmpdir = nil
+            store_pw_path = nil
+            key_pw_path = nil
+
             Dir.chdir(project_dir) do
               base_args = []
 
-              # Add signing args if keystore provided
+              # Phase 0: For AAB output, MSBuild only supports `file:<path>`
+              # for AndroidSigning*Pass (env: is explicitly unsupported for AAB).
+              # Write passwords to 0600 tempfiles whose *paths* go into argv
+              # instead of the passwords themselves.
               if keystore_info
+                pw_tmpdir = Dir.mktmpdir('mysigner-maui-pw-')
+                store_pw_path = File.join(pw_tmpdir, 'store_pw.txt')
+                File.write(store_pw_path, keystore_info[:password].to_s)
+                File.chmod(0o600, store_pw_path)
+
+                # Reuse the same file if store/key passwords match (common)
+                if keystore_info[:key_password] == keystore_info[:password]
+                  key_pw_path = store_pw_path
+                else
+                  key_pw_path = File.join(pw_tmpdir, 'key_pw.txt')
+                  File.write(key_pw_path, keystore_info[:key_password].to_s)
+                  File.chmod(0o600, key_pw_path)
+                end
+
                 base_args += [
                   '-p:AndroidKeyStore=true',
                   "-p:AndroidSigningKeyStore=#{keystore_info[:path]}",
                   "-p:AndroidSigningKeyAlias=#{keystore_info[:key_alias]}",
-                  "-p:AndroidSigningKeyPass=#{keystore_info[:key_password]}",
-                  "-p:AndroidSigningStorePass=#{keystore_info[:password]}"
+                  "-p:AndroidSigningKeyPass=file:#{key_pw_path}",
+                  "-p:AndroidSigningStorePass=file:#{store_pw_path}"
                 ]
               end
 
               # Add version code override
               base_args << "-p:ApplicationVersion=#{version_code_override}" if version_code_override
 
-              # MAUI uses dotnet publish with Android target
-              success = if framework == :maui
-                          system(
-                            'dotnet', 'publish',
-                            '-f', 'net8.0-android',
-                            '-c', 'Release',
-                            '-p:AndroidPackageFormat=aab',
-                            *base_args
-                          )
-                        else
-                          # Xamarin uses msbuild
-                          system(
-                            'dotnet', 'build',
-                            '-c', 'Release',
-                            '-p:AndroidPackageFormat=aab',
-                            *base_args
-                          )
-                        end
+              begin
+                # MAUI uses dotnet publish with Android target
+                success = if framework == :maui
+                            system(
+                              'dotnet', 'publish',
+                              '-f', 'net8.0-android',
+                              '-c', 'Release',
+                              '-p:AndroidPackageFormat=aab',
+                              *base_args
+                            )
+                          else
+                            # Xamarin uses msbuild
+                            system(
+                              'dotnet', 'build',
+                              '-c', 'Release',
+                              '-p:AndroidPackageFormat=aab',
+                              *base_args
+                            )
+                          end
 
-              unless success
-                error '.NET build failed'
-                exit 1
+                unless success
+                  error '.NET build failed'
+                  exit 1
+                end
+              ensure
+                # Clean up password files. On Windows NTFS the child may still
+                # hold the file open; fall back to at_exit deferred delete.
+                [store_pw_path, key_pw_path].compact.uniq.each do |p|
+                  File.delete(p) if File.exist?(p)
+                rescue Errno::EACCES
+                  at_exit do
+                    File.delete(p)
+                  rescue StandardError
+                    nil
+                  end
+                rescue StandardError
+                  # Best effort
+                end
+                FileUtils.rm_rf(pw_tmpdir) if pw_tmpdir && Dir.exist?(pw_tmpdir)
               end
             end
 
@@ -1976,28 +2089,38 @@ module Mysigner
               exit 1
             end
 
-            # Build gradle command with signing via command-line properties
+            # Phase 0: inject signing via Gradle init-script + env vars so
+            # passwords never appear in `ps aux` (ORG_GRADLE_PROJECT_<name>
+            # was the old workaround but doesn't support dotted names).
+            require_relative '../signing/gradle_signing_injector'
+
             gradle_args = ['./gradlew', 'bundleRelease', '--warning-mode=all']
-
-            if keystore_info
-              # Pass signing config via command-line properties (no file modification needed)
-              gradle_args += [
-                "-Pandroid.injected.signing.store.file=#{keystore_info[:path]}",
-                "-Pandroid.injected.signing.store.password=#{keystore_info[:password]}",
-                "-Pandroid.injected.signing.key.alias=#{keystore_info[:key_alias]}",
-                "-Pandroid.injected.signing.key.password=#{keystore_info[:key_password]}"
-              ]
-            end
-
-            # Pass version code override if provided (no file modification needed)
             gradle_args << "-PversionCode=#{version_code_override}" if version_code_override
 
-            Dir.chdir(android_dir) do
-              success = system(*gradle_args)
-              unless success
-                error 'Gradle build failed'
-                exit 1
+            injector = nil
+            env = {}
+            if keystore_info
+              injector = Mysigner::Signing::GradleSigningInjector.new
+              init_path = injector.write_init_script!
+              env = keystore_info[:signing_env_vars] || injector.env_vars(
+                keystore_path: keystore_info[:path],
+                store_password: keystore_info[:password],
+                key_password: keystore_info[:key_password],
+                key_alias: keystore_info[:key_alias]
+              )
+              gradle_args.insert(1, '--init-script', init_path)
+            end
+
+            begin
+              Dir.chdir(android_dir) do
+                success = system(env, *gradle_args)
+                unless success
+                  error 'Gradle build failed'
+                  exit 1
+                end
               end
+            ensure
+              injector&.cleanup!
             end
 
             # Find the AAB
@@ -2099,19 +2222,19 @@ module Mysigner
 
             case action
             when 'register'
-              if args.empty?
+              if args.empty? || args[0].nil? || args[0].to_s.empty?
                 error 'Usage: mysigner bundleid register IDENTIFIER [NAME]'
                 say ''
                 say 'Example: mysigner bundleid register com.company.myapp', :yellow
                 say 'Example: mysigner bundleid register com.company.myapp.widget "My Widget"', :yellow
                 exit 1
+                return
               end
 
               identifier = args[0]
-              # Default name is the last component of the identifier
-              name = args[1] || identifier.split('.').last.capitalize
 
-              # Validate bundle ID format
+              # Validate bundle ID format BEFORE dereferencing (guards against
+              # `.split` on a degenerate identifier like "123.com.app").
               unless identifier =~ /^[a-zA-Z][a-zA-Z0-9.-]*\.[a-zA-Z][a-zA-Z0-9.-]*$/
                 error "Invalid Bundle ID format: #{identifier}"
                 say ''
@@ -2120,7 +2243,11 @@ module Mysigner
                 say '  • Use reverse domain notation (e.g., com.company.app)', :cyan
                 say '  • Contain only letters, numbers, hyphens, and periods', :cyan
                 exit 1
+                return
               end
+
+              # Default name is the last component of the identifier
+              name = args[1] || identifier.split('.').last.capitalize
 
               say '🔗 Registering Bundle ID...', :cyan
               say ''
@@ -2205,12 +2332,67 @@ module Mysigner
                 exit 1
               end
 
+            when 'delete'
+              if args.empty? || args[0].nil? || args[0].to_s.empty?
+                error 'Usage: mysigner bundleid delete IDENTIFIER'
+                say ''
+                say 'Example: mysigner bundleid delete com.company.myapp', :yellow
+                exit 1
+                return
+              end
+
+              identifier = args[0]
+
+              say '🗑  Removing Bundle ID...', :cyan
+              say "  Identifier: #{identifier}", :white
+              say ''
+
+              begin
+                # Resolve the identifier → numeric id (the backend DELETE is keyed on id).
+                list_response = client.get(
+                  "/api/v1/organizations/#{config.current_organization_id}/bundle_ids"
+                )
+                bundle_ids = list_response[:data]['bundle_ids'] || list_response[:data] || []
+                bid = bundle_ids.find { |b| (b['identifier'] || b['bundle_id']) == identifier }
+
+                if bid.nil?
+                  error "Bundle ID not found: #{identifier}"
+                  say ''
+                  say '  → List existing: mysigner bundleid list', :yellow
+                  exit 1
+                  return
+                end
+
+                client.delete(
+                  "/api/v1/organizations/#{config.current_organization_id}/bundle_ids/#{bid['id']}"
+                )
+
+                say '✓ Bundle ID deleted from App Store Connect and local cache', :green
+                say ''
+                say 'Run `mysigner sync ios` to refresh your local cache if needed.', :cyan
+              rescue Mysigner::ValidationError => e
+                # Backend maps 409 Conflict → ValidationError. Apple refused
+                # because of dependent resources (apps/profiles/capabilities).
+                error e.message
+                say ''
+                say '💡 To delete this Bundle ID:', :cyan
+                say '   1. Remove any provisioning profiles that use it', :yellow
+                say '   2. Remove any apps tied to it in App Store Connect', :yellow
+                say '   3. Disable capabilities attached to it', :yellow
+                say '   4. Re-run `mysigner bundleid delete`', :yellow
+                exit 1
+              rescue Mysigner::ClientError => e
+                error "Failed to delete Bundle ID: #{e.message}"
+                exit 1
+              end
+
             else
               error "Unknown action: #{action}"
               say ''
               say 'Available actions:', :yellow
               say '  mysigner bundleid register IDENTIFIER [NAME]', :cyan
               say '  mysigner bundleid list', :cyan
+              say '  mysigner bundleid delete IDENTIFIER', :cyan
               exit 1
             end
           end
@@ -2407,11 +2589,12 @@ module Mysigner
 
             case action
             when 'create'
-              if identifier.nil?
+              if identifier.nil? || identifier.to_s.empty?
                 error 'Usage: mysigner merchant-id create IDENTIFIER [--name NAME]'
                 say ''
                 say 'Example: mysigner merchant-id create merchant.com.company.app', :yellow
                 exit 1
+                return
               end
 
               unless identifier.start_with?('merchant.')
@@ -2419,6 +2602,7 @@ module Mysigner
                 say ''
                 say 'Example: merchant.com.company.app', :cyan
                 exit 1
+                return
               end
 
               say '💳 Creating Merchant ID...', :cyan
@@ -2448,9 +2632,10 @@ module Mysigner
               end
 
             when 'delete'
-              if identifier.nil?
+              if identifier.nil? || identifier.to_s.empty?
                 error 'Usage: mysigner merchant-id delete IDENTIFIER'
                 exit 1
+                return
               end
 
               say '💳 Deleting Merchant ID...', :cyan
@@ -2468,6 +2653,7 @@ module Mysigner
                 if m.nil?
                   error "Merchant ID not found: #{identifier}"
                   exit 1
+                  return
                 end
 
                 client.delete(
@@ -2739,13 +2925,14 @@ module Mysigner
 
             case action
             when 'register'
-              if identifier.nil?
+              if identifier.nil? || identifier.to_s.empty?
                 error 'Usage: mysigner app-group register IDENTIFIER [--name NAME]'
                 say ''
                 say 'Example: mysigner app-group register group.com.company.shared', :yellow
                 say ''
                 say 'Note: Create the App Group in Apple Developer Portal first!', :cyan
                 exit 1
+                return
               end
 
               unless identifier.start_with?('group.')
@@ -2753,6 +2940,7 @@ module Mysigner
                 say ''
                 say 'Example: group.com.company.shared', :cyan
                 exit 1
+                return
               end
 
               say '📦 Registering App Group...', :cyan
@@ -2785,9 +2973,10 @@ module Mysigner
               end
 
             when 'delete'
-              if identifier.nil?
+              if identifier.nil? || identifier.to_s.empty?
                 error 'Usage: mysigner app-group delete IDENTIFIER'
                 exit 1
+                return
               end
 
               say '📦 Removing App Group...', :cyan
@@ -2805,6 +2994,7 @@ module Mysigner
                 if g.nil?
                   error "App Group not found: #{identifier}"
                   exit 1
+                  return
                 end
 
                 client.delete(

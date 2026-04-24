@@ -35,6 +35,8 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(config).to receive(:api_url).and_return(nil)
       allow(config).to receive(:api_token).and_return(nil)
       allow(config).to receive(:organization_id).and_return('123')
+      allow(config).to receive(:current_organization_id).and_return('123')
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get) # Stub to prevent errors if execution continues
     end
 
@@ -61,6 +63,8 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       # Stub to prevent errors if execution continues
       allow(client).to receive(:get).and_return({ data: {} })
       allow(Faraday).to receive(:new).and_return(double('connection',
@@ -106,6 +110,8 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}/certificates/#{cert_id}").and_return(cert_response)
 
       # Mock Faraday connection
@@ -197,6 +203,8 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}/certificates/#{cert_id}").and_return(cert_response)
 
       request_options = double('options')
@@ -229,7 +237,9 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
-      allow(client).to receive(:get).and_raise(Mysigner::NotFoundError)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
+      allow(client).to receive(:get).and_raise(Mysigner::NotFoundError.new('Not found'))
       cli.options = {}
     end
 
@@ -266,6 +276,8 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}/certificates/#{cert_id}").and_return(cert_response)
 
       request_options = double('options')
@@ -312,6 +324,8 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}/certificates/#{cert_id}").and_return(cert_response)
 
       request_options = double('options')
@@ -345,6 +359,8 @@ RSpec.describe 'mysigner certificate download', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
     end
 
     it 'shows unknown action error' do
@@ -354,7 +370,8 @@ RSpec.describe 'mysigner certificate download', type: :cli do
 
     it 'shows available actions' do
       output = capture_stdout { cli.certificate('upload', cert_id) }
-      expect(output).to include('Available actions: download')
+      expect(output).to include('Available actions:')
+      expect(output).to include('download')
     end
 
     it 'exits with code 1' do
@@ -366,7 +383,7 @@ RSpec.describe 'mysigner certificate download', type: :cli do
   describe 'help text' do
     it 'has description' do
       help_output = capture_stdout { Mysigner::CLI.start(%w[help certificate]) }
-      expect(help_output).to include('Download a signing certificate')
+      expect(help_output).to include('Download a certificate')
     end
 
     it 'shows ID argument' do

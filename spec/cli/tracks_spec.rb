@@ -69,6 +69,10 @@ RSpec.describe 'mysigner tracks', type: :cli do
 
     describe 'tracks command' do
       describe 'when package_name is missing' do
+        before do
+          allow(client).to receive(:get).and_return({ data: { 'tracks' => [] } })
+        end
+
         it 'shows usage error' do
           output = capture_stdout { cli.tracks }
           expect(output).to include('Usage: mysigner tracks PACKAGE_NAME')
@@ -290,6 +294,10 @@ RSpec.describe 'mysigner tracks', type: :cli do
       let(:track_name) { 'production' }
 
       describe 'when arguments are missing' do
+        before do
+          allow(client).to receive(:get).and_return({ data: {} })
+        end
+
         it 'shows usage error when no args' do
           output = capture_stdout { cli.track }
           expect(output).to include('Usage: mysigner track PACKAGE_NAME TRACK_NAME')

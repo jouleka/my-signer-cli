@@ -14,6 +14,14 @@ require_relative 'cli/diagnostic_commands'
 require_relative 'cli/build_commands'
 require_relative 'cli/resource_commands'
 require_relative 'cli/validate_commands'
+require_relative 'cleanup/private_keys_purger'
+
+# Phase 0: one-time cleanup of legacy plaintext .p8 files that older CLI
+# versions wrote to ~/.private_keys/ and ~/.appstoreconnect/private_keys/.
+# Idempotent — a marker file at ~/.mysigner/.private_keys_purged prevents
+# re-running. Skipped when MYSIGNER_USE_LEGACY_ASC=1 so users who opted
+# back into the legacy altool path keep their existing keys.
+Mysigner::Cleanup::PrivateKeysPurger.new.call
 
 module Mysigner
   class CLI < Thor

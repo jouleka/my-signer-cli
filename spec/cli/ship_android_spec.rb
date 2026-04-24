@@ -82,6 +82,8 @@ RSpec.describe 'mysigner ship android', type: :cli do
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
       allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
       allow(config).to receive(:user_email).and_return('test@example.com')
 
       cli.options = { platform: 'android', verbose: false }
@@ -113,6 +115,9 @@ RSpec.describe 'mysigner ship android', type: :cli do
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}/android_apps").and_return(apps_response)
       allow(client).to receive(:post) # Generic post stub
+      allow(client).to receive(:post).with(
+        "/api/v1/organizations/#{org_id}/credentials/google_play/access_token"
+      ).and_return({ data: { 'access_token' => 'ya29.fake_token' } })
     end
 
     context 'when upload succeeds completely' do

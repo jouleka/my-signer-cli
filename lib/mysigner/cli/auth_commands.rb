@@ -5,13 +5,16 @@ module Mysigner
     module AuthCommands
       def self.included(base)
         base.class_eval do
-          desc 'version', 'Show CLI version and system information'
+          desc 'version', 'Show version information'
           def version
             say "My Signer CLI v#{Mysigner::VERSION}", :cyan
             say ''
             say "Ruby:        #{RUBY_VERSION} (#{RUBY_PLATFORM})", :white
             say "Install:     #{File.expand_path('../../..', __dir__)}", :white
             say "Config:      #{Config::CONFIG_FILE}", :white
+            say ''
+            say 'Repository:  https://github.com/mysigner-dev/mysigner-cli', :white
+            say 'Issues:      https://github.com/mysigner-dev/mysigner-cli/issues', :white
             say ''
             say 'Docs:        https://mysigner.dev/docs/commands', :white
             say 'Support:     https://mysigner.dev/landing#contact', :white
@@ -738,9 +741,13 @@ module Mysigner
             end
           end
 
-          desc 'switch', 'Switch between organizations (for multi-org users)'
+          desc 'switch [ORG_ID]', 'Switch between organizations (for multi-org users)'
           long_desc <<~DESC
             Switch to a different organization.
+
+            Interactive (no argument): prompts you with a numbered list.
+            Non-interactive: pass an organization ID directly, e.g.
+                mysigner switch 7
 
             With organization-specific tokens, you'll need a token for each
             organization you want to access. This command will:
@@ -753,7 +760,7 @@ module Mysigner
             Note: You need to be the same user in all organizations. Tokens
             from different user accounts will be rejected.
           DESC
-          def switch
+          def switch(target_org_id = nil)
             config = load_config
             client = create_client(config)
 
@@ -815,20 +822,31 @@ module Mysigner
               say 'Legend: ✓ = Has token | ⚠️  = Needs token', :white
               say ''
 
-              # Let user select
-              org_index = ask("Select organization (1-#{organizations_list.length}, or 'q' to cancel):")
+              # Non-interactive selection via positional arg (`mysigner switch 7`)
+              selected_org = if target_org_id
+                               match = organizations_list.find { |o| o[:id].to_s == target_org_id.to_s }
+                               unless match
+                                 error "Organization #{target_org_id} not found among your memberships"
+                                 say ''
+                                 say "  Available IDs: #{organizations_list.map { |o| o[:id] }.join(', ')}", :yellow
+                                 exit 1
+                               end
+                               match
+                             else
+                               org_index = ask("Select organization (1-#{organizations_list.length}, or 'q' to cancel):")
 
-              if org_index.downcase == 'q'
-                say 'Cancelled', :yellow
-                return
-              end
+                               if org_index.downcase == 'q'
+                                 say 'Cancelled', :yellow
+                                 return
+                               end
 
-              unless org_index.match(/^\d+$/) && org_index.to_i.between?(1, organizations_list.length)
-                error 'Invalid selection'
-                return
-              end
+                               unless org_index.match(/^\d+$/) && org_index.to_i.between?(1, organizations_list.length)
+                                 error 'Invalid selection'
+                                 return
+                               end
 
-              selected_org = organizations_list[org_index.to_i - 1]
+                               organizations_list[org_index.to_i - 1]
+                             end
 
               if selected_org[:id] == config.current_organization_id
                 say ''
@@ -941,8 +959,14 @@ module Mysigner
           end
 
           no_commands do
-            # Helper method for yes/no prompts with Enter defaulting to yes
+            # Helper method for yes/no prompts with Enter defaulting to yes.
+            # Defaults to NO when stdin is not a TTY so automation (CI, pipes)
+            # never silently opts-in to mutating operations.
             def yes_with_default?(statement, color = nil)
+              unless $stdin.tty?
+                say "#{statement} [Y/n] (non-interactive: assuming no)", color
+                return false
+              end
               response = ask("#{statement} [Y/n]", color).to_s.strip.downcase
               response.empty? || response == 'y' || response == 'yes'
             end

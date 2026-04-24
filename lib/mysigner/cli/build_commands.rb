@@ -6,6 +6,7 @@ require 'time'
 require_relative '../upload/play_store_uploader'
 require_relative '../upload/app_store_automation'
 require_relative '../upload/app_store_submission'
+require_relative '../upload/asc_rest_uploader'
 
 module Mysigner
   class CLI < Thor
@@ -63,12 +64,15 @@ module Mysigner
           method_option :bundle_id, aliases: '-b', desc: 'Bundle ID (overrides project setting)'
           method_option :platform, type: :string, desc: 'Platform: ios or android (auto-detect if not specified)'
           method_option :package_name, type: :string, desc: 'Android package name (overrides project setting)'
-          method_option :release_notes, type: :string, desc: 'Release notes for Android Play Store'
+          method_option :release_notes, type: :string, desc: 'Release notes for Play Store (Android) / App Store (iOS whatsNew)'
+          method_option :metadata_file, type: :string, desc: 'Path to metadata JSON file (iOS App Store submissions)'
           method_option :version, type: :string, desc: 'Set version name for Android (e.g., 1.2.0)'
           method_option :release_type, type: :string, enum: %w[AFTER_APPROVAL MANUAL SCHEDULED],
                                        desc: 'Release type for App Store: AFTER_APPROVAL, MANUAL, or SCHEDULED'
           method_option :scheduled_date, type: :string, banner: 'ISO8601',
                                          desc: 'Scheduled release date (ISO 8601, e.g., 2026-02-01T10:00:00Z)'
+          method_option :auto_submit, type: :boolean,
+                                      desc: 'Submit for App Store review after upload. Defaults to dashboard CLI Defaults, else true for ship appstore. Use --no-auto-submit to skip.'
           def ship(target)
             ios_targets = %w[testflight appstore]
             android_targets = %w[internal alpha beta production]
@@ -302,47 +306,96 @@ module Mysigner
 
               upload_start = Time.now
 
-              # Fetch App Store Connect credentials
-              say '🔐 Fetching App Store Connect credentials...', :yellow
+              if ENV['MYSIGNER_USE_LEGACY_ASC'] == '1'
+                # LEGACY PATH — altool with server-fetched .p8. Will be removed in next release.
+                say '⚠️  MYSIGNER_USE_LEGACY_ASC=1 — using legacy altool upload path (deprecated).', :yellow
 
-              org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
-              org_data = org_response[:data]
+                # Fetch App Store Connect credentials
+                say '🔐 Fetching App Store Connect credentials...', :yellow
 
-              unless org_data['app_store_connect_configured']
+                org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
+                org_data = org_response[:data]
+
+                unless org_data['app_store_connect_configured']
+                  say ''
+                  say '✗ App Store Connect credentials not configured', :red
+                  say ''
+                  say 'Quick fix:', :cyan
+                  say '  mysigner doctor    # Auto-configure now', :green
+                  say ''
+                  say 'Or manually:', :cyan
+                  say '  1. Run: mysigner onboard'
+                  say '  2. Follow Step 5 to add credentials'
+                  say ''
+                  exit 1
+                end
+
+                api_key = org_data['app_store_connect_key_id']
+                api_issuer = org_data['app_store_connect_issuer_id']
+                private_key = org_data['app_store_connect_private_key']
+
+                unless api_key && api_issuer && private_key
+                  say '✗ Error: Invalid credentials received from API', :red
+                  exit 1
+                end
+
+                say '✓ Credentials loaded', :green
                 say ''
-                say '✗ App Store Connect credentials not configured', :red
-                say ''
-                say 'Quick fix:', :cyan
-                say '  mysigner doctor    # Auto-configure now', :green
-                say ''
-                say 'Or manually:', :cyan
-                say '  1. Run: mysigner onboard'
-                say '  2. Follow Step 5 to add credentials'
-                say ''
-                exit 1
+
+                # Upload (Uploader writes .p8 to Dir.mktmpdir + cleans up in ensure)
+                uploader = Upload::Uploader.new(
+                  ipa_path,
+                  api_key: api_key,
+                  api_issuer: api_issuer,
+                  private_key: private_key
+                )
+
+                uploader.upload!(wait_for_processing: options[:wait])
+              else
+                # DEFAULT PATH — ASC REST Build Upload API. No .p8 ever leaves the server.
+                require_relative '../upload/asc_rest_uploader'
+
+                # Resolve apple_app_id from bundle_id (may already have been fetched for is_appstore)
+                if !defined?(app) || app.nil?
+                  app_response = client.get("/api/v1/organizations/#{config.current_organization_id}/apple_apps",
+                                            params: { bundle_id: bundle_id })
+                  app = Array(app_response.dig(:data, 'data', 'apps')).first
+                end
+
+                unless app && app['id']
+                  say "✗ App not found in MySigner for bundle_id: #{bundle_id}", :red
+                  say 'Run: mysigner sync ios', :yellow
+                  exit 1
+                end
+
+                # Read version info from the built IPA
+                ipa_info = Upload::Uploader.extract_ipa_info(ipa_path)
+                cf_version = ipa_info[:cf_bundle_version] || '1'
+                cf_short   = ipa_info[:cf_bundle_short_version_string] || '1.0'
+
+                say "📤 Uploading via App Store Connect REST API (version #{cf_short} build #{cf_version})...", :cyan
+
+                rest = Mysigner::Upload::AscRestUploader.new(
+                  client: client,
+                  organization_id: config.current_organization_id,
+                  ipa_path: ipa_path,
+                  apple_app_id: app['id'],
+                  cf_bundle_version: cf_version,
+                  cf_bundle_short_version_string: cf_short,
+                  platform: 'IOS'
+                )
+
+                result = rest.call
+                case result[:final_state]
+                when 'COMPLETE'
+                  say '✓ Upload complete — Apple accepted the build', :green
+                when 'FAILED', 'INVALIDATED'
+                  say "✗ Apple rejected the upload: #{result[:final_state]}", :red
+                  exit 1
+                when 'TIMEOUT'
+                  say '⚠ Apple is still processing — check App Store Connect.', :yellow
+                end
               end
-
-              api_key = org_data['app_store_connect_key_id']
-              api_issuer = org_data['app_store_connect_issuer_id']
-              private_key = org_data['app_store_connect_private_key']
-
-              unless api_key && api_issuer && private_key
-                say '✗ Error: Invalid credentials received from API', :red
-                exit 1
-              end
-
-              say '✓ Credentials loaded', :green
-              say ''
-
-              # Upload
-              uploader = Upload::Uploader.new(
-                ipa_path,
-                api_key: api_key,
-                api_issuer: api_issuer,
-                private_key: private_key
-              )
-
-              uploader.upload!(wait_for_processing: options[:wait])
 
               timings[:upload] = Time.now - upload_start
 
@@ -427,14 +480,26 @@ module Mysigner
                     wait: true,
                     timeout: 1800,
                     poll_interval: 15,
-                    no_submit: false
+                    no_submit: false,
+                    # ship appstore defaults to submitting for review, but
+                    # dashboard `cli_defaults.auto_submit = false` now wins
+                    # (the old hard-override that clobbered it was removed).
+                    default_submit: true
                   }
                 )
 
                 # Submit the new build (use its specific build number)
-                # Build metadata overrides from CLI options
-                ship_overrides = { 'auto_submit' => true }
-                ship_override_keys = ['auto_submit']
+                # Build metadata overrides from CLI options — start from any
+                # --metadata-file + --release-notes, then layer in ship-specific
+                # release_type/scheduled_date. auto_submit is NOT forced here;
+                # precedence is: --auto-submit flag > cli_defaults > command default.
+                ship_overrides, override_sources = build_metadata_overrides(options)
+                ship_override_keys = []
+
+                if options.key?(:auto_submit)
+                  ship_overrides['auto_submit'] = options[:auto_submit]
+                  ship_override_keys << 'auto_submit'
+                end
 
                 if options[:release_type]
                   # Validate release_type
@@ -477,6 +542,8 @@ module Mysigner
                   end
                 end
 
+                override_sources << { type: :inline, keys: ship_override_keys }
+
                 submission = Upload::AppStoreSubmission.new(
                   client,
                   config.current_organization_id,
@@ -485,7 +552,7 @@ module Mysigner
                     build_number: new_build['build_number'] # Use the specific build we found
                   },
                   metadata_overrides: ship_overrides,
-                  override_sources: [{ type: :inline, keys: ship_override_keys }]
+                  override_sources: override_sources
                 )
 
                 submission_result = submission.submit_for_review!(automation: automation)
@@ -610,6 +677,11 @@ module Mysigner
                                        archive_path: archive_path,
                                        ipa_path: ipa_path
                                      })
+              exit 1
+            rescue Mysigner::Upload::AscRestUploader::BuildVersionConflictError => e
+              say ''
+              say "✗ #{e.message}", :red
+              say ''
               exit 1
             rescue StandardError => e
               say ''
@@ -805,49 +877,82 @@ module Mysigner
 
                 upload_start = Time.now
 
-                # Fetch Google Play credentials from API
-                say '🔐 Fetching Google Play credentials...', :yellow
+                # Phase 0: mint short-lived OAuth2 access token server-side.
+                # Service-account JSON never leaves the server.
+                say '🔐 Requesting Google Play access token...', :yellow
 
-                org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
-                org_data = org_response[:data]
-
-                unless org_data['google_play_configured']
+                begin
+                  token_response = client.post(
+                    "/api/v1/organizations/#{config.current_organization_id}/credentials/google_play/access_token"
+                  )
+                  access_token = token_response[:data]['access_token']
+                rescue Mysigner::NotFoundError, Mysigner::ValidationError
                   say ''
                   say '✗ Google Play credentials not configured', :red
                   say ''
                   say 'Quick fix:', :cyan
                   say '  Configure Google Play credentials in My Signer dashboard', :green
                   say ''
-                  say 'Or configure in My Signer dashboard', :yellow
-                  say ''
                   exit 1
                 end
 
-                service_account_json = org_data['google_play_service_account']
-
-                unless service_account_json
-                  say '✗ Error: Service account JSON not found', :red
+                if access_token.nil? || access_token.to_s.empty?
+                  say '✗ Error: Failed to mint Google Play access token', :red
                   exit 1
                 end
 
-                say '✓ Credentials loaded', :green
+                say '✓ Access token minted (valid ~1 hour)', :green
                 say ''
 
-                # Upload to Google Play
+                # Phase 0: fetch Android CLI Defaults from the dashboard
+                # (android_apps.cli_defaults JSONB). Fields here act as base
+                # values; explicit CLI flags below layer on top.
+                android_defaults = fetch_android_release_defaults(client, config, package_name)
+                if android_defaults
+                  say "✓ Loaded CLI Defaults for #{package_name}", :green
+                  say ''
+                end
+
+                # Upload to Google Play with bare bearer token
                 require_relative '../upload/play_store_uploader'
 
+                # Merge release notes: flag > defaults.release_notes (Hash)
                 release_notes = nil
-                release_notes = { 'en-US' => options[:release_notes] } if options[:release_notes]
+                if options[:release_notes]
+                  release_notes = { 'en-US' => options[:release_notes] }
+                elsif android_defaults && android_defaults['release_notes'].is_a?(Hash) && android_defaults['release_notes'].any?
+                  release_notes = android_defaults['release_notes']
+                end
+
+                # Effective track: positional arg wins; defaults only kick in
+                # if the user left it implicit (which `ship android` currently
+                # doesn't allow — track is required — but kept here for
+                # symmetry with submit_android and future-proofing).
+                effective_track = track.presence || android_defaults&.dig('default_track') || 'internal'
+
+                status = android_defaults&.dig('default_status')
+                user_fraction = android_defaults&.dig('default_user_fraction')
+                in_app_update_priority = android_defaults&.dig('default_in_app_update_priority')
+                release_name = android_defaults&.dig('release_name')
+                country_targeting = android_defaults&.dig('country_targeting')
+                changes_not_sent_for_review = android_defaults&.key?('changes_not_sent_for_review') ? android_defaults['changes_not_sent_for_review'] : nil
+                country_targeting = country_targeting.transform_keys(&:to_sym) if country_targeting.is_a?(Hash)
 
                 uploader = Upload::PlayStoreUploader.new(
                   aab_path: aab_path,
-                  service_account_json: service_account_json,
+                  access_token: access_token,
                   package_name: package_name
                 )
 
                 uploader.upload!(
-                  track: track,
-                  release_notes: release_notes
+                  track: effective_track,
+                  release_notes: release_notes,
+                  user_fraction: user_fraction,
+                  status: status,
+                  in_app_update_priority: in_app_update_priority,
+                  release_name: release_name,
+                  country_targeting: country_targeting,
+                  changes_not_sent_for_review: changes_not_sent_for_review
                 )
 
                 timings[:upload] = Time.now - upload_start
@@ -988,6 +1093,29 @@ module Mysigner
               end
             end
 
+            # Fetch Android CLI Defaults (android_apps.cli_defaults) for the
+            # package_name. Returns nil if none configured or request fails —
+            # ship proceeds with CLI-flag-only values in that case.
+            def fetch_android_release_defaults(client, config, package_name)
+              response = client.get(
+                "/api/v1/organizations/#{config.current_organization_id}/android_releases",
+                params: { package_name: package_name }
+              )
+              data = response[:data] if response[:success]
+              return nil unless data.is_a?(Hash)
+
+              releases = data['android_releases']
+              return nil unless releases.is_a?(Array) && releases.any?
+
+              releases.first
+            rescue Mysigner::NotFoundError
+              nil
+            rescue StandardError => e
+              # Non-fatal: log and proceed without defaults.
+              puts "⚠️  Could not fetch Android CLI Defaults: #{e.message}" if ENV['MYSIGNER_VERBOSE'] == '1'
+              nil
+            end
+
             # Fetch highest version code from API
             def fetch_android_highest_version_code(client, config, package_name)
               response = client.get("/api/v1/organizations/#{config.current_organization_id}/android_apps")
@@ -1091,13 +1219,15 @@ module Mysigner
                 say "🎯 Target Track: #{track_label}", :cyan
                 say ''
 
-                # Fetch Google Play credentials
-                say '🔐 Fetching Google Play credentials...', :yellow
+                # Phase 0: mint short-lived access token server-side; JSON stays on server
+                say '🔐 Requesting Google Play access token...', :yellow
 
-                org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
-                org_data = org_response[:data]
-
-                unless org_data['google_play_configured']
+                begin
+                  token_response = client.post(
+                    "/api/v1/organizations/#{config.current_organization_id}/credentials/google_play/access_token"
+                  )
+                  access_token = token_response[:data]['access_token']
+                rescue Mysigner::NotFoundError, Mysigner::ValidationError
                   say ''
                   say '✗ Google Play credentials not configured', :red
                   say ''
@@ -1105,8 +1235,12 @@ module Mysigner
                   exit 1
                 end
 
-                service_account_json = org_data['google_play_service_account']
-                say '✓ Credentials loaded', :green
+                if access_token.nil? || access_token.to_s.empty?
+                  say '✗ Error: Failed to mint Google Play access token', :red
+                  exit 1
+                end
+
+                say '✓ Access token minted', :green
                 say ''
 
                 # Get the latest build from the API
@@ -1147,19 +1281,11 @@ module Mysigner
                 release_notes = nil
                 release_notes = { 'en-US' => options[:release_notes] } if options[:release_notes]
 
-                # Create a minimal uploader just for track assignment
-                # We need to use the Google API directly for this
-                require 'googleauth'
+                # Use the Google API directly with the bare bearer token for track assignment
                 require 'google/apis/androidpublisher_v3'
-                require 'stringio'
-
-                auth = Google::Auth::ServiceAccountCredentials.make_creds(
-                  json_key_io: StringIO.new(service_account_json),
-                  scope: 'https://www.googleapis.com/auth/androidpublisher'
-                )
 
                 service = Google::Apis::AndroidpublisherV3::AndroidPublisherService.new
-                service.authorization = auth
+                service.authorization = access_token
 
                 # Create edit
                 edit = service.insert_edit(package_name, Google::Apis::AndroidpublisherV3::AppEdit.new)
@@ -1648,56 +1774,102 @@ module Mysigner
                 exit 1
               end
 
-              # Fetch App Store Connect credentials from API
-              say '🔐 Fetching App Store Connect credentials...', :yellow
+              if ENV['MYSIGNER_USE_LEGACY_ASC'] == '1'
+                # LEGACY PATH — altool with server-fetched .p8. Will be removed in next release.
+                say '⚠️  MYSIGNER_USE_LEGACY_ASC=1 — using legacy altool upload path (deprecated).', :yellow
+                say '🔐 Fetching App Store Connect credentials...', :yellow
 
-              begin
-                org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
-                org_data = org_response[:data]
+                begin
+                  org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
+                  org_data = org_response[:data]
 
-                # Check if credentials are configured
-                unless org_data['app_store_connect_configured']
+                  unless org_data['app_store_connect_configured']
+                    say ''
+                    say '✗ App Store Connect credentials not configured', :red
+                    say ''
+                    say 'Quick fix:', :cyan
+                    say '  mysigner doctor    # Auto-configure now', :green
+                    say ''
+                    say 'Or manually:', :cyan
+                    say '  1. Run: mysigner onboard'
+                    say '  2. Follow Step 5 to add credentials'
+                    say ''
+                    exit 1
+                  end
+
+                  api_key = org_data['app_store_connect_key_id']
+                  api_issuer = org_data['app_store_connect_issuer_id']
+                  private_key = org_data['app_store_connect_private_key']
+
+                  unless api_key && api_issuer && private_key
+                    say '✗ Error: Invalid credentials received from API', :red
+                    exit 1
+                  end
+
+                  say '✓ Credentials loaded', :green
                   say ''
-                  say '✗ App Store Connect credentials not configured', :red
+                rescue Mysigner::ClientError => e
                   say ''
-                  say 'Quick fix:', :cyan
-                  say '  mysigner doctor    # Auto-configure now', :green
-                  say ''
-                  say 'Or manually:', :cyan
-                  say '  1. Run: mysigner onboard'
-                  say '  2. Follow Step 5 to add credentials'
-                  say ''
+                  say "✗ Error fetching credentials: #{e.message}", :red
                   exit 1
                 end
 
-                # Get credentials (API will return the decrypted values)
-                api_key = org_data['app_store_connect_key_id']
-                api_issuer = org_data['app_store_connect_issuer_id']
-                private_key = org_data['app_store_connect_private_key']
+                uploader = Upload::Uploader.new(
+                  ipa_path,
+                  api_key: api_key,
+                  api_issuer: api_issuer,
+                  private_key: private_key
+                )
 
-                unless api_key && api_issuer && private_key
-                  say '✗ Error: Invalid credentials received from API', :red
+                uploader.upload!(wait_for_processing: options[:wait])
+              else
+                # DEFAULT PATH — ASC REST Build Upload API.
+                require_relative '../upload/asc_rest_uploader'
+
+                ipa_info = Upload::Uploader.extract_ipa_info(ipa_path)
+                bundle_id = ipa_info[:bundle_id]
+                cf_version = ipa_info[:cf_bundle_version] || '1'
+                cf_short   = ipa_info[:cf_bundle_short_version_string] || '1.0'
+
+                if bundle_id.nil? || bundle_id.empty?
+                  say '✗ Could not extract bundle identifier from IPA.', :red
+                  say '  Ensure the file is a valid iOS .ipa with a Payload/*.app/Info.plist.', :yellow
                   exit 1
                 end
 
-                say '✓ Credentials loaded', :green
-                say ''
-              rescue Mysigner::ClientError => e
-                say ''
-                say "✗ Error fetching credentials: #{e.message}", :red
-                exit 1
+                app_response = client.get("/api/v1/organizations/#{config.current_organization_id}/apple_apps",
+                                          params: { bundle_id: bundle_id })
+                app = Array(app_response.dig(:data, 'data', 'apps')).first
+
+                unless app && app['id']
+                  say "✗ App with bundle ID '#{bundle_id}' not found in MySigner.", :red
+                  say '  Run: mysigner sync ios', :yellow
+                  exit 1
+                end
+
+                say "📤 Uploading #{File.basename(ipa_path)} via App Store Connect REST API (version #{cf_short} build #{cf_version})...", :cyan
+
+                rest = Mysigner::Upload::AscRestUploader.new(
+                  client: client,
+                  organization_id: config.current_organization_id,
+                  ipa_path: ipa_path,
+                  apple_app_id: app['id'],
+                  cf_bundle_version: cf_version,
+                  cf_bundle_short_version_string: cf_short,
+                  platform: 'IOS'
+                )
+
+                result = rest.call
+                case result[:final_state]
+                when 'COMPLETE'
+                  say '✓ Upload complete — Apple accepted the build', :green
+                when 'FAILED', 'INVALIDATED'
+                  say "✗ Apple rejected the upload: #{result[:final_state]}", :red
+                  exit 1
+                when 'TIMEOUT'
+                  say '⚠ Apple is still processing — check App Store Connect.', :yellow
+                end
               end
-
-              # Create uploader
-              uploader = Upload::Uploader.new(
-                ipa_path,
-                api_key: api_key,
-                api_issuer: api_issuer,
-                private_key: private_key
-              )
-
-              # Upload
-              uploader.upload!(wait_for_processing: options[:wait])
 
               say '🎉 Upload complete!', :green
               say ''
@@ -1713,6 +1885,11 @@ module Mysigner
             rescue Upload::Uploader::UploadError => e
               say ''
               say "✗ Upload Error: #{e.message}", :red
+              exit 1
+            rescue Mysigner::Upload::AscRestUploader::BuildVersionConflictError => e
+              say ''
+              say "✗ #{e.message}", :red
+              say ''
               exit 1
             rescue StandardError => e
               say ''
@@ -1769,6 +1946,8 @@ module Mysigner
           method_option :package_name, type: :string, desc: 'Android package name'
           method_option :version_code, type: :string, desc: 'Android version code to promote'
           method_option :release_notes, type: :string, desc: 'Release notes for Android'
+          method_option :auto_submit, type: :boolean,
+                                      desc: 'Submit for review. Defaults to dashboard CLI Defaults, else true. Use --no-auto-submit to skip.'
           def submit(track = nil)
             config = load_config
             client = create_client(config)
@@ -1829,7 +2008,11 @@ module Mysigner
                 organization_id: config.current_organization_id,
                 opts: {
                   wait: false, # No need to wait - only using already-processed builds
-                  no_submit: false
+                  no_submit: false,
+                  # `mysigner submit` without --auto-submit/--no-auto-submit
+                  # defaults to submitting; cli_defaults.auto_submit=false can
+                  # still suppress it.
+                  default_submit: true
                 }
               )
 
@@ -1852,10 +2035,17 @@ module Mysigner
                 build_number: options[:build_number]
               }
 
-              # Force submission when running 'mysigner submit' explicitly
-              # Build metadata overrides from CLI options
-              metadata_overrides = { 'auto_submit' => true }
-              override_keys = ['auto_submit']
+              # `mysigner submit` defaults to submitting (see AppStoreAutomation
+              # opts[:default_submit]=true above) but no longer hard-clobbers
+              # the user's dashboard `cli_defaults.auto_submit = false`.
+              # Precedence: --auto-submit flag > cli_defaults > command default.
+              metadata_overrides = {}
+              override_keys = []
+
+              if options.key?(:auto_submit)
+                metadata_overrides['auto_submit'] = options[:auto_submit]
+                override_keys << 'auto_submit'
+              end
 
               if options[:whats_new]
                 metadata_overrides['whats_new'] = options[:whats_new]

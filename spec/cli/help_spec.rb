@@ -221,12 +221,14 @@ RSpec.describe 'mysigner help' do
   describe 'output format' do
     it 'uses consistent formatting' do
       stdout, = Open3.capture3("#{exe_path} help 2>&1")
+      stdout = stdout.force_encoding('UTF-8')
       # Should have proper structure
       expect(stdout).to match(/Commands:.*Options:/m)
     end
 
     it 'aligns command descriptions' do
       stdout, = Open3.capture3("#{exe_path} help 2>&1")
+      stdout = stdout.force_encoding('UTF-8')
       lines = stdout.split("\n").select { |l| l.include?('mysigner') && l.include?('#') }
       # All description markers should align
       expect(lines.length).to be > 10

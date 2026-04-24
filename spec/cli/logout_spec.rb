@@ -104,7 +104,7 @@ RSpec.describe 'mysigner logout' do
   describe 'help text' do
     it 'has description' do
       command = Mysigner::CLI.commands['logout']
-      expect(command.description).to eq('Clear stored credentials')
+      expect(command.description).to eq('Log out and clear stored credentials')
     end
 
     it 'is listed in help' do

@@ -23,6 +23,19 @@ RSpec.describe Mysigner::Signing::Wizard do
     # Stub validator
     allow(Mysigner::Signing::Validator).to receive(:new).and_return(validator)
     allow(validator).to receive(:validate).and_return({ valid: true, errors: [], warnings: [] })
+
+    # Stub profile download: after selecting a profile the wizard tries to
+    # fetch + install it via direct Faraday (binary data). Stub client to
+    # expose api_url/api_token, stub Faraday to avoid real HTTP, and stub
+    # file I/O so no real profile is written.
+    allow(client).to receive(:api_url).and_return('https://test.mysigner.dev')
+    allow(client).to receive(:api_token).and_return('test-token')
+    faraday_conn = double('faraday_conn')
+    faraday_response = double('response', success?: true, body: "\x00\x01\x02", status: 200, headers: {})
+    allow(faraday_conn).to receive(:get).and_return(faraday_response)
+    allow(Faraday).to receive(:new).and_return(faraday_conn)
+    allow(FileUtils).to receive(:mkdir_p)
+    allow(File).to receive(:binwrite)
   end
 
   def capture_output
@@ -285,12 +298,14 @@ RSpec.describe Mysigner::Signing::Wizard do
       end
 
       it 'shows error and provides guidance' do
-        stub_stdin('1') # Keep current team
+        # '1' keeps current team; '3' = "Create manually and sync" option
+        # (1 = auto-create App Store, 2 = auto-create Dev, 4 = Skip)
+        stub_stdin('1', '3')
 
         output = capture_output { wizard.run! }
 
         expect(output).to include('No provisioning profiles found')
-        expect(output).to include('Create a profile at')
+        expect(output).to include('Create profile at')
         expect(output).to include('developer.apple.com')
       end
     end

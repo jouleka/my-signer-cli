@@ -634,8 +634,15 @@ module Mysigner
           end
 
           no_commands do
-            # Helper method for yes/no prompts with Enter defaulting to yes
+            # Helper method for yes/no prompts with Enter defaulting to yes.
+            # When stdin is not a TTY (pipe, redirect, CI), default to NO so
+            # `mysigner doctor` never silently mutates user files (e.g. ~/.zshrc)
+            # without an interactive confirmation.
             def yes_with_default?(statement, color = nil)
+              unless $stdin.tty?
+                say "#{statement} [Y/n] (non-interactive: assuming no)", color
+                return false
+              end
               response = ask("#{statement} [Y/n]", color).to_s.strip.downcase
               response.empty? || response == 'y' || response == 'yes'
             end

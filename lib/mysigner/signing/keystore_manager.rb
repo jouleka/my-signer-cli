@@ -3,6 +3,7 @@
 require 'English'
 require 'fileutils'
 require 'base64'
+require 'open3'
 
 module Mysigner
   module Signing
@@ -21,11 +22,13 @@ module Mysigner
 
       # List all keystores from API
       # @param android_app_id [Integer, nil] Filter by app ID
-      # @param include_secrets [Boolean] Include passwords in response (only for build operations)
-      def list(android_app_id: nil, include_secrets: false)
+      # @param include_secrets [Boolean] DEPRECATED and silently ignored. Kept
+      #   for signature-compat during the 10.0 transition; will be removed in
+      #   the next release. Passwords are now fetched via #fetch_secrets.
+      def list(android_app_id: nil, include_secrets: nil)
+        _ = include_secrets # intentionally unused — see note above
         params = {}
         params[:android_app_id] = android_app_id if android_app_id
-        params[:include_secrets] = true if include_secrets
 
         response = @client.get(
           "/api/v1/organizations/#{@organization_id}/android_keystores",
@@ -35,10 +38,22 @@ module Mysigner
       end
 
       # Get active keystore for an app (or any active keystore if no app specified)
-      # @param include_secrets [Boolean] Include passwords in response (only for build operations)
-      def active_keystore(android_app_id: nil, include_secrets: false)
-        keystores = list(android_app_id: android_app_id, include_secrets: include_secrets)
+      # @param include_secrets [Boolean] DEPRECATED — see #list.
+      def active_keystore(android_app_id: nil, include_secrets: nil)
+        _ = include_secrets
+        keystores = list(android_app_id: android_app_id)
         keystores.find { |k| k['active'] }
+      end
+
+      # Phase 0: narrow audit-logged endpoint that returns the keystore
+      # password + key password + key alias for a single keystore. Replaces
+      # the insecure ?include_secrets=true list flag.
+      # Returns a hash: { 'keystore_password' =>, 'key_password' =>, 'key_alias' => }
+      def fetch_secrets(keystore_id)
+        response = @client.post(
+          "/api/v1/organizations/#{@organization_id}/android_keystores/#{keystore_id}/secrets"
+        )
+        response[:data] || {}
       end
 
       # Download a keystore from API and save locally
@@ -80,28 +95,36 @@ module Mysigner
         }
       end
 
-      # Get or download keystore (uses cached version if available)
+      # Get or download keystore (uses cached version if available and fresh).
+      # Phase 0: cache has a TTL (default 24h, override via
+      # MYSIGNER_KEYSTORE_CACHE_HOURS). Stale files are deleted + re-downloaded.
       def get_or_download(keystore_id)
         keystores = list
         keystore = keystores.find { |k| k['id'].to_s == keystore_id.to_s }
 
         raise KeystoreNotFoundError, "Keystore with ID #{keystore_id} not found" unless keystore
 
-        # Check if already cached locally
         filename = "#{keystore['name'].gsub(/[^a-zA-Z0-9_.-]/, '_')}.jks"
         local_path = File.join(KEYSTORES_DIR, filename)
+        max_age_hours = (ENV['MYSIGNER_KEYSTORE_CACHE_HOURS'] || 24).to_i
 
         if File.exist?(local_path)
-          return {
-            path: local_path,
-            name: keystore['name'],
-            key_alias: keystore['key_alias'],
-            id: keystore['id'],
-            cached: true
-          }
+          age_seconds = Time.now - File.mtime(local_path)
+          if age_seconds < (max_age_hours * 3600)
+            return {
+              path: local_path,
+              name: keystore['name'],
+              key_alias: keystore['key_alias'],
+              id: keystore['id'],
+              cached: true
+            }
+          else
+            # Stale cache — delete and re-download below
+            File.delete(local_path)
+          end
         end
 
-        # Download if not cached
+        # Download if not cached (or stale)
         result = download(keystore_id)
         result[:cached] = false
         result
@@ -183,13 +206,21 @@ module Mysigner
         end
       end
 
-      # Get keystore info using keytool
+      # Get keystore info using keytool.
+      # Phase 0: passes the password via a temp env var consumed by
+      # `-storepass:env` so it's never in argv/ps output.
       def keystore_info(keystore_path, password)
         return nil unless File.exist?(keystore_path)
         return nil unless system('which keytool > /dev/null 2>&1')
 
-        output = `keytool -list -v -keystore #{shell_escape(keystore_path)} -storepass #{shell_escape(password)} 2>&1`
-        return nil unless $CHILD_STATUS.success?
+        env = { 'MYSIGNER_KS_PW' => password.to_s }
+        output, status = Open3.capture2e(
+          env,
+          'keytool', '-list', '-v',
+          '-keystore', keystore_path,
+          '-storepass:env', 'MYSIGNER_KS_PW'
+        )
+        return nil unless status.success?
 
         # Parse output
         info = {}
@@ -222,12 +253,6 @@ module Mysigner
           f.options.open_timeout = 10
           f.adapter Faraday.default_adapter
         end
-      end
-
-      def shell_escape(str)
-        return "''" if str.nil? || str.empty?
-
-        "'#{str.gsub("'", "'\\''")}'"
       end
     end
   end

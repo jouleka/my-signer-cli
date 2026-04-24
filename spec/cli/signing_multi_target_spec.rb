@@ -2,10 +2,14 @@
 
 require 'spec_helper'
 require 'mysigner/cli'
+require 'mysigner/signing/wizard'
 
 RSpec.describe 'CLI Multi-Target Signing', type: :cli do
   let(:cli) { Mysigner::CLI.new }
-  let(:config) { double('Config', api_token: 'test_token', organization_id: 'org-123', user_email: 'test@example.com') }
+  let(:config) do
+    double('Config', api_token: 'test_token', organization_id: 'org-123',
+                     current_organization_id: 'org-123', user_email: 'test@example.com')
+  end
   let(:client) { double('Client') }
 
   let(:project_info) do
@@ -86,10 +90,14 @@ RSpec.describe 'CLI Multi-Target Signing', type: :cli do
         cli.options = { target: 'NonExistentTarget' }
 
         allow(parser_double).to receive(:find_target).with('NonExistentTarget').and_raise('Target not found')
+        allow(parser_double).to receive(:code_sign_style).and_return('Manual')
+
+        wizard = instance_double(Mysigner::Signing::Wizard, run!: nil)
+        allow(Mysigner::Signing::Wizard).to receive(:new).and_return(wizard)
 
         # The wizard will handle the error gracefully by printing error and returning
         # Just verify it doesn't crash
-        expect { cli.signing('setup') }.not_to raise_error
+        expect { cli.signing('configure') }.not_to raise_error
       end
     end
 
@@ -106,7 +114,7 @@ RSpec.describe 'CLI Multi-Target Signing', type: :cli do
         expect(cli).to receive(:error).with('Cannot use both --target and --all-targets')
         expect(cli).to receive(:exit).with(1)
 
-        cli.signing('setup')
+        cli.signing('configure')
       end
     end
   end

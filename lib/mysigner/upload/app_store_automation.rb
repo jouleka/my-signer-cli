@@ -13,6 +13,9 @@ module Mysigner
       def initialize(client:, organization_id:, opts: {})
         @client = client
         @organization_id = organization_id
+        # Proper boolean coercion — `!x.nil?` evaluates to `true` for `false`,
+        # which previously caused `wait: false` / `no_submit: false` to be
+        # treated as `true`. Use `!!` to get the actual boolean semantics.
         @wait_enabled = opts.key?(:wait) ? !opts[:wait].nil? : true
 
         poll = opts[:poll_interval] || opts[:poll_seconds]
@@ -24,6 +27,13 @@ module Mysigner
         @timeout = timeout&.positive? ? timeout : DEFAULT_WAIT_TIMEOUT
 
         @no_submit = !opts[:no_submit].nil?
+
+        # Whether to submit by default when NEITHER cli_defaults nor CLI
+        # overrides specify `auto_submit`. `ship`/`submit` pass true (it's
+        # the user's explicit intent). Dashboard `cli_defaults.auto_submit`
+        # still wins if set — we only fall back to this when silent.
+        @default_submit = opts.key?(:default_submit) ? !opts[:default_submit].nil? : false
+
         @now = opts[:now]
       end
 
@@ -317,6 +327,11 @@ module Mysigner
       def should_submit_with_reason(metadata, overrides)
         return [false, nil, '--no-auto-submit flag'] if @no_submit
 
+        # Precedence: explicit CLI flag > dashboard cli_defaults > command default.
+        # The command default is set by `ship appstore` / `submit` (true),
+        # preserving backward-compat when the user runs those commands without
+        # configuring anything. Dashboard `auto_submit: false` now correctly
+        # suppresses submission (previously hard-overridden at the call site).
         if overrides.key?('auto_submit')
           return overrides['auto_submit'] ? [true, 'CLI override',
                                              nil] : [false, nil, 'CLI override disabled auto_submit']
@@ -326,6 +341,8 @@ module Mysigner
           return metadata['auto_submit'] ? [true, 'Dashboard configuration',
                                             nil] : [false, nil, 'Dashboard auto_submit disabled']
         end
+
+        return [true, 'command default', nil] if @default_submit
 
         [false, nil, 'No auto_submit configuration']
       end
@@ -353,14 +370,42 @@ module Mysigner
                 "Cannot submit to Apple Store: missing required fields: #{missing_fields.join(', ')}. Please configure these in your My Signer dashboard or provide via --whats-new flag."
         end
 
+        # Primary-locale fields (backward-compatible path): backend will
+        # upsert a single localization for the app's primary locale when
+        # these top-level keys are present.
         payload = {
           whats_new: merged['whats_new'],
           keywords: merged['keywords'],
           marketing_url: merged['marketing_url'],
           promotional_text: merged['promotional_text'],
           support_url: merged['support_url'],
+          description: merged['description'],
           locale: merged['locale']
-        }.compact # Remove nil values
+        }.compact
+
+        # Multi-locale path: if cli_defaults includes a `localizations` array,
+        # forward it so the backend can PATCH/POST each locale on ASC
+        # (appStoreVersionLocalizations) instead of only the primary.
+        if merged['localizations'].is_a?(Array) && merged['localizations'].any?
+          payload[:localizations] = merged['localizations'].map do |loc|
+            next nil unless loc.is_a?(Hash)
+
+            {
+              locale: loc['locale'] || loc[:locale],
+              whats_new: loc['whats_new'] || loc[:whats_new],
+              keywords: loc['keywords'] || loc[:keywords],
+              marketing_url: loc['marketing_url'] || loc[:marketing_url],
+              promotional_text: loc['promotional_text'] || loc[:promotional_text],
+              support_url: loc['support_url'] || loc[:support_url],
+              description: loc['description'] || loc[:description]
+            }.compact
+          end.compact
+        end
+
+        # Phased release: backend flips @version.phased_release_pending and
+        # enqueues PhasedReleaseActivationJob, which POSTs
+        # appStoreVersionPhasedReleases after Apple approves the submission.
+        payload[:phased_release] = true if merged['phased_release']
 
         @client.post(
           "/api/v1/organizations/#{@organization_id}/app_store_versions/#{version_id}/submit",

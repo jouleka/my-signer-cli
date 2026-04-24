@@ -111,7 +111,7 @@ RSpec.describe 'mysigner config', type: :cli do
       # Keys should be left-justified to 20 characters
       expect(output).to match(/api_url\s+:/)
       expect(output).to match(/user_email\s+:/)
-      expect(output).to match(/current_organization\s+:/)
+      expect(output).to match(/current_organization\s*:/)
     end
 
     it 'does not make network calls' do
@@ -246,7 +246,7 @@ RSpec.describe 'mysigner config', type: :cli do
   describe 'help text' do
     it 'has description' do
       help_output = capture_stdout { Mysigner::CLI.start(%w[help config]) }
-      expect(help_output).to include('Show current configuration')
+      expect(help_output).to include('Show current CLI configuration')
     end
   end
 

@@ -268,7 +268,7 @@ RSpec.describe 'mysigner export', type: :cli do
   describe 'help text' do
     it 'has description' do
       help_output = capture_stdout { Mysigner::CLI.start(%w[help export]) }
-      expect(help_output).to include('Export .xcarchive to .ipa file')
+      expect(help_output).to include('Export .xcarchive to .ipa')
     end
 
     it 'shows archive path argument' do

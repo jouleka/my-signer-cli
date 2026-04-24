@@ -11,18 +11,28 @@ RSpec.describe 'mysigner signing configure', type: :integration do
   let(:client) { instance_double(Mysigner::Client) }
   let(:project_info) { { path: '/path/to/Test.xcodeproj', type: :project, framework: :native, directory: '/path/to' } }
   let(:wizard) { instance_double(Mysigner::Signing::Wizard) }
+  let(:main_target) { double('main_target', name: 'TestApp') }
+  let(:parser) do
+    double('parser').tap do |p|
+      allow(p).to receive(:main_target).and_return(main_target)
+      # Return 'Manual' so the wizard is not short-circuited by the
+      # "Automatic signing" branch in CLI#signing.
+      allow(p).to receive(:code_sign_style).and_return('Manual')
+      allow(p).to receive(:team_id).and_return('TEAM123')
+    end
+  end
 
   before do
     allow(cli).to receive(:load_config).and_return(config)
     allow(cli).to receive(:create_client).and_return(client)
     allow(config).to receive(:api_token).and_return('test-token')
-    allow(config).to receive(:organization_id).and_return('org-123')
+    allow(config).to receive(:current_organization_id).and_return('org-123')
 
     # Stub Build::Detector
     allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
 
     # Stub Build::Parser
-    allow(Mysigner::Build::Parser).to receive(:new).and_return(double('parser'))
+    allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
 
     # Stub Signing::Wizard
     allow(Mysigner::Signing::Wizard).to receive(:new).and_return(wizard)
@@ -58,10 +68,9 @@ RSpec.describe 'mysigner signing configure', type: :integration do
     end
 
     it 'creates wizard with correct parameters' do
-      parser = double('parser')
-      allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
-
-      expect(Mysigner::Signing::Wizard).to receive(:new).with(parser, client, 'org-123')
+      expect(Mysigner::Signing::Wizard).to receive(:new)
+        .with(parser, client, 'org-123', hash_including(:target, :all_targets))
+        .and_return(wizard)
 
       capture_output { cli.signing('configure') }
     end

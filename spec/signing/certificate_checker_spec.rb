@@ -25,8 +25,10 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
         PEM
       end
 
-      let(:openssl_output1) { 'notAfter=Dec 31 23:59:59 2025 GMT' }
-      let(:openssl_output2) { 'notAfter=Jun 15 23:59:59 2024 GMT' }
+      let(:future_year) { Date.today.year + 2 }
+      let(:past_year) { Date.today.year - 2 }
+      let(:openssl_output1) { "notAfter=Dec 31 23:59:59 #{future_year} GMT" }
+      let(:openssl_output2) { "notAfter=Jun 15 23:59:59 #{past_year} GMT" }
 
       before do
         # Stub security find-identity
@@ -82,7 +84,7 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
 
       it 'determines status based on expiry' do
         certs = checker.check!
-        # First cert expires in 2025 (valid)
+        # First cert expires in the future (valid)
         expect(certs[0][:status]).to eq(:valid)
       end
     end

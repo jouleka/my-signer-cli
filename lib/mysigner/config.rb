@@ -160,6 +160,12 @@ module Mysigner
       @organizations = {}
 
       File.delete(CONFIG_FILE) if exists?
+
+      # Phase 0: logout also purges the keystore cache so a shared machine
+      # doesn't leave prior-user keystore blobs on disk.
+      keystores_dir = File.expand_path('~/.mysigner/keystores')
+      FileUtils.rm_rf(keystores_dir)
+
       true
     rescue StandardError => e
       raise ConfigError, "Failed to clear config: #{e.message}"

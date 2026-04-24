@@ -14,11 +14,24 @@ RSpec.describe 'mysigner onboard' do
   let(:client) { instance_double(Mysigner::Client) }
   let(:api_url) { 'http://test.example.com' }
   let(:api_token) { 'test_token_123' }
+  let(:user_email) { 'test@example.com' }
+  let(:org_id) { 1 }
+  let(:org_data) do
+    {
+      'id' => org_id,
+      'name' => 'Test Org',
+      'app_store_connect_configured' => false
+    }
+  end
 
   before do
     allow(Mysigner::Config).to receive(:new).and_return(config)
     allow(Mysigner::Client).to receive(:new).and_return(client)
     allow(config).to receive(:save)
+    # No prior session by default
+    allow(config).to receive(:exists?).and_return(false)
+    allow(config).to receive(:api_token).and_return(nil)
+    allow(config).to receive(:current_organization_id).and_return(nil)
   end
 
   describe 'successful setup - user has everything' do
@@ -26,22 +39,21 @@ RSpec.describe 'mysigner onboard' do
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       # User has account (1), has organization (1), skip App Store Connect setup (2)
       allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1', '2')
-      # User has token
-      allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
+      # User has token (yes_with_default? calls ask)
+      allow(cli).to receive(:yes_with_default?).with(/Have you generated/, anything).and_return(true)
       # Provide email and token
-      allow(cli).to receive(:prompt_for_email).and_return('test@example.com')
+      allow(cli).to receive(:prompt_for_email).and_return(user_email)
       allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
       # Success responses
       allow(client).to receive(:test_connection).and_return({ success: true })
       allow(client).to receive(:get).with('/api/v1/organizations').and_return({
                                                                                 data: { 'organizations' => [{
-                                                                                  'id' => '1', 'name' => 'Test Org'
+                                                                                  'id' => org_id, 'name' => 'Test Org'
                                                                                 }] }
                                                                               })
-      allow(client).to receive(:get).with('/api/v1/organizations/1').and_return({
-                                                                                  data: { 'id' => '1',
-                                                                                          'name' => 'Test Org' }
-                                                                                })
+      allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return({
+                                                                                          data: org_data
+                                                                                        })
       allow(config).to receive(:api_url=)
       allow(config).to receive(:user_email=)
       allow(config).to receive(:current_organization_id=)
@@ -72,15 +84,19 @@ RSpec.describe 'mysigner onboard' do
     end
 
     it 'fetches organizations' do
-      expect(client).to receive(:get).with('/api/v1/organizations')
+      expect(client).to receive(:get).with('/api/v1/organizations').and_return({
+                                                                                 data: { 'organizations' => [{
+                                                                                   'id' => org_id, 'name' => 'Test Org'
+                                                                                 }] }
+                                                                               })
       cli.onboard
     end
 
-    it 'saves configuration' do
+    it 'saves configuration with multi-org token' do
       expect(config).to receive(:api_url=).with(api_url)
-      expect(config).to receive(:user_email=).with('test@example.com')
-      expect(config).to receive(:current_organization_id=).with('1')
-      expect(config).to receive(:save_token_for_org).with('1', 'Test Org', api_token)
+      expect(config).to receive(:user_email=).with(user_email)
+      expect(config).to receive(:current_organization_id=).with(org_id)
+      expect(config).to receive(:save_token_for_org).with(org_id, 'Test Org', api_token)
       expect(config).to receive(:save)
       cli.onboard
     end
@@ -108,26 +124,24 @@ RSpec.describe 'mysigner onboard' do
         # User needs account (2), has organization (1), skip App Store Connect (2)
         allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('2', '1', '2')
         # Confirms account created
-        allow(cli).to receive(:yes?).with(/Have you created your account/).and_return(true)
+        allow(cli).to receive(:yes_with_default?).with(/Have you created your account/, anything).and_return(true)
         # Has token
-        allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-        allow(cli).to receive(:prompt_for_email).and_return('test@example.com')
+        allow(cli).to receive(:yes_with_default?).with(/Have you generated/, anything).and_return(true)
+        allow(cli).to receive(:prompt_for_email).and_return(user_email)
         allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
         allow(client).to receive(:test_connection).and_return({ success: true })
         allow(client).to receive(:get).with('/api/v1/organizations').and_return({
                                                                                   data: { 'organizations' => [{
-                                                                                    'id' => '1', 'name' => 'Test Org'
+                                                                                    'id' => org_id, 'name' => 'Test Org'
                                                                                   }] }
                                                                                 })
-        allow(client).to receive(:get).with('/api/v1/organizations/1').and_return({
-                                                                                    data: { 'id' => '1',
-                                                                                            'name' => 'Test Org' }
-                                                                                  })
+        allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return({
+                                                                                            data: org_data
+                                                                                          })
         allow(config).to receive(:api_url=)
         allow(config).to receive(:user_email=)
         allow(config).to receive(:current_organization_id=)
         allow(config).to receive(:save_token_for_org)
-        allow(config).to receive(:organization_id=)
       end
 
       it 'shows signup guidance' do
@@ -147,7 +161,7 @@ RSpec.describe 'mysigner onboard' do
       before do
         # User needs account
         allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('2')
-        allow(cli).to receive(:yes?).with(/Have you created your account/).and_return(false)
+        allow(cli).to receive(:yes_with_default?).with(/Have you created your account/, anything).and_return(false)
       end
 
       it 'shows signup guidance' do
@@ -174,21 +188,20 @@ RSpec.describe 'mysigner onboard' do
       before do
         # Has account (1), needs org (2), skip App Store Connect (2)
         allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '2', '2')
-        allow(cli).to receive(:yes?).with(/Have you created your organization/).and_return(true)
+        allow(cli).to receive(:yes_with_default?).with(/Have you created your organization/, anything).and_return(true)
         # Has token
-        allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-        allow(cli).to receive(:prompt_for_email).and_return('test@example.com')
+        allow(cli).to receive(:yes_with_default?).with(/Have you generated/, anything).and_return(true)
+        allow(cli).to receive(:prompt_for_email).and_return(user_email)
         allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
         allow(client).to receive(:test_connection).and_return({ success: true })
         allow(client).to receive(:get).with('/api/v1/organizations').and_return({
                                                                                   data: { 'organizations' => [{
-                                                                                    'id' => '1', 'name' => 'Test Org'
+                                                                                    'id' => org_id, 'name' => 'Test Org'
                                                                                   }] }
                                                                                 })
-        allow(client).to receive(:get).with('/api/v1/organizations/1').and_return({
-                                                                                    data: { 'id' => '1',
-                                                                                            'name' => 'Test Org' }
-                                                                                  })
+        allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return({
+                                                                                            data: org_data
+                                                                                          })
         allow(config).to receive(:api_url=)
         allow(config).to receive(:user_email=)
         allow(config).to receive(:current_organization_id=)
@@ -212,7 +225,7 @@ RSpec.describe 'mysigner onboard' do
       before do
         # Has account, needs org
         allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '2')
-        allow(cli).to receive(:yes?).with(/Have you created your organization/).and_return(false)
+        allow(cli).to receive(:yes_with_default?).with(/Have you created your organization/, anything).and_return(false)
       end
 
       it 'shows organization guidance' do
@@ -236,7 +249,7 @@ RSpec.describe 'mysigner onboard' do
       # Has account and org
       allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1')
       # No token yet
-      allow(cli).to receive(:yes?).with(/Have you generated/).and_return(false)
+      allow(cli).to receive(:yes_with_default?).with(/Have you generated/, anything).and_return(false)
     end
 
     it 'shows token generation guidance' do
@@ -258,8 +271,8 @@ RSpec.describe 'mysigner onboard' do
     before do
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1')
-      allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-      allow(cli).to receive(:prompt_for_email).and_return('test@example.com')
+      allow(cli).to receive(:yes_with_default?).with(/Have you generated/, anything).and_return(true)
+      allow(cli).to receive(:prompt_for_email).and_return(user_email)
       allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return('')
       allow(cli).to receive(:error)
     end
@@ -283,10 +296,10 @@ RSpec.describe 'mysigner onboard' do
     before do
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1')
-      allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-      allow(cli).to receive(:prompt_for_email).and_return('test@example.com')
+      allow(cli).to receive(:yes_with_default?).with(/Have you generated/, anything).and_return(true)
+      allow(cli).to receive(:prompt_for_email).and_return(user_email)
       allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
-      allow(client).to receive(:test_connection).and_raise(Mysigner::UnauthorizedError)
+      allow(client).to receive(:test_connection).and_raise(Mysigner::UnauthorizedError.new('Invalid token'))
       allow(cli).to receive(:error)
     end
 
@@ -310,8 +323,8 @@ RSpec.describe 'mysigner onboard' do
     before do
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1')
-      allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-      allow(cli).to receive(:prompt_for_email).and_return('test@example.com')
+      allow(cli).to receive(:yes_with_default?).with(/Have you generated/, anything).and_return(true)
+      allow(cli).to receive(:prompt_for_email).and_return(user_email)
       allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
       allow(client).to receive(:test_connection).and_return({ success: false })
       allow(cli).to receive(:error)
@@ -332,8 +345,8 @@ RSpec.describe 'mysigner onboard' do
     before do
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1')
-      allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-      allow(cli).to receive(:prompt_for_email).and_return('test@example.com')
+      allow(cli).to receive(:yes_with_default?).with(/Have you generated/, anything).and_return(true)
+      allow(cli).to receive(:prompt_for_email).and_return(user_email)
       allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
       allow(client).to receive(:test_connection).and_return({ success: true })
       allow(client).to receive(:get).with('/api/v1/organizations').and_return({
@@ -361,8 +374,8 @@ RSpec.describe 'mysigner onboard' do
     before do
       allow(cli).to receive(:prompt_api_url).and_return(api_url)
       allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1')
-      allow(cli).to receive(:yes?).with(/Have you generated/).and_return(true)
-      allow(cli).to receive(:prompt_for_email).and_return('test@example.com')
+      allow(cli).to receive(:yes_with_default?).with(/Have you generated/, anything).and_return(true)
+      allow(cli).to receive(:prompt_for_email).and_return(user_email)
       allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
       allow(client).to receive(:test_connection).and_raise(StandardError, 'Network error')
       allow(cli).to receive(:error)
@@ -386,7 +399,7 @@ RSpec.describe 'mysigner onboard' do
   describe 'help text' do
     it 'has description' do
       command = Mysigner::CLI.commands['onboard']
-      expect(command.description).to include('Interactive onboarding guide')
+      expect(command.description).to include('START HERE')
     end
 
     it 'has long description' do

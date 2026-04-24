@@ -34,6 +34,8 @@ RSpec.describe 'mysigner certificates', type: :cli do
       allow(config).to receive(:api_url).and_return(nil)
       allow(config).to receive(:api_token).and_return(nil)
       allow(config).to receive(:organization_id).and_return('123')
+      allow(config).to receive(:current_organization_id).and_return('123')
+      allow(config).to receive(:user_email).and_return(nil)
       # Stub to prevent errors if execution continues
       allow(client).to receive(:get).and_return({
                                                   data: { 'certificates' => [],
@@ -74,6 +76,8 @@ RSpec.describe 'mysigner certificates', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return(api_response)
       cli.options = { page: 1, per_page: 50 }
     end
@@ -127,6 +131,8 @@ RSpec.describe 'mysigner certificates', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return(api_response)
       cli.options = { page: 1, per_page: 50 }
     end
@@ -214,6 +220,8 @@ RSpec.describe 'mysigner certificates', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return(api_response)
       cli.options = { page: 1, per_page: 50, type: 'distribution' }
     end
@@ -248,6 +256,8 @@ RSpec.describe 'mysigner certificates', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return(api_response)
       cli.options = { page: 1, per_page: 50, status: 'active' }
     end
@@ -277,6 +287,8 @@ RSpec.describe 'mysigner certificates', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return(api_response)
       cli.options = { page: 1, per_page: 50, search: 'Distribution' }
     end
@@ -315,6 +327,8 @@ RSpec.describe 'mysigner certificates', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return(api_response)
       cli.options = { page: 1, per_page: 50 }
     end
@@ -350,6 +364,8 @@ RSpec.describe 'mysigner certificates', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_raise(Mysigner::ClientError.new('API error'))
       cli.options = { page: 1, per_page: 50 }
     end

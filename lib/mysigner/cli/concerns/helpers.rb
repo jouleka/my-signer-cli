@@ -36,6 +36,38 @@ module Mysigner
           end
         end
 
+        # Client-side UDID validity check for iOS devices. Matches the two
+        # formats Apple uses: 25-character alphanumeric (older devices pre-
+        # iPhone X) and 40-character hex, optionally with a single dash after
+        # the first 8 chars (newer). Also rejects obviously synthetic values
+        # (all zeros, single-character repeats) that Apple's dev-portal
+        # sandbox has been known to accept even though they can never match
+        # a real device.
+        def valid_ios_udid?(udid)
+          return false if udid.nil? || udid.strip.empty?
+
+          normalized = udid.strip.upcase
+
+          # 25-char legacy UDID: alphanumeric
+          legacy = normalized.match?(/\A[0-9A-F]{25}\z/)
+
+          # 40-char modern UDID: hex, optional dash after first 8 chars
+          modern_plain = normalized.match?(/\A[0-9A-F]{40}\z/)
+          modern_dashed = normalized.match?(/\A[0-9A-F]{8}-[0-9A-F]{16}\z/) # 8-16 form some tools emit (older spec)
+          modern_full_dashed = normalized.match?(/\A[0-9A-F]{8}-[0-9A-F]{32}\z/) # 8-32 (what xcrun outputs)
+
+          return false unless legacy || modern_plain || modern_dashed || modern_full_dashed
+
+          hex_only = normalized.delete('-')
+          # Reject trivially synthetic UDIDs. A real UDID has at least 4
+          # distinct hex characters among its 25/40 positions; "000…" or
+          # "AAAA…" or "012345…" style sequences flunk that.
+          distinct = hex_only.chars.uniq.size
+          return false if distinct < 4
+
+          true
+        end
+
         def load_config
           # CI/CD mode: prefer environment variables when set
           return Config.from_env if Config.env_configured?

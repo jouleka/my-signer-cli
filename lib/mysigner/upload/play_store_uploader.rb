@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'json'
-require 'stringio'
 
 module Mysigner
   module Upload
@@ -24,10 +23,16 @@ module Mysigner
       VALID_TRACKS = %w[internal alpha beta production].freeze
       SCOPE = 'https://www.googleapis.com/auth/androidpublisher'
 
-      def initialize(aab_path:, service_account_json:, package_name:)
+      # Phase 0: accepts a short-lived OAuth2 access_token (minted server-side
+      # from the customer's service-account JSON). The JSON no longer leaves
+      # the server. google-api-ruby-client accepts a bare string for
+      # authorization= and sends it as `Authorization: Bearer <token>`.
+      def initialize(aab_path:, access_token:, package_name:)
         @aab_path = File.expand_path(aab_path)
-        @service_account_json = service_account_json
+        @access_token = access_token
         @package_name = package_name
+
+        raise CredentialsError, 'access_token is required' if @access_token.nil? || @access_token.to_s.empty?
 
         validate_aab!
         setup_google_client!
@@ -37,8 +42,17 @@ module Mysigner
       # @param track [String] Track to assign: internal, alpha, beta, production
       # @param release_notes [Hash] Localized release notes { 'en-US' => 'What\'s new...' }
       # @param user_fraction [Float] Rollout percentage (0.0-1.0) for staged rollouts
+      # @param status [String] Explicit release status: draft | inProgress | completed.
+      #   Overrides the user_fraction-derived default. `draft` is useful for
+      #   "upload, don't release yet" flows that iOS-MANUAL users expect.
+      # @param in_app_update_priority [Integer] 0–5 priority hint for in-app update flows
+      # @param release_name [String] Optional release name (defaults to AAB versionName)
+      # @param country_targeting [Hash] { countries: ['US','CA'], include_rest_of_world: false }
+      # @param changes_not_sent_for_review [Boolean] Skip submitting changes to Play review on commit
       # @return [Hash] Upload result with version_code and track info
-      def upload!(track: 'internal', release_notes: nil, user_fraction: nil)
+      def upload!(track: 'internal', release_notes: nil, user_fraction: nil,
+                  status: nil, in_app_update_priority: nil, release_name: nil,
+                  country_targeting: nil, changes_not_sent_for_review: nil)
         @current_track = track # Store for error messages
         say_uploading(track)
 
@@ -55,10 +69,20 @@ module Mysigner
           say_upload_success(version_code)
 
           # 3. Assign to track with release
-          assign_to_track(edit.id, track, version_code, release_notes: release_notes, user_fraction: user_fraction) if track
+          if track
+            assign_to_track(
+              edit.id, track, version_code,
+              release_notes: release_notes,
+              user_fraction: user_fraction,
+              status: status,
+              in_app_update_priority: in_app_update_priority,
+              release_name: release_name,
+              country_targeting: country_targeting
+            )
+          end
 
           # 4. Commit the edit
-          commit_edit(edit.id)
+          commit_edit(edit.id, changes_not_sent_for_review: changes_not_sent_for_review)
 
           say_success(track, version_code)
 
@@ -145,25 +169,12 @@ module Mysigner
       end
 
       def setup_google_client!
-        require 'googleauth'
         require 'google/apis/androidpublisher_v3'
 
-        # Parse and validate service account JSON
-        begin
-          @credentials_data = JSON.parse(@service_account_json)
-        rescue JSON::ParserError => e
-          raise CredentialsError, "Invalid service account JSON: #{e.message}"
-        end
-
-        # Build authorization
-        @auth = Google::Auth::ServiceAccountCredentials.make_creds(
-          json_key_io: StringIO.new(@service_account_json),
-          scope: SCOPE
-        )
-
-        # Create service
+        # Create service with the bare bearer token. google-api-ruby-client
+        # sends a string authorization as `Authorization: Bearer <string>`.
         @service = Google::Apis::AndroidpublisherV3::AndroidPublisherService.new
-        @service.authorization = @auth
+        @service.authorization = @access_token
         @service.client_options.open_timeout_sec = 30
         @service.client_options.read_timeout_sec = 300 # Large file uploads need time
         @service.request_options.retries = 3
@@ -216,18 +227,32 @@ module Mysigner
         end
       end
 
-      def assign_to_track(edit_id, track, version_code, release_notes: nil, user_fraction: nil)
+      def assign_to_track(edit_id, track, version_code, release_notes: nil, user_fraction: nil,
+                          status: nil, in_app_update_priority: nil, release_name: nil,
+                          country_targeting: nil)
         raise TrackError, "Invalid track '#{track}'. Valid tracks: #{VALID_TRACKS.join(', ')}" unless VALID_TRACKS.include?(track)
 
         puts "🚂 Assigning to #{track} track..."
 
-        # Build release
+        # Status precedence: explicit `status:` arg > user_fraction-derived >
+        # completed. Google Play rejects `userFraction` outside (0,1) and also
+        # rejects it when status != inProgress, so we clear it when the
+        # caller-provided status is non-rollout.
+        effective_status = if status && %w[draft inProgress halted completed].include?(status)
+                             status
+                           elsif user_fraction
+                             'inProgress'
+                           else
+                             'completed'
+                           end
+
         release = Google::Apis::AndroidpublisherV3::TrackRelease.new(
           version_codes: [version_code.to_s],
-          status: user_fraction ? 'inProgress' : 'completed'
+          status: effective_status
         )
 
-        # Add release notes if provided
+        release.name = release_name if release_name
+
         if release_notes&.any?
           release.release_notes = release_notes.map do |lang, text|
             Google::Apis::AndroidpublisherV3::LocalizedText.new(
@@ -237,10 +262,16 @@ module Mysigner
           end
         end
 
-        # Add user fraction for staged rollouts
-        release.user_fraction = user_fraction if user_fraction
+        release.user_fraction = user_fraction if user_fraction && effective_status == 'inProgress'
+        release.in_app_update_priority = in_app_update_priority if in_app_update_priority
 
-        # Build track update
+        if country_targeting.is_a?(Hash) && country_targeting[:countries].is_a?(Array) && country_targeting[:countries].any?
+          release.country_targeting = Google::Apis::AndroidpublisherV3::CountryTargeting.new(
+            countries: country_targeting[:countries],
+            include_rest_of_world: country_targeting.fetch(:include_rest_of_world, false)
+          )
+        end
+
         track_obj = Google::Apis::AndroidpublisherV3::Track.new(
           track: track,
           releases: [release]
@@ -249,20 +280,26 @@ module Mysigner
         @service.update_edit_track(@package_name, edit_id, track, track_obj)
       end
 
-      def commit_edit(edit_id)
+      # Commit the edit. When `changes_not_sent_for_review` is nil (the
+      # historical default) we opt-in (true) and fall back to false if Google
+      # rejects — some apps have Play-managed review that forbids the flag.
+      # When the caller passes an explicit boolean (from cli_defaults), we
+      # pass it through without the fallback retry.
+      def commit_edit(edit_id, changes_not_sent_for_review: nil)
         puts '💾 Committing changes...'
-        begin
-          # Try with changesNotSentForReview first (for apps without managed review)
-          @service.commit_edit(@package_name, edit_id, changes_not_sent_for_review: true)
-        rescue Google::Apis::ClientError => e
-          error_text = e.message.to_s
-          # Also check body if present
-          error_text += " #{e.body}" if e.respond_to?(:body) && e.body
 
-          raise unless error_text.include?('changesNotSentForReview')
+        if changes_not_sent_for_review.nil?
+          begin
+            @service.commit_edit(@package_name, edit_id, changes_not_sent_for_review: true)
+          rescue Google::Apis::ClientError => e
+            error_text = e.message.to_s
+            error_text += " #{e.body}" if e.respond_to?(:body) && e.body
+            raise unless error_text.include?('changesNotSentForReview')
 
-          # App has managed review enabled, commit without the flag
-          @service.commit_edit(@package_name, edit_id)
+            @service.commit_edit(@package_name, edit_id)
+          end
+        else
+          @service.commit_edit(@package_name, edit_id, changes_not_sent_for_review: !!changes_not_sent_for_review)
         end
       end
 

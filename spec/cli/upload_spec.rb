@@ -26,6 +26,12 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
     allow(Mysigner::Config).to receive(:new).and_return(config)
     allow(Mysigner::Client).to receive(:new).and_return(client)
     allow(cli).to receive(:exit) # Stub exit
+    # Legacy uploader path (default is ASC REST uploader now)
+    ENV['MYSIGNER_USE_LEGACY_ASC'] = '1'
+  end
+
+  after do
+    ENV.delete('MYSIGNER_USE_LEGACY_ASC')
   end
 
   describe 'when not logged in' do
@@ -35,6 +41,8 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(nil)
       allow(config).to receive(:api_token).and_return(nil)
       allow(config).to receive(:organization_id).and_return(nil)
+      allow(config).to receive(:current_organization_id).and_return(nil)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).and_return(true) # Stub to prevent errors if execution continues
       allow(client).to receive(:get) # Stub to prevent errors if execution continues
     end
@@ -62,6 +70,8 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).and_return(true) # Stub to prevent errors if execution continues
       allow(client).to receive(:get) # Stub to prevent errors if execution continues
     end
@@ -89,6 +99,8 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).with(ipa_path).and_return(false)
       allow(client).to receive(:get) # Stub to prevent errors if execution continues
     end
@@ -125,6 +137,8 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).with(ipa_path).and_return(true)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
     end
@@ -141,9 +155,8 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
 
     it 'shows setup guidance' do
       output = capture_stdout { cli.upload('testflight', ipa_path) }
-      expect(output).to include('configure your App Store Connect API key')
-      expect(output).to include('organization settings')
-      expect(output).to include('API Key ID, Issuer ID')
+      expect(output).to include('mysigner doctor')
+      expect(output).to include('mysigner onboard')
     end
 
     it 'exits with code 1' do
@@ -159,6 +172,8 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).with(ipa_path).and_return(true)
       allow(client).to receive(:get).and_raise(Mysigner::ClientError.new('API connection failed'))
     end
@@ -193,6 +208,8 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).with(ipa_path).and_return(true)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
     end
@@ -227,6 +244,8 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).with(ipa_path).and_return(true)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
       allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
@@ -309,6 +328,8 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).with(ipa_path).and_return(true)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
       allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
@@ -348,6 +369,8 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).with(ipa_path).and_return(true)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
       allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
@@ -388,6 +411,8 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).with(ipa_path).and_return(true)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
       allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
@@ -408,6 +433,7 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
 
     context 'with DEBUG environment variable' do
       before do
+        allow(ENV).to receive(:[]).and_call_original
         allow(ENV).to receive(:[]).with('DEBUG').and_return('true')
       end
 
@@ -421,7 +447,7 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
   describe 'help text' do
     it 'has description' do
       help_output = capture_stdout { Mysigner::CLI.start(%w[help upload]) }
-      expect(help_output).to include('Upload IPA to TestFlight')
+      expect(help_output).to include('Upload existing .ipa to TestFlight')
     end
 
     it 'shows target and path arguments' do

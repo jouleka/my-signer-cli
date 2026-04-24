@@ -108,9 +108,14 @@ module Mysigner
           '-allowProvisioningUpdates' # Allow Xcode to update profiles if needed
         ].join(' ')
 
-        # Run command and capture output
+        # Run command and capture output. xcodebuild output can contain
+        # non-ASCII bytes (smart quotes in Apple error messages, emoji in
+        # file paths) — force UTF-8 + scrub so `.strip` / `.include?` don't
+        # raise Encoding::CompatibilityError under the default US-ASCII
+        # locale (e.g. on CI runners without LANG set).
         IO.popen(cmd, err: %i[child out]) do |io|
           io.each_line do |line|
+            line = line.force_encoding('UTF-8').scrub
             next if line.strip.empty?
 
             # Show errors and warnings

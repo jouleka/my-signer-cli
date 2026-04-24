@@ -91,11 +91,23 @@ module Mysigner
         # Handle framework-specific pre-build steps
         run_pre_build_steps
 
-        # Build command with signing properties
-        cmd = build_gradle_command(task)
+        # Phase 0: inject signing via Gradle init-script + env vars. Passwords
+        # never appear in argv (no -Pandroid.injected.signing.*=PLAINTEXT).
+        injector = nil
+        if @keystore_path && File.exist?(@keystore_path)
+          require 'mysigner/signing/gradle_signing_injector'
+          injector = Mysigner::Signing::GradleSigningInjector.new
+          @signing_init_script_path = injector.write_init_script!
+        end
 
-        # Execute build
-        execute_with_output(cmd)
+        begin
+          # Build command with signing properties referencing the init script
+          cmd = build_gradle_command(task)
+          execute_with_output(cmd)
+        ensure
+          injector&.cleanup!
+          @signing_init_script_path = nil
+        end
       end
 
       def ensure_java_home!
@@ -233,19 +245,33 @@ module Mysigner
           cmd_parts << '&&'
         end
 
+        # Phase 0: export signing env vars inline so they're only visible to
+        # the child process, not in argv. The Gradle init script below reads
+        # MYSIGNER_STORE_FILE / MYSIGNER_STORE_PASSWORD / MYSIGNER_KEY_ALIAS /
+        # MYSIGNER_KEY_PASSWORD and configures signingConfigs.release.
+        if @keystore_path && File.exist?(@keystore_path) && @signing_init_script_path
+          cmd_parts << "export MYSIGNER_STORE_FILE=#{shell_escape(File.absolute_path(@keystore_path))}"
+          cmd_parts << '&&'
+          cmd_parts << "export MYSIGNER_STORE_PASSWORD=#{shell_escape(@keystore_password)}" if @keystore_password
+          cmd_parts << '&&' if @keystore_password
+          cmd_parts << "export MYSIGNER_KEY_ALIAS=#{shell_escape(@key_alias)}" if @key_alias
+          cmd_parts << '&&' if @key_alias
+          cmd_parts << "export MYSIGNER_KEY_PASSWORD=#{shell_escape(@key_password)}" if @key_password
+          cmd_parts << '&&' if @key_password
+        end
+
         # Change to android directory and run gradle
         cmd_parts << "cd #{shell_escape(android_dir)}"
         cmd_parts << '&&'
         cmd_parts << gradle_cmd
-        cmd_parts << task
 
-        # Add signing properties if provided
-        if @keystore_path && File.exist?(@keystore_path)
-          cmd_parts << "-Pandroid.injected.signing.store.file=#{shell_escape(File.absolute_path(@keystore_path))}"
-          cmd_parts << "-Pandroid.injected.signing.store.password=#{shell_escape(@keystore_password)}" if @keystore_password
-          cmd_parts << "-Pandroid.injected.signing.key.alias=#{shell_escape(@key_alias)}" if @key_alias
-          cmd_parts << "-Pandroid.injected.signing.key.password=#{shell_escape(@key_password)}" if @key_password
+        # Reference the init script (contains the signing-config override)
+        if @signing_init_script_path
+          cmd_parts << '--init-script'
+          cmd_parts << shell_escape(@signing_init_script_path)
         end
+
+        cmd_parts << task
 
         # Add version code override if provided (no file modification needed)
         cmd_parts << "-PversionCode=#{@version_code}" if @version_code

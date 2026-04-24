@@ -3,4 +3,20 @@
 
 require 'mysigner'
 
-Mysigner::CLI.start(ARGV)
+# Normalize `mysigner <cmd> [args…] --help` → `mysigner help <cmd>`. Thor
+# treats extra positional args as a fatal argument-count error, so without
+# this rewrite users who type `mysigner ship testflight --help` see
+# `ERROR: "mysigner ship" was called with arguments ["testflight", "--help"]`
+# instead of the usage docs. Rewriting at the entry point keeps every
+# subcommand's `--help` behaviour predictable.
+def rewrite_help_flag!(argv)
+  return argv unless argv.any? { |a| ['--help', '-h'].include?(a) }
+
+  # Don't touch `help` itself or `--version` / bare `-v` invocations.
+  first = argv.find { |a| !a.start_with?('-') }
+  return argv if first.nil? || first == 'help'
+
+  ['help', first]
+end
+
+Mysigner::CLI.start(rewrite_help_flag!(ARGV))

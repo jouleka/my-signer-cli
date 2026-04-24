@@ -3,6 +3,7 @@
 require 'English'
 require 'fileutils'
 require 'json'
+require 'tmpdir'
 
 module Mysigner
   module Upload
@@ -16,6 +17,30 @@ module Mysigner
         '/Applications/Transporter.app/Contents/itms/bin/iTMSTransporter',    # Standalone Transporter app
         '/usr/local/itms/bin/iTMSTransporter' # Custom installation
       ].freeze
+
+      # Parses CFBundleVersion + CFBundleShortVersionString from an .ipa
+      # (reads Info.plist from the Payload/*.app/ inside the zip).
+      # Used by the new ASC REST upload flow in build_commands.rb.
+      def self.extract_ipa_info(ipa_path)
+        require 'open3'
+        result = { cf_bundle_version: nil, cf_bundle_short_version_string: nil, bundle_id: nil }
+        Dir.mktmpdir('mysigner-ipa-inspect-') do |tmp|
+          plist_path = File.join(tmp, 'Info.plist')
+          zip_out, status = Open3.capture2e('unzip', '-p', ipa_path, 'Payload/*.app/Info.plist')
+          return result unless status.success? && !zip_out.empty?
+
+          File.binwrite(plist_path, zip_out)
+          xml_out, xml_status = Open3.capture2e('plutil', '-convert', 'xml1', '-o', '-', plist_path)
+          return result unless xml_status.success?
+
+          result[:cf_bundle_version] = xml_out[%r{<key>CFBundleVersion</key>\s*<string>([^<]+)</string>}, 1]
+          result[:cf_bundle_short_version_string] = xml_out[%r{<key>CFBundleShortVersionString</key>\s*<string>([^<]+)</string>}, 1]
+          result[:bundle_id] = xml_out[%r{<key>CFBundleIdentifier</key>\s*<string>([^<]+)</string>}, 1]
+        end
+        result
+      rescue StandardError
+        { cf_bundle_version: nil, cf_bundle_short_version_string: nil, bundle_id: nil }
+      end
 
       def initialize(ipa_path, api_key:, api_issuer:, private_key:)
         @ipa_path = File.expand_path(ipa_path)
@@ -56,6 +81,8 @@ module Mysigner
           }
         rescue StandardError => e
           raise UploadError, "Upload failed: #{e.message}"
+        ensure
+          cleanup_private_key!
         end
       end
 
@@ -83,20 +110,22 @@ module Mysigner
       end
 
       def setup_private_key!
-        # iTMSTransporter looks for .p8 files in these locations:
-        # - ./private_keys/AuthKey_<KEY_ID>.p8
-        # - ~/private_keys/AuthKey_<KEY_ID>.p8
-        # - ~/.private_keys/AuthKey_<KEY_ID>.p8
-        # - ~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8
-
-        @private_keys_dir = File.expand_path('~/.private_keys')
-        FileUtils.mkdir_p(@private_keys_dir)
-
+        # Phase 0: write the .p8 to a per-run tempdir (0600) and point altool
+        # there via API_PRIVATE_KEYS_DIR. #cleanup_private_key! in the upload!
+        # ensure block removes the tempdir, so the key never persists across
+        # invocations. Replaces the old ~/.private_keys/ persistent write.
+        @private_keys_dir = Dir.mktmpdir('mysigner-p8-')
         @private_key_path = File.join(@private_keys_dir, "AuthKey_#{@api_key}.p8")
-
-        # Write the private key to disk
         File.write(@private_key_path, @private_key)
-        File.chmod(0o600, @private_key_path) # Secure permissions
+        File.chmod(0o600, @private_key_path)
+        ENV['API_PRIVATE_KEYS_DIR'] = @private_keys_dir
+      end
+
+      def cleanup_private_key!
+        FileUtils.rm_rf(@private_keys_dir) if @private_keys_dir && Dir.exist?(@private_keys_dir)
+        ENV.delete('API_PRIVATE_KEYS_DIR')
+      rescue StandardError
+        # Best-effort cleanup; never raise from ensure.
       end
 
       def validate_ipa

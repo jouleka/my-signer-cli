@@ -544,7 +544,7 @@ For questions or issues:
 
 ## License
 
-Copyright 2025 Jurgen Leka
+Copyright 2025 MySigner
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

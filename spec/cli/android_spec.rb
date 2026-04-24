@@ -519,7 +519,9 @@ RSpec.describe 'mysigner android', type: :cli do
       config_file = Mysigner::Config::CONFIG_FILE
       allow(File).to receive(:exist?).with(config_file).and_return(false)
 
-      output = capture_stdout { Mysigner::CLI.start(%w[android init]) }
+      output = capture_stdout do
+        expect { Mysigner::CLI.start(%w[android init]) }.to raise_error(SystemExit)
+      end
       expect(output).to include('Not logged in')
     end
   end

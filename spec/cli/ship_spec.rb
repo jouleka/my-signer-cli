@@ -25,6 +25,12 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
     allow(Mysigner::Config).to receive(:new).and_return(config)
     allow(Mysigner::Client).to receive(:new).and_return(client)
     allow(cli).to receive(:exit) # Stub exit
+    # Force legacy altool upload path (default is ASC REST uploader now)
+    ENV['MYSIGNER_USE_LEGACY_ASC'] = '1'
+  end
+
+  after do
+    ENV.delete('MYSIGNER_USE_LEGACY_ASC')
   end
 
   describe 'when not logged in' do
@@ -61,6 +67,8 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(config).to receive(:user_email).and_return('test@example.com')
       allow(config).to receive(:current_organization_id).and_return(org_id)
       allow(cli).to receive(:exit) { throw :system_exit }
@@ -113,6 +121,8 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(config).to receive(:user_email).and_return('test@example.com')
       allow(config).to receive(:current_organization_id).and_return(org_id)
 
@@ -277,6 +287,8 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(config).to receive(:user_email).and_return('test@example.com')
       allow(config).to receive(:current_organization_id).and_return(org_id)
       cli.options = { configuration: 'Release', scheme: nil, wait: false, team: nil }

@@ -34,6 +34,8 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_url).and_return(nil)
       allow(config).to receive(:api_token).and_return(nil)
       allow(config).to receive(:organization_id).and_return('123')
+      allow(config).to receive(:current_organization_id).and_return('123')
+      allow(config).to receive(:user_email).and_return(nil)
       # Stub to prevent errors if execution continues
       allow(client).to receive(:post).and_return({ data: { 'device' => {} } })
       cli.options = { platform: 'IOS' }
@@ -62,6 +64,8 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       # Stub to prevent errors if execution continues
       allow(client).to receive(:post).and_return({ data: { 'device' => {} } })
       cli.options = { platform: 'IOS' }
@@ -90,6 +94,8 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:post).and_return({ data: { 'device' => {} } })
       cli.options = { platform: 'IOS' }
     end
@@ -127,6 +133,8 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:post).and_return(device_response)
 
       cli.options = { platform: 'IOS' }
@@ -195,6 +203,8 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:post).and_return(device_response)
 
       cli.options = { platform: 'mac_os' }
@@ -232,6 +242,8 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:post).and_raise(validation_error)
 
       cli.options = { platform: 'IOS' }
@@ -268,6 +280,8 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:post).and_raise(validation_error)
 
       cli.options = { platform: 'IOS' }
@@ -296,6 +310,8 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:post).and_raise(client_error)
 
       cli.options = { platform: 'IOS' }
@@ -323,6 +339,8 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:post).and_raise(client_error)
 
       cli.options = { platform: 'IOS' }
@@ -347,6 +365,8 @@ RSpec.describe 'mysigner device add', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       cli.options = { platform: 'IOS' }
     end
 
@@ -357,7 +377,9 @@ RSpec.describe 'mysigner device add', type: :cli do
 
     it 'shows available actions' do
       output = capture_stdout { cli.device('delete', '123') }
-      expect(output).to include('Available actions: add, update')
+      expect(output).to include('Available actions:')
+      expect(output).to include('add')
+      expect(output).to include('update')
     end
 
     it 'exits with code 1' do
@@ -369,7 +391,7 @@ RSpec.describe 'mysigner device add', type: :cli do
   describe 'help text' do
     it 'has description' do
       help_output = capture_stdout { Mysigner::CLI.start(%w[help device]) }
-      expect(help_output).to include('Manage devices')
+      expect(help_output).to include('Register and manage test devices')
     end
 
     it 'shows subcommands' do

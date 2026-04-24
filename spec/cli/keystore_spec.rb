@@ -368,7 +368,7 @@ RSpec.describe 'mysigner keystore', type: :cli do
 
         it 'shows hint to list keystores' do
           output = capture_stdout { cli.keystore('download') }
-          expect(output).to include('mysigner keystores')
+          expect(output).to include('mysigner keystore list')
         end
 
         it 'exits with code 1' do
@@ -391,7 +391,7 @@ RSpec.describe 'mysigner keystore', type: :cli do
 
         it 'shows helpful tips' do
           output = capture_stdout { cli.keystore('download', '999') }
-          expect(output).to include('mysigner keystores')
+          expect(output).to include('mysigner keystore list')
         end
 
         it 'exits with code 1' do
@@ -604,7 +604,7 @@ RSpec.describe 'mysigner keystore', type: :cli do
 
         it 'shows helpful tips' do
           output = capture_stdout { cli.keystore('activate', '999') }
-          expect(output).to include('mysigner keystores')
+          expect(output).to include('mysigner keystore list')
         end
 
         it 'exits with code 1' do

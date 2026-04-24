@@ -35,6 +35,8 @@ RSpec.describe 'mysigner device update', type: :cli do
       allow(config).to receive(:api_url).and_return(nil)
       allow(config).to receive(:api_token).and_return(nil)
       allow(config).to receive(:organization_id).and_return('123')
+      allow(config).to receive(:current_organization_id).and_return('123')
+      allow(config).to receive(:user_email).and_return(nil)
       # Stub to prevent errors if execution continues
       allow(client).to receive(:get).and_return({ data: {} })
       allow(client).to receive(:patch).and_return({ data: { 'device' => {} } })
@@ -64,6 +66,8 @@ RSpec.describe 'mysigner device update', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       # Stub to prevent errors if execution continues
       allow(client).to receive(:get).and_return({ data: {} })
       allow(client).to receive(:patch).and_return({ data: { 'device' => {} } })
@@ -88,6 +92,8 @@ RSpec.describe 'mysigner device update', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return({ data: {} })
       allow(client).to receive(:patch).and_return({ data: { 'device' => {} } })
       cli.options = { platform: 'IOS' }
@@ -139,6 +145,8 @@ RSpec.describe 'mysigner device update', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}/devices/#{device_id}").and_return(get_response)
       allow(client).to receive(:patch).and_return(patch_response)
 
@@ -204,7 +212,9 @@ RSpec.describe 'mysigner device update', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
-      allow(client).to receive(:get).and_raise(Mysigner::NotFoundError)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
+      allow(client).to receive(:get).and_raise(Mysigner::NotFoundError.new('Not found'))
 
       cli.options = { platform: 'IOS' }
     end
@@ -241,6 +251,8 @@ RSpec.describe 'mysigner device update', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return(get_response)
       allow(client).to receive(:patch).and_raise(Mysigner::ClientError.new('Connection timeout'))
 
@@ -262,7 +274,7 @@ RSpec.describe 'mysigner device update', type: :cli do
   describe 'help text' do
     it 'has description' do
       help_output = capture_stdout { Mysigner::CLI.start(%w[help device]) }
-      expect(help_output).to include('Manage devices')
+      expect(help_output).to include('Register and manage test devices')
     end
 
     it 'shows subcommands' do

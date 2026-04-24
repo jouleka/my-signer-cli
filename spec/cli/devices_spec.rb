@@ -34,6 +34,8 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_url).and_return(nil)
       allow(config).to receive(:api_token).and_return(nil)
       allow(config).to receive(:organization_id).and_return('123')
+      allow(config).to receive(:current_organization_id).and_return('123')
+      allow(config).to receive(:user_email).and_return(nil)
       # Stub to prevent errors if execution continues
       allow(client).to receive(:get).and_return({
                                                   data: {
@@ -81,6 +83,8 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return(empty_response)
 
       cli.options = { page: 1, per_page: 50 }
@@ -145,6 +149,8 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return(devices_response)
 
       cli.options = { page: 1, per_page: 50 }
@@ -244,6 +250,8 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return(devices_response)
 
       cli.options = { page: 1, per_page: 50, platform: 'mac_os' }
@@ -294,6 +302,8 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return(devices_response)
 
       cli.options = { page: 1, per_page: 50, status: 'enabled' }
@@ -344,6 +354,8 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return(devices_response)
 
       cli.options = { page: 1, per_page: 50, search: 'iPhone 15' }
@@ -393,6 +405,8 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_return(devices_response)
 
       cli.options = { page: 1, per_page: 1 }
@@ -421,6 +435,8 @@ RSpec.describe 'mysigner devices', type: :cli do
       allow(config).to receive(:api_url).and_return(api_url)
       allow(config).to receive(:api_token).and_return(api_token)
       allow(config).to receive(:organization_id).and_return(org_id)
+      allow(config).to receive(:current_organization_id).and_return(org_id)
+      allow(config).to receive(:user_email).and_return(nil)
       allow(client).to receive(:get).and_raise(Mysigner::ClientError.new('Connection failed'))
 
       cli.options = { page: 1, per_page: 50 }
@@ -441,7 +457,7 @@ RSpec.describe 'mysigner devices', type: :cli do
   describe 'help text' do
     it 'has description' do
       help_output = capture_stdout { Mysigner::CLI.start(%w[help devices]) }
-      expect(help_output).to include('List devices')
+      expect(help_output).to include('List registered test devices')
     end
 
     it 'shows platform option' do

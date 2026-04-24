@@ -24,6 +24,39 @@ RSpec.describe 'App Store Distribution', type: :cli do
     allow(cli).to receive(:say)
     allow(cli).to receive(:error)
     allow(cli).to receive(:exit)
+    # Force legacy altool upload path (default is ASC REST uploader now)
+    ENV['MYSIGNER_USE_LEGACY_ASC'] = '1'
+    # Prevent real sleep in polling loops (product calls global sleep, not cli.sleep)
+    allow_any_instance_of(Object).to receive(:sleep)
+    allow(client).to receive(:post).with(
+      "/api/v1/organizations/#{config.current_organization_id}/sync",
+      body: { force: true }
+    ).and_return({ data: {} })
+    # Stubs for step 2.5 (fetching current latest build) and step 4 (polling for new build)
+    # Return build 2 in both — step 2.5 sets latest_build_before_upload = 2,
+    # step 4 loop compares to new builds. We make the loop break by returning
+    # build with higher number (3) on subsequent calls; simplest: make first call
+    # return empty so latest_build_before_upload stays nil → any build wins.
+    # Simpler: return a build in step 2.5 AND a build with same number in step 4;
+    # since 2 > 2 is false, loop never breaks. Use build_number 0 in step 2.5,
+    # build_number 1 in step 4.
+    @builds_calls = 0
+    allow(client).to receive(:get).with(
+      "/api/v1/organizations/#{config.current_organization_id}/apple_apps",
+      params: anything
+    ).and_return({ data: { 'data' => { 'apps' => [{ 'id' => 'app-1' }] } } })
+    allow(client).to receive(:get).with(
+      "/api/v1/organizations/#{config.current_organization_id}/builds",
+      params: anything
+    ) do
+      @builds_calls += 1
+      build_num = @builds_calls == 1 ? '0' : '99'
+      { data: { 'data' => { 'builds' => [{ 'build_number' => build_num, 'processing_state' => 'PROCESSING_COMPLETE' }] } } }
+    end
+  end
+
+  after do
+    ENV.delete('MYSIGNER_USE_LEGACY_ASC')
   end
 
   describe 'mysigner ship appstore' do
@@ -35,8 +68,8 @@ RSpec.describe 'App Store Distribution', type: :cli do
       expect { cli.help(:ship) }.to output(/testflight.*appstore/m).to_stdout
     end
 
-    it 'shows --submit-for-review option' do
-      expect { cli.help(:ship) }.to output(/--submit-for-review/).to_stdout
+    it 'shows --release-type option' do
+      expect { cli.help(:ship) }.to output(/--release-type/).to_stdout
     end
 
     it 'accepts appstore as valid target' do
@@ -89,6 +122,14 @@ RSpec.describe 'App Store Distribution', type: :cli do
       uploader = double('Uploader')
       allow(uploader).to receive(:upload!)
       allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
+
+      # Stub submission flow (always runs for appstore)
+      submission = double('Submission', submit_for_review!: {
+                            success: true, metadata: {}, automation: { wait: {}, submitted: false }
+                          })
+      allow(Mysigner::Upload::AppStoreSubmission).to receive(:new).and_return(submission)
+      automation = double('Automation')
+      allow(Mysigner::Upload::AppStoreAutomation).to receive(:new).and_return(automation)
 
       allow(File).to receive(:exist?).and_return(true)
       allow(File).to receive(:size).and_return(10_000_000)
@@ -180,19 +221,15 @@ RSpec.describe 'App Store Distribution', type: :cli do
       automation = instance_double(Mysigner::Upload::AppStoreAutomation)
       allow(Mysigner::Upload::AppStoreAutomation).to receive(:new).and_return(automation)
 
-      allow(cli).to receive(:say)
-      expect(cli).to receive(:say).with(/ASC Polling:/)
-
       expect(Mysigner::Upload::AppStoreSubmission).to receive(:new).with(
         client,
         'org-123',
         hash_including(
           bundle_id: 'com.example.app',
-          version: '1.0.0',
-          build_number: '1'
+          build_number: '99'
         ),
-        metadata_overrides: {},
-        override_sources: []
+        metadata_overrides: hash_including('auto_submit' => true),
+        override_sources: array_including(hash_including(type: :inline))
       ).and_return(double('Submission', submit_for_review!: {
                             success: true,
                             metadata: {},
@@ -213,11 +250,16 @@ RSpec.describe 'App Store Distribution', type: :cli do
       cli.ship('appstore')
     end
 
-    it 'skips submission when --submit-for-review is false' do
-      cli.options = { submit_for_review: false }
+    it 'always submits for App Store target (product no longer supports skipping)' do
+      # NOTE: product refactor — ship appstore always submits; --submit-for-review
+      # option no longer exists. Verify submission IS called even without options.
+      cli.options = {}
 
-      expect(Mysigner::Upload::AppStoreAutomation).not_to receive(:new)
-      expect(Mysigner::Upload::AppStoreSubmission).not_to receive(:new)
+      submission = double('Submission', submit_for_review!: {
+                            success: true, metadata: {}, automation: { wait: {}, submitted: true }
+                          })
+      expect(Mysigner::Upload::AppStoreAutomation).to receive(:new)
+      expect(Mysigner::Upload::AppStoreSubmission).to receive(:new).and_return(submission)
 
       cli.ship('appstore')
     end
@@ -275,7 +317,7 @@ RSpec.describe 'App Store Distribution', type: :cli do
     end
 
     it 'passes release notes override to the submission' do
-      cli.options = { submit_for_review: true, release_notes: 'CLI release notes' }
+      cli.options = { release_notes: 'CLI release notes' }
 
       automation = instance_double(Mysigner::Upload::AppStoreAutomation)
       allow(Mysigner::Upload::AppStoreAutomation).to receive(:new).and_return(automation)
@@ -285,8 +327,7 @@ RSpec.describe 'App Store Distribution', type: :cli do
         'org-123',
         hash_including(
           bundle_id: 'com.example.app',
-          version: '1.0.0',
-          build_number: '1'
+          build_number: '99'
         ),
         metadata_overrides: hash_including('whats_new' => 'CLI release notes'),
         override_sources: array_including(hash_including(type: :inline))
@@ -300,7 +341,7 @@ RSpec.describe 'App Store Distribution', type: :cli do
         file.write({ support_url: 'https://example.com/support', phased_release: true }.to_json)
         file.flush
 
-        cli.options = { submit_for_review: true, metadata_file: file.path }
+        cli.options = { metadata_file: file.path }
 
         automation = instance_double(Mysigner::Upload::AppStoreAutomation)
         allow(Mysigner::Upload::AppStoreAutomation).to receive(:new).and_return(automation)
@@ -310,8 +351,7 @@ RSpec.describe 'App Store Distribution', type: :cli do
           'org-123',
           hash_including(
             bundle_id: 'com.example.app',
-            version: '1.0.0',
-            build_number: '1'
+            build_number: '99'
           ),
           metadata_overrides: hash_including(
             'support_url' => 'https://example.com/support',
@@ -370,18 +410,26 @@ RSpec.describe 'App Store Distribution', type: :cli do
       allow(exporter).to receive(:export!).and_return('/path/to/app.ipa')
       allow(Mysigner::Export::Exporter).to receive(:new).and_return(exporter)
 
-      allow(client).to receive(:get).and_return({
-                                                  data: {
-                                                    'app_store_connect_configured' => true,
-                                                    'app_store_connect_key_id' => 'KEY123',
-                                                    'app_store_connect_issuer_id' => 'ISSUER123',
-                                                    'app_store_connect_private_key' => 'PRIVATE_KEY'
-                                                  }
-                                                })
+      allow(client).to receive(:get).with('/api/v1/organizations/org-123').and_return({
+                                                                                        data: {
+                                                                                          'app_store_connect_configured' => true,
+                                                                                          'app_store_connect_key_id' => 'KEY123',
+                                                                                          'app_store_connect_issuer_id' => 'ISSUER123',
+                                                                                          'app_store_connect_private_key' => 'PRIVATE_KEY'
+                                                                                        }
+                                                                                      })
 
       uploader = double('Uploader')
       allow(uploader).to receive(:upload!)
       allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
+
+      # Stub submission flow (always runs for appstore)
+      submission = double('Submission', submit_for_review!: {
+                            success: true, metadata: {}, automation: { wait: {}, submitted: true }
+                          })
+      allow(Mysigner::Upload::AppStoreSubmission).to receive(:new).and_return(submission)
+      automation = double('Automation')
+      allow(Mysigner::Upload::AppStoreAutomation).to receive(:new).and_return(automation)
 
       allow(File).to receive(:exist?).and_return(true)
       allow(File).to receive(:size).and_return(10_000_000)
@@ -394,7 +442,7 @@ RSpec.describe 'App Store Distribution', type: :cli do
     end
 
     it 'shows different next steps for App Store vs TestFlight' do
-      expect(cli).to receive(:say).with(/Select this build for a new version/).at_least(:once)
+      expect(cli).to receive(:say).with(/submitted for App Store review/, anything).at_least(:once)
 
       cli.ship('appstore')
     end
