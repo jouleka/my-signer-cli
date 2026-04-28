@@ -11,3 +11,7 @@
 
 # rspec failure tracking
 .rspec_status
+
+# macOS
+.DS_Store
+**/.DS_Store
