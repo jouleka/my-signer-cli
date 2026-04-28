@@ -166,7 +166,7 @@ module Mysigner
       # On non-macOS the encryption key lives in a file fallback. Wipe it on
       # logout so a fresh login can mint a new key — otherwise the old key
       # would silently encrypt a new token that nobody else can decrypt.
-      File.delete(KEY_FILE) if File.exist?(KEY_FILE)
+      FileUtils.rm_f(KEY_FILE)
 
       # Phase 0: logout also purges the keystore cache so a shared machine
       # doesn't leave prior-user keystore blobs on disk.
@@ -395,10 +395,11 @@ module Mysigner
 
     def warn_keychain_unavailable_once
       return if defined?(@keychain_warning_shown) && @keychain_warning_shown
+
       @keychain_warning_shown = true
       return unless $stderr.respond_to?(:tty?) && $stderr.tty?
 
-      $stderr.puts(<<~MSG)
+      warn(<<~MSG)
         [mysigner] macOS Keychain is unavailable on this platform. Falling
         back to file-based encryption key at #{KEY_FILE} (mode 0600).
         For the strongest CI/CD posture, set MYSIGNER_API_TOKEN as an
