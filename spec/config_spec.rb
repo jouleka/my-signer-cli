@@ -6,11 +6,14 @@ require 'fileutils'
 RSpec.describe Mysigner::Config do
   let(:test_config_dir) { File.expand_path('~/.mysigner_test') }
   let(:test_config_file) { File.join(test_config_dir, 'config.yml') }
+  let(:test_key_file) { File.join(test_config_dir, '.encryption_key') }
+  let(:macos?) { RbConfig::CONFIG['host_os'] =~ /darwin/i }
 
   before do
     # Stub the constants to use test directory
     stub_const('Mysigner::Config::CONFIG_DIR', test_config_dir)
     stub_const('Mysigner::Config::CONFIG_FILE', test_config_file)
+    stub_const('Mysigner::Config::KEY_FILE', test_key_file)
 
     # Clean up test directory
     FileUtils.rm_rf(test_config_dir)
@@ -511,13 +514,19 @@ RSpec.describe Mysigner::Config do
         expect(config.send(:decrypt_token, encrypted2)).to eq(test_token)
       end
 
-      it 'stores encryption key in keychain' do
+      it 'stores encryption key in keychain on macOS, file fallback elsewhere' do
         config.encryption_enabled = true
         config.send(:encrypt_token, test_token)
 
-        # Verify key exists in keychain
-        result = `security find-generic-password -s 'com.mysigner.cli' -a 'config_encryption_key' -w 2>/dev/null`
-        expect(result).not_to be_empty
+        if macos?
+          # macOS: key lives in the system Keychain
+          result = `security find-generic-password -s 'com.mysigner.cli' -a 'config_encryption_key' -w 2>/dev/null`
+          expect(result).not_to be_empty
+        else
+          # Linux/Windows: key lives in a 0600 file in the config dir
+          expect(File.exist?(test_key_file)).to be true
+          expect(File.stat(test_key_file).mode & 0o777).to eq(0o600)
+        end
       end
 
       it 'reuses same encryption key across instances' do

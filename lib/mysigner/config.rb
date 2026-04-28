@@ -8,11 +8,13 @@ require 'openssl'
 require 'base64'
 require 'json'
 require 'securerandom'
+require 'rbconfig'
 
 module Mysigner
   class Config
     CONFIG_DIR = File.expand_path('~/.mysigner').freeze
     CONFIG_FILE = File.join(CONFIG_DIR, 'config.yml').freeze
+    KEY_FILE = File.join(CONFIG_DIR, '.encryption_key').freeze
     KEYCHAIN_SERVICE = 'com.mysigner.cli'
     KEYCHAIN_ACCOUNT = 'config_encryption_key'
 
@@ -160,6 +162,11 @@ module Mysigner
       @organizations = {}
 
       File.delete(CONFIG_FILE) if exists?
+
+      # On non-macOS the encryption key lives in a file fallback. Wipe it on
+      # logout so a fresh login can mint a new key — otherwise the old key
+      # would silently encrypt a new token that nobody else can decrypt.
+      File.delete(KEY_FILE) if File.exist?(KEY_FILE)
 
       # Phase 0: logout also purges the keystore cache so a shared machine
       # doesn't leave prior-user keystore blobs on disk.
@@ -310,14 +317,32 @@ module Mysigner
     end
 
     def get_or_create_encryption_key
-      # Try to get key from keychain
-      key = get_key_from_keychain
+      # macOS Keychain is the preferred key store. On Linux/Windows we fall
+      # back to a 0600 file in the config dir so the encrypted YAML token
+      # is still recoverable across CLI invocations. The fallback is roughly
+      # equivalent in security to the config file itself; for the strongest
+      # posture in CI, prefer the MYSIGNER_API_TOKEN env var path.
+      if macos_keychain?
+        key = get_key_from_keychain
+        return key if key
+
+        new_key = SecureRandom.bytes(32) # 256-bit key
+        store_key_in_keychain(new_key)
+        return new_key
+      end
+
+      key = read_key_from_file
       return key if key
 
-      # Generate new key and store in keychain
+      warn_keychain_unavailable_once
+      ensure_config_dir_exists
       new_key = SecureRandom.bytes(32) # 256-bit key
-      store_key_in_keychain(new_key)
+      write_key_to_file(new_key)
       new_key
+    end
+
+    def macos_keychain?
+      RbConfig::CONFIG['host_os'] =~ /darwin/i
     end
 
     def get_key_from_keychain
@@ -347,6 +372,38 @@ module Mysigner
       $CHILD_STATUS.exitstatus.zero?
     rescue StandardError => e
       raise ConfigError, "Failed to store encryption key in keychain: #{e.message}"
+    end
+
+    def read_key_from_file
+      return nil unless File.exist?(KEY_FILE)
+
+      encoded = File.read(KEY_FILE).strip
+      return nil if encoded.empty?
+
+      Base64.strict_decode64(encoded)
+    rescue StandardError
+      nil
+    end
+
+    def write_key_to_file(key)
+      File.write(KEY_FILE, Base64.strict_encode64(key))
+      File.chmod(0o600, KEY_FILE)
+      true
+    rescue StandardError => e
+      raise ConfigError, "Failed to write encryption key file: #{e.message}"
+    end
+
+    def warn_keychain_unavailable_once
+      return if defined?(@keychain_warning_shown) && @keychain_warning_shown
+      @keychain_warning_shown = true
+      return unless $stderr.respond_to?(:tty?) && $stderr.tty?
+
+      $stderr.puts(<<~MSG)
+        [mysigner] macOS Keychain is unavailable on this platform. Falling
+        back to file-based encryption key at #{KEY_FILE} (mode 0600).
+        For the strongest CI/CD posture, set MYSIGNER_API_TOKEN as an
+        encrypted secret instead — env-var auth never touches the disk.
+      MSG
     end
   end
 
