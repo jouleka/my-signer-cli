@@ -353,7 +353,7 @@ RSpec.describe 'mysigner doctor' do
     end
   end
 
-  describe 'integration tests' do
+  describe 'integration tests', :integration do
     it 'runs successfully via shell' do
       _, _, status = Open3.capture3("#{exe_path} doctor 2>&1")
       expect(status.success?).to be true

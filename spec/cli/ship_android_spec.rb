@@ -114,6 +114,10 @@ RSpec.describe 'mysigner ship android', type: :cli do
       # Mock API calls
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
       allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}/android_apps").and_return(apps_response)
+      allow(client).to receive(:get).with(
+        "/api/v1/organizations/#{org_id}/android_releases",
+        hash_including(:params)
+      ).and_return({ data: { 'data' => [] } })
       allow(client).to receive(:post) # Generic post stub
       allow(client).to receive(:post).with(
         "/api/v1/organizations/#{org_id}/credentials/google_play/access_token"

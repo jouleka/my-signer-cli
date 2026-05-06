@@ -57,9 +57,13 @@ RSpec.describe Mysigner::Export::Exporter do
       FileUtils.mkdir_p(output_dir)
       File.write(File.join(output_dir, 'App.ipa'), 'fake ipa content')
 
-      # Stub IO.popen to avoid actually running xcodebuild
-      allow(IO).to receive(:popen).and_yield(StringIO.new("Exporting...\n"))
-      allow(Process).to receive(:last_status).and_return(double(success?: true))
+      # Stub IO.popen to avoid actually running xcodebuild, and force
+      # $CHILD_STATUS to a successful value so the exporter believes the
+      # fake popen call succeeded (without depending on prior test state).
+      allow(IO).to receive(:popen) do |_cmd, _opts, &block|
+        block.call(StringIO.new("Exporting...\n"))
+        `true`
+      end
     end
 
     it 'exports with app-store method by default' do

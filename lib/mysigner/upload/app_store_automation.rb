@@ -13,10 +13,9 @@ module Mysigner
       def initialize(client:, organization_id:, opts: {})
         @client = client
         @organization_id = organization_id
-        # Proper boolean coercion — `!x.nil?` evaluates to `true` for `false`,
-        # which previously caused `wait: false` / `no_submit: false` to be
-        # treated as `true`. Use `!!` to get the actual boolean semantics.
-        @wait_enabled = opts.key?(:wait) ? !opts[:wait].nil? : true
+        # Proper boolean coercion — must distinguish between `false` (an
+        # explicit user intent to disable) and an unset key (default applies).
+        @wait_enabled = opts.key?(:wait) ? to_bool(opts[:wait]) : true
 
         poll = opts[:poll_interval] || opts[:poll_seconds]
         poll = poll.to_i if poll
@@ -26,13 +25,13 @@ module Mysigner
         timeout = timeout.to_i if timeout
         @timeout = timeout&.positive? ? timeout : DEFAULT_WAIT_TIMEOUT
 
-        @no_submit = !opts[:no_submit].nil?
+        @no_submit = to_bool(opts[:no_submit])
 
         # Whether to submit by default when NEITHER cli_defaults nor CLI
         # overrides specify `auto_submit`. `ship`/`submit` pass true (it's
         # the user's explicit intent). Dashboard `cli_defaults.auto_submit`
         # still wins if set — we only fall back to this when silent.
-        @default_submit = opts.key?(:default_submit) ? !opts[:default_submit].nil? : false
+        @default_submit = opts.key?(:default_submit) ? to_bool(opts[:default_submit]) : false
 
         @now = opts[:now]
       end
@@ -104,6 +103,10 @@ module Mysigner
       end
 
       private
+
+      def to_bool(value)
+        value ? true : false
+      end
 
       def ensure_app(bundle_id)
         response = @client.get(

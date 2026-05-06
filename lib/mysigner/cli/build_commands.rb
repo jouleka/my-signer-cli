@@ -928,7 +928,7 @@ module Mysigner
                 # if the user left it implicit (which `ship android` currently
                 # doesn't allow — track is required — but kept here for
                 # symmetry with submit_android and future-proofing).
-                effective_track = track.presence || android_defaults&.dig('default_track') || 'internal'
+                effective_track = (track && !track.empty? ? track : nil) || android_defaults&.dig('default_track') || 'internal'
 
                 status = android_defaults&.dig('default_status')
                 user_fraction = android_defaults&.dig('default_user_fraction')
@@ -1558,8 +1558,8 @@ module Mysigner
 
               bundle_id = options[:bundle_id] || parser.bundle_id(target_name, options[:configuration])
 
-              # Validate bundle ID format if overridden
-              if options[:bundle_id]
+              # Validate bundle ID format if overridden (skip empty to let executor handle)
+              if options[:bundle_id] && !options[:bundle_id].empty?
                 if bundle_id =~ /\$\(|\$\{/
                   error "Bundle ID cannot contain variables: #{bundle_id}"
                   exit 1

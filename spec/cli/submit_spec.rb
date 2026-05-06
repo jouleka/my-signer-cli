@@ -40,6 +40,8 @@ RSpec.describe 'mysigner submit', type: :cli do
       allow(config).to receive(:user_email).and_return(nil)
       # Stub client and build detection to prevent execution from continuing past auth check
       allow(client).to receive(:get).and_return({ data: {} })
+      allow(client).to receive(:post).and_return({ data: {} })
+      allow(client).to receive(:api_url).and_return(api_url)
       allow(Mysigner::Build::Detector).to receive(:detect).and_raise(StandardError.new('No project'))
     end
 
@@ -416,7 +418,7 @@ RSpec.describe 'mysigner submit', type: :cli do
     end
   end
 
-  describe 'integration tests' do
+  describe 'integration tests', :integration do
     it 'requires login' do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file = Mysigner::Config::CONFIG_FILE

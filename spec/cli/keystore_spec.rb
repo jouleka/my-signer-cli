@@ -170,6 +170,7 @@ RSpec.describe 'mysigner keystore', type: :cli do
         before do
           cli.options = { name: 'My Key', alias: 'key0' }
           allow(File).to receive(:exist?).with(keystore_path).and_return(true)
+          allow($stdin).to receive(:tty?).and_return(true)
           allow(cli).to receive(:ask).and_return('password123')
           allow(keystore_manager).to receive(:upload).and_return(upload_result)
         end
@@ -661,7 +662,7 @@ RSpec.describe 'mysigner keystore', type: :cli do
     end
   end
 
-  describe 'integration tests' do
+  describe 'integration tests', :integration do
     it 'requires login' do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file = Mysigner::Config::CONFIG_FILE

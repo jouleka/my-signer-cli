@@ -145,7 +145,8 @@ RSpec.describe 'mysigner certificate download', type: :cli do
     end
 
     it 'saves to default filename' do
-      expect(File).to receive(:binwrite).with('iOS_Distribution_Certificate.cer', cert_content)
+      expected_path = File.join(File.expand_path('~/Downloads'), 'iOS_Distribution_Certificate.cer')
+      expect(File).to receive(:binwrite).with(expected_path, cert_content)
       cli.certificate('download', cert_id)
     end
 
@@ -397,7 +398,7 @@ RSpec.describe 'mysigner certificate download', type: :cli do
     end
   end
 
-  describe 'integration tests' do
+  describe 'integration tests', :integration do
     it 'requires login' do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file = Mysigner::Config::CONFIG_FILE

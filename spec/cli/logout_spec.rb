@@ -113,7 +113,7 @@ RSpec.describe 'mysigner logout' do
     end
   end
 
-  describe 'integration tests' do
+  describe 'integration tests', :integration do
     it 'runs successfully when logged in' do
       # Can't easily test interactive prompt in integration, but verify command exists
       stdout, _, status = Open3.capture3("#{exe_path} help logout 2>&1")

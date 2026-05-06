@@ -68,7 +68,7 @@ RSpec.describe 'CLI Multi-Target Signing', type: :cli do
     allow(cli).to receive(:create_client).and_return(client)
     allow(cli).to receive(:say)
     allow(cli).to receive(:error)
-    allow(cli).to receive(:exit).and_call_original
+    allow(cli).to receive(:exit) { |code| throw(:exit, code) }
 
     allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
     allow(Mysigner::Build::Parser).to receive(:new).and_return(parser_double)
@@ -112,9 +112,9 @@ RSpec.describe 'CLI Multi-Target Signing', type: :cli do
         cli.options = { target: 'MyApp', all_targets: true }
 
         expect(cli).to receive(:error).with('Cannot use both --target and --all-targets')
-        expect(cli).to receive(:exit).with(1)
 
-        cli.signing('configure')
+        exit_code = catch(:exit) { cli.signing('configure') }
+        expect(exit_code).to eq(1)
       end
     end
   end

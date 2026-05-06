@@ -218,6 +218,7 @@ RSpec.describe 'App Store Distribution', type: :cli do
     end
 
     it 'passes correct build info to submission and reports automation outcome' do
+      cli.options = { submit_for_review: true, auto_submit: true }
       automation = instance_double(Mysigner::Upload::AppStoreAutomation)
       allow(Mysigner::Upload::AppStoreAutomation).to receive(:new).and_return(automation)
 

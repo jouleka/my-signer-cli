@@ -454,7 +454,7 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
     end
   end
 
-  describe 'integration tests' do
+  describe 'integration tests', :integration do
     it 'requires login' do
       allow(Mysigner::Config).to receive(:new).and_call_original
       config_file = Mysigner::Config::CONFIG_FILE

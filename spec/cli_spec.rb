@@ -677,9 +677,11 @@ RSpec.describe Mysigner::CLI do
         config.save
       end
 
+      let(:default_profile_path) { File.join(File.expand_path('~/Downloads'), 'Test_Profile.mobileprovision') }
+
       after do
         # Clean up downloaded test files
-        FileUtils.rm_f('Test_Profile.mobileprovision')
+        FileUtils.rm_f(default_profile_path)
         FileUtils.rm_f('custom_output.mobileprovision')
       end
 
@@ -712,8 +714,8 @@ RSpec.describe Mysigner::CLI do
         expect(output).to include('Profile downloaded successfully')
         expect(output).to include('Test Profile')
         expect(output).to include('Test_Profile.mobileprovision')
-        expect(File.exist?('Test_Profile.mobileprovision')).to be true
-        expect(File.read('Test_Profile.mobileprovision')).to eq(test_content)
+        expect(File.exist?(default_profile_path)).to be true
+        expect(File.read(default_profile_path)).to eq(test_content)
       end
 
       it 'supports custom output path' do
@@ -1014,9 +1016,11 @@ RSpec.describe Mysigner::CLI do
         config.save
       end
 
+      let(:default_cert_path) { File.join(File.expand_path('~/Downloads'), 'Test_Certificate.cer') }
+
       after do
         # Clean up downloaded test files
-        FileUtils.rm_f('Test_Certificate.cer')
+        FileUtils.rm_f(default_cert_path)
         FileUtils.rm_f('custom_output.cer')
       end
 
@@ -1049,8 +1053,8 @@ RSpec.describe Mysigner::CLI do
         expect(output).to include('Certificate downloaded successfully')
         expect(output).to include('Test Certificate')
         expect(output).to include('Test_Certificate.cer')
-        expect(File.exist?('Test_Certificate.cer')).to be true
-        expect(File.read('Test_Certificate.cer')).to eq(test_content)
+        expect(File.exist?(default_cert_path)).to be true
+        expect(File.read(default_cert_path)).to eq(test_content)
       end
 
       it 'supports custom output path' do
@@ -1286,11 +1290,14 @@ RSpec.describe Mysigner::CLI do
           allow(mock_parser).to receive(:code_sign_style).and_return('Manual')
           allow(mock_parser).to receive(:signing_configured?).and_return(false)
 
+          mock_validator = instance_double(Mysigner::Signing::Validator, validate!: nil)
+          allow(Mysigner::Signing::Validator).to receive(:new).and_return(mock_validator)
+
           expect(mock_configurator).to receive(:configure!).with(
             anything,
             anything,
             hash_including(build_type: :adhoc)
-          )
+          ).and_return({ 'name' => 'Profile' })
 
           Dir.chdir(temp_project_dir) do
             capture_output { Mysigner::CLI.start(['build', '--type', 'adhoc']) }
@@ -1324,27 +1331,43 @@ RSpec.describe Mysigner::CLI do
         end
 
         it 'shows error message' do
-          expect do
-            Dir.chdir(temp_project_dir) do
-              capture_output { Mysigner::CLI.start(['build']) }
-            end
-          end.to raise_error(Mysigner::Build::Detector::NoProjectError, /No Xcode project found/)
+          captured = StringIO.new
+          original_stdout = $stdout
+          $stdout = captured
+          begin
+            expect do
+              Dir.chdir(temp_project_dir) do
+                Mysigner::CLI.start(['build'])
+              end
+            end.to raise_error(SystemExit)
+          ensure
+            $stdout = original_stdout
+          end
+          expect(captured.string).to include('No Xcode project found')
         end
       end
 
       context 'when build fails' do
         before do
           allow(mock_executor).to receive(:build!).and_raise(
-            Mysigner::Error.new('xcodebuild failed with exit code 1')
+            Mysigner::Build::Executor::BuildError.new('xcodebuild failed with exit code 1')
           )
         end
 
         it 'shows error message' do
-          expect do
-            Dir.chdir(temp_project_dir) do
-              capture_output { Mysigner::CLI.start(['build']) }
-            end
-          end.to raise_error(Mysigner::Error, /xcodebuild failed/)
+          captured = StringIO.new
+          original_stdout = $stdout
+          $stdout = captured
+          begin
+            expect do
+              Dir.chdir(temp_project_dir) do
+                Mysigner::CLI.start(['build'])
+              end
+            end.to raise_error(SystemExit)
+          ensure
+            $stdout = original_stdout
+          end
+          expect(captured.string).to include('xcodebuild failed')
         end
       end
     end

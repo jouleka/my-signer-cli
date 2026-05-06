@@ -411,7 +411,7 @@ RSpec.describe 'mysigner onboard' do
     end
   end
 
-  describe 'integration tests' do
+  describe 'integration tests', :integration do
     it 'shows help for onboard command' do
       stdout, _, status = Open3.capture3("#{exe_path} help onboard 2>&1")
       expect(status.exitstatus).to eq(0)
