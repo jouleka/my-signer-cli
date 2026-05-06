@@ -1,0 +1,58 @@
+{
+  "devices": [
+    {
+      "id": 408,
+      "remote_id": "3FGJ6W83HB",
+      "name": "Device 1",
+      "udid": "b93e3a4688a13f7d32088e6f417a2783e73cb3c7",
+      "platform": "IOS",
+      "device_class": "IPHONE",
+      "status": "ENABLED",
+      "added_at": "2018-07-07T07:43:17Z",
+      "created_at": "2026-05-01T15:06:36Z",
+      "updated_at": "2026-05-01T15:06:36Z"
+    },
+    {
+      "id": 409,
+      "remote_id": "7WZ6H2LR2W",
+      "name": "Device 2",
+      "udid": "c43072d2fe52cb6d6cd7ed5b75f51e3dd8c5678a",
+      "platform": "IOS",
+      "device_class": "IPOD",
+      "status": "ENABLED",
+      "added_at": "2026-04-24T14:15:00Z",
+      "created_at": "2026-05-01T15:06:36Z",
+      "updated_at": "2026-05-01T15:06:36Z"
+    },
+    {
+      "id": 410,
+      "remote_id": "JKUXZ5KAH9",
+      "name": "Device 3",
+      "udid": "428b908408cae61bd24c4df119675779f5b36c2a",
+      "platform": "IOS",
+      "device_class": "IPOD",
+      "status": "ENABLED",
+      "added_at": "2026-04-24T13:16:38Z",
+      "created_at": "2026-05-01T15:06:36Z",
+      "updated_at": "2026-05-01T15:06:36Z"
+    },
+    {
+      "id": 411,
+      "remote_id": "S2X3FPR2Z9",
+      "name": "Device 4",
+      "udid": "00008110-3E5EFA96703A5351",
+      "platform": "IOS",
+      "device_class": "IPHONE",
+      "status": "ENABLED",
+      "added_at": "2025-12-10T11:08:49Z",
+      "created_at": "2026-05-01T15:06:36Z",
+      "updated_at": "2026-05-01T15:06:36Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 50,
+    "total": 4,
+    "total_pages": 1
+  }
+}

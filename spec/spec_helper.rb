@@ -13,4 +13,10 @@ RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = :expect
   end
+
+  # Tests tagged :integration hit a real MySigner backend and consume real
+  # API/network resources — they are excluded from the default run. Opt in
+  # with `bundle exec rspec --tag integration`. See spec/integration/README
+  # in spec/README.md for the required ENV vars.
+  config.filter_run_excluding integration: true unless ENV['INTEGRATION'] == '1'
 end

@@ -1,0 +1,62 @@
+{
+  "profiles": [
+    {
+      "id": 560,
+      "remote_id": "9A3TU47T64",
+      "name": "com.example.testapp App Store",
+      "uuid": "cd4672fb-bb97-4244-8c5a-9203a6ac65bd",
+      "profile_type": "IOS_APP_STORE",
+      "state": "ACTIVE",
+      "platform": "IOS",
+      "bundle_id_identifier": "com.example.testapp",
+      "expires_at": "2026-10-23T19:02:04Z",
+      "created_at": "2026-05-01T15:06:36Z",
+      "updated_at": "2026-05-01T15:06:36Z"
+    },
+    {
+      "id": 561,
+      "remote_id": "NDC436PWL9",
+      "name": "com.example.testapp.widget App Store",
+      "uuid": "a3630f36-04a5-4c82-9024-e69f8d6c5f1e",
+      "profile_type": "IOS_APP_STORE",
+      "state": "ACTIVE",
+      "platform": "IOS",
+      "bundle_id_identifier": "com.example.testapp.widget",
+      "expires_at": "2026-10-23T19:02:04Z",
+      "created_at": "2026-05-01T15:06:36Z",
+      "updated_at": "2026-05-01T15:06:36Z"
+    },
+    {
+      "id": 559,
+      "remote_id": "49HUJ76JQK",
+      "name": "com.example.testapp2 App Store",
+      "uuid": "5b8bb2a5-d11f-4775-a8fa-87617f40bcf6",
+      "profile_type": "IOS_APP_STORE",
+      "state": "ACTIVE",
+      "platform": "IOS",
+      "bundle_id_identifier": "com.example.testapp2",
+      "expires_at": "2026-10-23T19:02:04Z",
+      "created_at": "2026-05-01T15:06:36Z",
+      "updated_at": "2026-05-01T15:06:36Z"
+    },
+    {
+      "id": 562,
+      "remote_id": "SJKV74S4Z2",
+      "name": "com.example.testapp Development",
+      "uuid": "fdceec10-f1d8-47bf-bd84-56b688b87dd5",
+      "profile_type": "IOS_APP_DEVELOPMENT",
+      "state": "ACTIVE",
+      "platform": "IOS",
+      "bundle_id_identifier": "com.example.testapp",
+      "expires_at": "2027-01-21T05:19:25Z",
+      "created_at": "2026-05-01T15:06:36Z",
+      "updated_at": "2026-05-01T15:06:36Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 50,
+    "total": 4,
+    "total_pages": 1
+  }
+}

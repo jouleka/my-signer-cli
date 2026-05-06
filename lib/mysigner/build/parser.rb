@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'xcodeproj'
-
 module Mysigner
   module Build
     class Parser
@@ -184,6 +182,8 @@ module Mysigner
       end
 
       def open_project
+        require 'xcodeproj'
+
         if @project_info[:type] == :workspace
           # Workspace contains multiple projects
           # Get the main project (not Pods)

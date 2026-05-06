@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "message": "API authentication successful",
+  "user": {
+    "id": 50,
+    "email": "test@example.com"
+  },
+  "organization": {
+    "id": 29,
+    "name": "Test Org"
+  },
+  "token": {
+    "name": "fixture-capture",
+    "scopes": [
+      "read",
+      "write",
+      "admin"
+    ],
+    "last_used_at": "2026-05-01T16:01:43.635Z"
+  },
+  "timestamp": "2026-05-01T16:01:43Z"
+}

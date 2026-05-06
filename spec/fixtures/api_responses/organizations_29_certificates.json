@@ -1,0 +1,34 @@
+{
+  "certificates": [
+    {
+      "id": 364,
+      "remote_id": "3TAR2TQ4Z4",
+      "name": "Apple Distribution: Test Developer",
+      "certificate_type": "DISTRIBUTION",
+      "serial_number": "59A37822C4AE2DF1C38F5F201BEDB250",
+      "platform": null,
+      "status": null,
+      "expires_at": "2026-10-23T19:02:04Z",
+      "created_at": "2026-05-01T15:06:36Z",
+      "updated_at": "2026-05-01T15:06:36Z"
+    },
+    {
+      "id": 365,
+      "remote_id": "78GMQV5JN8",
+      "name": "Apple Development: Test Developer",
+      "certificate_type": "DEVELOPMENT",
+      "serial_number": "7A2AE4FE7D49F759AB8E82E2BE1D5F84",
+      "platform": null,
+      "status": null,
+      "expires_at": "2026-10-23T19:19:47Z",
+      "created_at": "2026-05-01T15:06:36Z",
+      "updated_at": "2026-05-01T15:06:36Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 50,
+    "total": 2,
+    "total_pages": 1
+  }
+}

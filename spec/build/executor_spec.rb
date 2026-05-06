@@ -108,6 +108,18 @@ RSpec.describe Mysigner::Build::Executor do
           executor.build!(target_name, configuration, scheme: scheme)
         end.to raise_error(Mysigner::Build::Executor::BuildError, /Build failed/)
       end
+
+      it 'mentions the log path in the error when execute_with_output set one' do
+        log_path = '/path/to/build/last-build.log'
+        allow(executor).to receive(:execute_with_output) do
+          executor.instance_variable_set(:@last_build_log, log_path)
+          false
+        end
+
+        expect do
+          executor.build!(target_name, configuration, scheme: scheme)
+        end.to raise_error(Mysigner::Build::Executor::BuildError, /Full log: #{Regexp.escape(log_path)}/)
+      end
     end
 
     context 'when scheme is not provided' do
@@ -118,6 +130,103 @@ RSpec.describe Mysigner::Build::Executor do
 
         executor.build!(target_name, configuration)
       end
+    end
+  end
+
+  # Direct tests for execute_with_output: this is the layer that captures
+  # xcodebuild output to a log file and dumps the tail on failure. The
+  # -quiet flag plus the keyword filter previously hid framework-loader
+  # errors entirely; this spec keeps that from regressing.
+  describe '#execute_with_output (private)' do
+    let(:tmpdir) { Dir.mktmpdir }
+    let(:log_path) { File.join(tmpdir, 'build', 'last-build.log') }
+    let(:project_info) do
+      {
+        type: :workspace,
+        path: File.join(tmpdir, 'App.xcworkspace'),
+        directory: tmpdir,
+        framework: :native
+      }
+    end
+    let(:executor) { described_class.new(project_info, parser) }
+
+    after { FileUtils.rm_rf(tmpdir) }
+
+    # Stub IO.popen so it yields the lines we want, then run a real shell
+    # command (`true` or `false`) so $CHILD_STATUS reflects the desired
+    # exit code without involving xcodebuild.
+    def fake_run(lines, success:)
+      allow(IO).to receive(:popen) do |_cmd, _opts, &block|
+        block.call(StringIO.new(lines.join))
+        success ? `true` : `false`
+      end
+    end
+
+    it 'writes every captured line to <project>/build/last-build.log' do
+      fake_run(["warning: deprecated API\n", "noise\n", "** ARCHIVE SUCCEEDED **\n"], success: true)
+
+      executor.send(:execute_with_output, 'xcodebuild archive')
+
+      expect(File.exist?(log_path)).to be true
+      contents = File.read(log_path)
+      expect(contents).to include('warning: deprecated API')
+      expect(contents).to include('noise')
+      expect(contents).to include('ARCHIVE SUCCEEDED')
+    end
+
+    it 'returns true on a successful exit' do
+      fake_run(["ok\n"], success: true)
+      expect(executor.send(:execute_with_output, 'xcodebuild archive')).to be true
+    end
+
+    it 'returns false on a failed exit' do
+      fake_run(["error: bad\n"], success: false)
+      expect { executor.send(:execute_with_output, 'xcodebuild archive') }
+        .to output.to_stdout # swallow the tail dump
+      # second invocation to grab the return value
+      fake_run(["error: bad\n"], success: false)
+      expect(executor.send(:execute_with_output, 'xcodebuild archive')).to be false
+    end
+
+    it 'prints the log tail with the log path when the build fails' do
+      lines = (1..120).map { |i| "line #{i}\n" }
+      fake_run(lines, success: false)
+
+      expect { executor.send(:execute_with_output, 'xcodebuild archive') }
+        .to output(/Build output \(last \d+ lines\):.*line 120.*Full log: .*last-build\.log/m).to_stdout
+    end
+
+    it 'does NOT print the tail dump on success' do
+      fake_run(["clean build\n"], success: true)
+
+      expect { executor.send(:execute_with_output, 'xcodebuild archive') }
+        .not_to output(/Build output \(last/).to_stdout
+    end
+
+    it 'records @last_build_log so build! can include it in the error message' do
+      fake_run(["ok\n"], success: true)
+
+      executor.send(:execute_with_output, 'xcodebuild archive')
+
+      expect(executor.instance_variable_get(:@last_build_log)).to eq(log_path)
+    end
+
+    # The historical filter dropped any line that didn't contain "error:".
+    # Framework loader failures (NSCocoaErrorDomain, dlopen, etc.) slipped
+    # through. Even though they aren't surfaced live during the build, they
+    # MUST end up in the log file so the tail dump can show them.
+    it 'captures non-keyword lines (e.g. dlopen errors) to the log' do
+      fake_run([
+                 "DVTPlugInLoading: Failed to load com.apple.dt.IDESimulatorFoundation\n",
+                 "Symbol not found: _$s12DVTDownloads21DownloadableAssetTypeO\n"
+               ], success: false)
+
+      expect { executor.send(:execute_with_output, 'xcodebuild archive') }
+        .to output.to_stdout
+
+      contents = File.read(log_path)
+      expect(contents).to include('DVTPlugInLoading')
+      expect(contents).to include('Symbol not found')
     end
   end
 end

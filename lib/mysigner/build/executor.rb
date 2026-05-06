@@ -46,7 +46,11 @@ module Mysigner
         # Execute build
         success = execute_with_output(cmd)
 
-        raise BuildError, 'Build failed. Check output above for errors.' unless success
+        unless success
+          msg = +'Build failed.'
+          msg << " Full log: #{@last_build_log}" if @last_build_log
+          raise BuildError, msg
+        end
 
         # Verify archive was created
         raise BuildError, "Build reported success but archive not found at: #{archive_path}" unless File.exist?(archive_path)
@@ -129,40 +133,76 @@ module Mysigner
         puts ''
 
         @build_errors = []
+        @last_build_log = log_path_for_run
 
-        # Run command and capture output in real-time
-        IO.popen(cmd, err: %i[child out]) do |io|
-          io.each_line do |line|
-            # Filter output to show only important messages
-            next if line.strip.empty?
+        # Capture every line so we can replay it on failure. xcodebuild's
+        # `-quiet` plus our keyword filter happily hides framework-loader
+        # errors, license issues, and anything that doesn't say "error:" —
+        # leaving the user with "Build failed" and nothing actionable. The
+        # log file (and tail dump on failure) keeps the full output recoverable.
+        File.open(@last_build_log, 'w') do |log|
+          # Run command and capture output in real-time
+          IO.popen(cmd, err: %i[child out]) do |io|
+            io.each_line do |line|
+              log.write(line)
 
-            # Detect error lines (case-insensitive for error:)
-            # Check for various error patterns including curly quotes from Xcode
-            is_error = line.downcase.include?('error:') ||
-                       line.include?('Provisioning profile') ||
-                       line.include?('Code Sign error') ||
-                       line.include?("doesn't support") ||
-                       line.include?("doesn\u2019t support") ||
-                       line.include?('capability')
+              # Filter output to show only important messages
+              next if line.strip.empty?
 
-            is_warning = line.downcase.include?('warning:')
+              # Detect error lines (case-insensitive for error:)
+              # Check for various error patterns including curly quotes from Xcode
+              is_error = line.downcase.include?('error:') ||
+                         line.include?('Provisioning profile') ||
+                         line.include?('Code Sign error') ||
+                         line.include?("doesn't support") ||
+                         line.include?("doesn\u2019t support") ||
+                         line.include?('capability')
 
-            # Show and capture errors and warnings
-            if is_error || is_warning
-              puts line
-              @build_errors << line if is_error
-            # Show progress markers
-            elsif line.include?('Building') || line.include?('Compiling') ||
-                  line.include?('Linking') || line.include?('Signing') ||
-                  line.include?('Copying')
-              print '.'
+              is_warning = line.downcase.include?('warning:')
+
+              # Show and capture errors and warnings
+              if is_error || is_warning
+                puts line
+                @build_errors << line if is_error
+              # Show progress markers
+              elsif line.include?('Building') || line.include?('Compiling') ||
+                    line.include?('Linking') || line.include?('Signing') ||
+                    line.include?('Copying')
+                print '.'
+              end
             end
           end
         end
 
         puts '' # New line after dots
 
-        $CHILD_STATUS.success?
+        success = $CHILD_STATUS.success?
+        dump_log_tail(@last_build_log) unless success
+        success
+      end
+
+      def log_path_for_run
+        log_dir = File.join(@project_info[:directory], 'build')
+        FileUtils.mkdir_p(log_dir)
+        File.join(log_dir, 'last-build.log')
+      end
+
+      def dump_log_tail(path, lines: 80)
+        return unless File.exist?(path)
+
+        tail = File.foreach(path).each_with_object([]) do |line, buf|
+          buf << line
+          buf.shift if buf.size > lines
+        end
+        return if tail.empty?
+
+        puts ''
+        puts '─' * 80
+        puts "Build output (last #{tail.size} lines):"
+        puts '─' * 80
+        puts tail.join
+        puts '─' * 80
+        puts "Full log: #{path}"
       end
     end
   end

@@ -1,0 +1,90 @@
+{
+  "id": 29,
+  "name": "Test Org",
+  "member_count": 1,
+  "role": "owner",
+  "access_state": "active",
+  "plan": {
+    "tier": "pro",
+    "next_tier": "team",
+    "entitlements": {
+      "limits": {
+        "owned_organizations": 3,
+        "seats_per_organization": 1,
+        "screenshot_projects_per_organization": 10,
+        "screenshot_scenes_per_project": 10,
+        "media_storage_bytes_per_organization": 2147483648,
+        "export_storage_bytes_per_organization": 5368709120,
+        "store_uploads_per_day_per_organization": 60,
+        "store_listing_apps": 999,
+        "store_listing_locales": 10,
+        "ai_translations_per_month": 100,
+        "ai_rewrites_per_month": 50,
+        "tracked_keywords_per_app": 50,
+        "review_monitoring_apps": 5,
+        "analytics_history_days": 90
+      },
+      "features": {
+        "store_uploads": true,
+        "scheduled_sync": true,
+        "manual_sync": true,
+        "stale_dashboard_sync": true,
+        "store_listing_push": true,
+        "release_checklist": true,
+        "release_checklist_read_only": false,
+        "release_notes_history": true,
+        "keyword_editor": true,
+        "keyword_editor_read_only": false,
+        "keyword_tracking": true,
+        "review_monitoring": true,
+        "response_templates": true,
+        "custom_product_pages": true,
+        "analytics_dashboard": true,
+        "audit_log": false,
+        "rbac": false,
+        "sso": false
+      }
+    },
+    "usage": {
+      "seats": 1,
+      "active_memberships": 1,
+      "pending_invitations": 0,
+      "screenshot_projects": 0,
+      "owned_organizations": 1,
+      "media_storage_bytes": 0,
+      "export_storage_bytes": 0,
+      "store_uploads_last_24_hours": 0
+    },
+    "overages": {
+      "any": false,
+      "seats": false,
+      "screenshot_projects": false,
+      "media_storage": false,
+      "export_storage": false,
+      "frozen_project_ids": []
+    },
+    "scheduled_change_impact": null
+  },
+  "stats": {
+    "certificates_count": 2,
+    "devices_count": 4,
+    "profiles_count": 4,
+    "invalid_profiles_count": 0,
+    "bundle_ids_count": 10
+  },
+  "sync": {
+    "status": "ok",
+    "last_synced_at": "2026-05-01T15:41:40Z",
+    "has_credentials": true
+  },
+  "app_store_connect_configured": true,
+  "google_play_configured": false,
+  "credentials_status": {
+    "configured": true,
+    "team_id_set": true,
+    "needs_setup": false
+  },
+  "created_at": "2026-05-01T14:54:13Z",
+  "updated_at": "2026-05-01T14:54:13Z",
+  "token_organization_id": 29
+}

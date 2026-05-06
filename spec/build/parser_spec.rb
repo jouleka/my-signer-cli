@@ -2,6 +2,7 @@
 
 require 'spec_helper'
 require 'mysigner/build/parser'
+require 'xcodeproj'
 
 RSpec.describe Mysigner::Build::Parser do
   let(:project_path) { '/fake/path/App.xcodeproj' }
