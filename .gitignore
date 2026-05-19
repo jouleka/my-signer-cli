@@ -15,3 +15,28 @@
 # macOS
 .DS_Store
 **/.DS_Store
+
+# Dotenv / local config
+.env
+.env.*
+*.local
+
+# Signing material — must never be committed
+*.p8
+*.p12
+*.pem
+*.key
+*.jks
+*.keystore
+*.cer
+*.mobileprovision
+*.certSigningRequest
+google-service-account*.json
+service-account*.json
+
+# Editor / IDE / Ruby LSP
+.idea/
+.vscode/
+/.ruby-lsp/
+*.swp
+*~
