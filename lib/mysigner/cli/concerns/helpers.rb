@@ -69,6 +69,14 @@ module Mysigner
         end
 
         def load_config
+          # mysigner-22 — local-only mode is allowed to run with ZERO MySigner
+          # auth: no ~/.mysigner/config.yml, no API token, no login. Return a
+          # blank Config sentinel and skip both the load and the
+          # "Not logged in" exit. Callers must treat the returned config as
+          # opaque (no api_url, no api_token, no organization_id) and must
+          # also treat create_client(config) as returning nil.
+          return blank_local_only_config if local_only?
+
           # CI/CD mode: prefer environment variables when set
           return Config.from_env if Config.env_configured?
 
@@ -82,6 +90,19 @@ module Mysigner
             say '  export MYSIGNER_ORG_ID=your_org_id', :yellow
             say '  export MYSIGNER_API_URL=https://mysigner.dev  # optional', :yellow
             say '  export MYSIGNER_EMAIL=you@example.com          # optional', :yellow
+            say ''
+            # Discoverability: a first-time user who doesn't want a MySigner
+            # account at all (BYO-credentials, no server orchestration) needs
+            # to know `--local-only` exists. Without this tip the only error
+            # they see is "Not logged in", which strongly implies signup is
+            # the only path forward.
+            say 'Tip: To skip MySigner entirely and ship locally with your own', :yellow
+            say 'Apple/Google credentials, use --local-only:', :yellow
+            say '  mysigner --local-only ship appstore', :yellow
+            say '  (auto-discovers ASC .p8 from ~/.appstoreconnect/private_keys/,', :yellow
+            say '   Google Play SA-JSON from GOOGLE_APPLICATION_CREDENTIALS / eas.json,', :yellow
+            say '   keystore from key.properties / eas.json — or set them via flags / env.)', :yellow
+            say '  See "Local-only mode" section in README.', :yellow
             exit 1
           end
 
@@ -90,6 +111,12 @@ module Mysigner
         end
 
         def create_client(config)
+          # mysigner-22 — in local-only mode every MySigner API touchpoint is
+          # supposed to be bypassed at the call site. Returning nil here makes
+          # an accidental `client.get(...)` fail loud (NoMethodError on nil)
+          # rather than silently re-introducing a server hit.
+          return nil if local_only?
+
           Client.new(
             api_url: config.api_url,
             api_token: config.api_token,
@@ -97,8 +124,116 @@ module Mysigner
           )
         end
 
+        # mysigner-22 — a Config built without touching disk, ENV, or the
+        # encryption key. We deliberately bypass Config#initialize (which
+        # auto-loads ~/.mysigner/config.yml when it exists) because the whole
+        # point of local-only is to work on a machine where that file might
+        # not exist or might be unreadable (e.g. broken Keychain key).
+        # Callers only read `current_organization_id` / `api_url` / etc., all
+        # of which legitimately return nil here.
+        def blank_local_only_config
+          config = Config.allocate
+          config.instance_variable_set(:@api_url, nil)
+          config.instance_variable_set(:@user_email, nil)
+          config.instance_variable_set(:@current_organization_id, nil)
+          config.instance_variable_set(:@organizations, {})
+          config.instance_variable_set(:@encryption_enabled, false)
+          config.instance_variable_set(:@from_env, false)
+          config
+        end
+
         def error(message)
           say "✗ Error: #{message}", :red
+        end
+
+        # Local-only mode is active if either the --local-only flag is set
+        # on this invocation OR MYSIGNER_LOCAL_ONLY is truthy in ENV.
+        # Subsequent tickets gate credential-sending behavior on this.
+        def local_only?
+          options[:local_only] || Mysigner::Config.local_only?
+        end
+
+        # mysigner-22 Phase 5 — resolve ASC creds via the cascade (flag →
+        # env → keychain → ~/.appstoreconnect → prompt), surface a clear
+        # error and exit 1 on miss. Logs the winning source on stderr so
+        # CI runs leave an audit trail of where the credential came from.
+        # Returns a Mysigner::CredentialResolver::AscCreds struct.
+        def resolve_local_asc_creds_or_exit
+          require 'mysigner/credential_resolver'
+          creds = Mysigner::CredentialResolver.resolve_asc(options: options.to_h)
+          warn "[mysigner] ASC credentials source: #{creds.source}" if $stderr.respond_to?(:tty?) && $stderr.tty?
+          creds
+        rescue Mysigner::CredentialResolver::CredentialNotFoundError,
+               Mysigner::CredentialResolver::AmbiguousCredentialsError => e
+          # Preserve the historical wording the CLI specs were written
+          # against ("No local ASC credentials found") so users and tests
+          # have a stable identifier, while including the resolver's
+          # multi-line cascade trace + override knob list right after it.
+          say "✗ No local ASC credentials found via `mysigner onboard --local-only` or other sources:\n#{e.message}",
+              :red
+          exit 1
+        end
+
+        # mysigner-22 Phase 5 — Google Play counterpart of
+        # resolve_local_asc_creds_or_exit. Same semantics: pre-resolve so the
+        # CLI can fail fast before the build kicks off.
+        def resolve_local_play_creds_or_exit
+          require 'mysigner/credential_resolver'
+          creds = Mysigner::CredentialResolver.resolve_play(options: options.to_h)
+          warn "[mysigner] Google Play credentials source: #{creds.source}" if $stderr.respond_to?(:tty?) && $stderr.tty?
+          creds
+        rescue Mysigner::CredentialResolver::CredentialNotFoundError,
+               Mysigner::CredentialResolver::AmbiguousCredentialsError => e
+          say "✗ No local Google Play credentials found via `mysigner onboard --local-only` or other sources:\n#{e.message}",
+              :red
+          exit 1
+        end
+
+        # mysigner-22 Phase 7 — Android keystore counterpart of the ASC/Play
+        # resolvers. Pre-resolves the keystore (path + passwords + alias) via
+        # the cascade so `ship android --local-only` can skip the MySigner
+        # server entirely.
+        def resolve_local_android_keystore_or_exit
+          require 'mysigner/credential_resolver'
+          creds = Mysigner::CredentialResolver.resolve_android_keystore(options: options.to_h)
+          warn "[mysigner] Android keystore source: #{creds.source}" if $stderr.respond_to?(:tty?) && $stderr.tty?
+          creds
+        rescue Mysigner::CredentialResolver::CredentialNotFoundError,
+               Mysigner::CredentialResolver::AmbiguousCredentialsError => e
+          say "✗ No local Android keystore found:\n#{e.message}", :red
+          exit 1
+        end
+
+        # One-time banner on stderr (TTY only) so users know they've opted
+        # into local-only mode. Module-level guard ensures it fires at most
+        # once per CLI invocation, even if multiple commands call it.
+        # (Module instance var, not @@, to avoid the class-var smell — every
+        # instance method sees the same Helpers module object.)
+        def emit_local_only_banner
+          return if Helpers.banner_emitted?
+          return unless $stderr.respond_to?(:tty?) && $stderr.tty?
+
+          Helpers.mark_banner_emitted!
+          # Honest scope: credential transport is what local-only currently
+          # guards. Non-credential MySigner endpoints (app/build registry,
+          # keystore download, etc.) are still used. Documented in the
+          # local-only docs (mysigner-45).
+          warn '[mysigner] local-only mode active — signing credentials stay on this machine ' \
+               '(other MySigner APIs may still be used; see docs).'
+        end
+
+        class << self
+          def banner_emitted?
+            @local_only_banner_emitted == true
+          end
+
+          def mark_banner_emitted!
+            @local_only_banner_emitted = true
+          end
+
+          def reset_banner!
+            @local_only_banner_emitted = false
+          end
         end
       end
     end

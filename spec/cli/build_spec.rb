@@ -338,7 +338,7 @@ RSpec.describe 'mysigner build', type: :cli do
         allow(parser).to receive(:team_id).and_return('PROJECT_TEAM')
 
         expect(Mysigner::Signing::Validator).to receive(:new).with(
-          parser, 'App', 'Release', team_id: 'CUSTOM_TEAM'
+          parser, 'App', 'Release', team_id: 'CUSTOM_TEAM', local_only: false
         )
 
         cli.options = { team: 'CUSTOM_TEAM', configuration: 'Release' }

@@ -9,6 +9,14 @@ module Mysigner
       class CredentialsError < UploadError; end
       class TrackError < UploadError; end
 
+      # Raised when local-only mode is requested but no Google Play credentials
+      # are stored in the LocalCredentials store. The message points users at
+      # `mysigner onboard --local-only` (mysigner-44) which is what persists
+      # them. We refuse to silently fall back to the server path — local-only
+      # must fail loud. Defined locally (not shared with AscRestUploader) so
+      # each uploader owns its own error contract.
+      class MissingLocalCredentialsError < UploadError; end
+
       # Special error for when AAB uploaded but track assignment failed
       # This carries the version_code so it can be saved to prevent conflicts
       class PartialUploadError < UploadError
@@ -23,16 +31,74 @@ module Mysigner
       VALID_TRACKS = %w[internal alpha beta production].freeze
       SCOPE = 'https://www.googleapis.com/auth/androidpublisher'
 
+      # mysigner-22 follow-up — pre-check the user's project versionCode
+      # against what's already on Google Play in local-only mode, where the
+      # MySigner server's `highest_version_code` lookup is bypassed. The
+      # cheapest authenticated way to ask Google "what's already there" is
+      # to insert an edit, list all uploaded bundles (which carry their
+      # versionCode), and discard the edit. Inserting an edit is free and
+      # has no side effect when never committed.
+      #
+      # Returns the maximum versionCode across all bundles (Integer), or
+      # nil when the app has no bundles yet (very first upload).
+      def self.fetch_highest_version_code(package_name:, access_token:)
+        require 'google/apis/androidpublisher_v3'
+
+        service = Google::Apis::AndroidpublisherV3::AndroidPublisherService.new
+        service.authorization = access_token
+
+        edit = service.insert_edit(package_name, Google::Apis::AndroidpublisherV3::AppEdit.new)
+        begin
+          bundles_response = service.list_edit_bundles(package_name, edit.id)
+          version_codes = Array(bundles_response&.bundles).map(&:version_code).compact
+          return nil if version_codes.empty?
+
+          version_codes.max
+        ensure
+          # Best-effort cleanup — the edit auto-expires after a week if we
+          # leak one, but tidiness is cheap. Swallow errors so a transient
+          # cleanup failure can't mask the real return value.
+          begin
+            service.delete_edit(package_name, edit.id)
+          rescue StandardError
+            nil
+          end
+        end
+      rescue Google::Apis::ClientError
+        # We treat a lookup failure (auth issue, package-not-found) as
+        # "unknown" rather than fatal — Google will still reject at upload
+        # time with a useful message. This pre-check is best-effort.
+        nil
+      end
+
       # Phase 0: accepts a short-lived OAuth2 access_token (minted server-side
       # from the customer's service-account JSON). The JSON no longer leaves
       # the server. google-api-ruby-client accepts a bare string for
       # authorization= and sends it as `Authorization: Bearer <token>`.
-      def initialize(aab_path:, access_token:, package_name:)
+      #
+      # mysigner-43: when `local_only: true`, `access_token` is optional —
+      # the uploader mints one locally from Keychain-backed SA-JSON. The
+      # SA-JSON never leaves the user's machine, and no MySigner server
+      # credential endpoints are contacted.
+      def initialize(aab_path:, package_name:, access_token: nil, local_only: false, play_creds: nil)
         @aab_path = File.expand_path(aab_path)
         @access_token = access_token
         @package_name = package_name
+        @local_only = local_only
+        # mysigner-22 Phase 5 — pre-resolved PlayCreds Struct from the
+        # CredentialResolver cascade. When nil (legacy / unit tests), we fall
+        # back to the resolver with default args (Keychain only) inside
+        # local_access_token — preserving existing spec invariants.
+        @play_creds = play_creds
 
-        raise CredentialsError, 'access_token is required' if @access_token.nil? || @access_token.to_s.empty?
+        if @local_only
+          # Mint immediately so missing-credentials errors surface at
+          # construction time (same DX as the server path's
+          # CredentialsError) rather than mid-upload.
+          @access_token = local_access_token
+        elsif @access_token.nil? || @access_token.to_s.empty?
+          raise CredentialsError, 'access_token is required'
+        end
 
         validate_aab!
         setup_google_client!
@@ -180,6 +246,32 @@ module Mysigner
         @service.request_options.retries = 3
       rescue LoadError
         raise CredentialsError, 'Google API client not installed. Run: gem install google-api-client'
+      end
+
+      # mysigner-43 + mysigner-22 Phase 5: look up the Google Play SA-JSON
+      # through the CredentialResolver cascade (flag → env → keychain →
+      # project sniff → prompt) and mint a short-lived OAuth2 access_token.
+      # The SA-JSON never leaves the process; the MySigner server is never
+      # contacted.
+      def local_access_token
+        require 'mysigner/auth/google_oauth_minter'
+        creds = @play_creds || resolve_play_creds
+        Mysigner::Auth::GoogleOauthMinter.new(creds.sa_json).mint(scope: SCOPE)
+      end
+
+      def resolve_play_creds
+        require 'mysigner/credential_resolver'
+        Mysigner::CredentialResolver.resolve_play
+      rescue Mysigner::CredentialResolver::CredentialNotFoundError, Mysigner::CredentialResolver::AmbiguousCredentialsError => e
+        raise MissingLocalCredentialsError, rewrite_resolver_error(e.message)
+      end
+
+      def rewrite_resolver_error(text)
+        if text.start_with?('No usable Google Play credentials found')
+          "No local Google Play credentials found via `mysigner onboard --local-only`. #{text}"
+        else
+          text
+        end
       end
 
       def create_edit

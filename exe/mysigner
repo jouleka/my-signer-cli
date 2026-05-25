@@ -3,6 +3,60 @@
 
 require 'mysigner'
 
+# Hoist class_options written BEFORE the subcommand to AFTER it.
+# Thor's `retrieve_command_name` only treats the first non-flag arg as the
+# command — when ARGV starts with a class_option flag like `--local-only`,
+# Thor sees no command, silently dispatches to `help`, and we get
+# `"mysigner help" was called with arguments ["ship", "appstore", ...]`.
+#
+# We avoid hard-coding the flag list by reading
+# `Mysigner::CLI.class_options` at startup. Class-option booleans support
+# Thor's auto-generated `--no-flag` / `--skip-flag` variants too. String/
+# numeric options aren't currently used as class_options here, but if one
+# is added we also recognise `--flag value` (separate-arg form).
+def hoist_leading_class_options!(argv)
+  return argv if argv.empty?
+
+  class_opts = Mysigner::CLI.class_options
+  switches = class_opts.each_with_object({}) do |(_, opt), acc|
+    Array(opt.switch_name).each { |s| acc[s] = opt }
+    opt.aliases.each { |s| acc[s] = opt }
+    next unless opt.type == :boolean && opt.switch_name.start_with?('--')
+
+    base = opt.switch_name.sub(/\A--/, '')
+    acc["--no-#{base}"] = opt
+    acc["--skip-#{base}"] = opt
+  end
+
+  hoisted = []
+  i = 0
+  while i < argv.length
+    arg = argv[i]
+    flag_name = arg.split('=', 2).first
+    break unless switches.key?(flag_name)
+
+    hoisted << arg
+    # `--flag value` form: pull the value too, but only when the flag was
+    # written WITHOUT `=` AND the option isn't a boolean (booleans don't
+    # take a value).
+    opt = switches[flag_name]
+    if opt.type != :boolean && !arg.include?('=') && argv[i + 1] && !argv[i + 1].start_with?('-')
+      hoisted << argv[i + 1]
+      i += 1
+    end
+    i += 1
+  end
+
+  return argv if hoisted.empty?
+  # No command word follows the leading flags — leave argv alone so Thor
+  # can fall through to its own no-command help dispatch.
+  return argv if i >= argv.length
+
+  command = argv[i]
+  rest = argv[(i + 1)..]
+  [command, *hoisted, *rest]
+end
+
 # Normalize `mysigner <cmd> [args…] --help` → `mysigner help <cmd>`. Thor
 # treats extra positional args as a fatal argument-count error, so without
 # this rewrite users who type `mysigner ship testflight --help` see
@@ -19,4 +73,4 @@ def rewrite_help_flag!(argv)
   ['help', first]
 end
 
-Mysigner::CLI.start(rewrite_help_flag!(ARGV))
+Mysigner::CLI.start(rewrite_help_flag!(hoist_leading_class_options!(ARGV)))

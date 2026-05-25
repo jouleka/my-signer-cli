@@ -5,11 +5,17 @@ module Mysigner
     class Validator
       class ValidationError < StandardError; end
 
-      def initialize(parser, target_name, configuration = 'Release', team_id: nil)
+      # local_only: when true, omit user-facing fix-suggestions that point
+      # at the MySigner web dashboard (mysigner-22). A user who passed
+      # `--local-only` (or set MYSIGNER_LOCAL_ONLY=1) has explicitly opted
+      # out of MySigner; suggesting they log in there to fix an error is
+      # nonsense and was a real point of confusion in the Phase 6 ship test.
+      def initialize(parser, target_name, configuration = 'Release', team_id: nil, local_only: false)
         @parser = parser
         @target_name = target_name
         @configuration = configuration
         @team_id_override = team_id
+        @local_only = local_only
       end
 
       # Validates signing setup before build
@@ -22,16 +28,21 @@ module Mysigner
         if team_id.nil? || team_id.empty?
           result[:errors] << "No development team set for target '#{@target_name}'"
           result[:errors] << ''
-          result[:errors] << 'Fix Option 1: Add team to My Signer'
-          result[:errors] << '  1. Open https://mysigner.dev'
-          result[:errors] << '  2. Go to Settings → App Store Connect'
-          result[:errors] << '  3. Add your Team ID'
-          result[:errors] << '  4. Run: mysigner build (team will auto-fetch)'
-          result[:errors] << ''
-          result[:errors] << 'Fix Option 2: Pass team via CLI'
+          option_number = 1
+          unless @local_only
+            result[:errors] << "Fix Option #{option_number}: Add team to My Signer"
+            result[:errors] << '  1. Open https://mysigner.dev'
+            result[:errors] << '  2. Go to Settings → App Store Connect'
+            result[:errors] << '  3. Add your Team ID'
+            result[:errors] << '  4. Run: mysigner build (team will auto-fetch)'
+            result[:errors] << ''
+            option_number += 1
+          end
+          result[:errors] << "Fix Option #{option_number}: Pass team via CLI"
           result[:errors] << '  mysigner build --team YOUR_TEAM_ID'
           result[:errors] << ''
-          result[:errors] << 'Fix Option 3: Set in Xcode'
+          option_number += 1
+          result[:errors] << "Fix Option #{option_number}: Set in Xcode"
           result[:errors] << '  Open Xcode → Select target → Signing & Capabilities → Select a team'
           result[:errors] << ''
           result[:errors] << 'Find your team ID at: https://developer.apple.com/account/#!/membership/'

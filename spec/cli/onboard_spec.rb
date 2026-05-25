@@ -420,6 +420,209 @@ RSpec.describe 'mysigner onboard' do
     end
   end
 
+  # mysigner-44 — local-only branch. These specs encode the invariants the
+  # whole local-only mode rests on: never POST credentials, always store
+  # them via LocalCredentials, raise loud on bad input. A regression in any
+  # of these silently breaks the offline path the epic depends on, so the
+  # assertions are intentionally tight.
+  describe 'local-only mode' do
+    let(:ec_key)    { OpenSSL::PKey::EC.generate('prime256v1') }
+    let(:p8_pem)    { ec_key.to_pem }
+    let(:key_id)    { 'ABC123DEFG' }
+    let(:issuer_id) { '69a6de70-1234-47e3-e053-5b8c7c11a4d1' }
+    let(:sa_email)  { 'svc@my-project.iam.gserviceaccount.com' }
+    let(:sa_json) do
+      JSON.generate(
+        'type' => 'service_account',
+        'client_email' => sa_email,
+        'private_key' => "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n",
+        'project_id' => 'my-project'
+      )
+    end
+    let(:p8_path)   { '/tmp/AuthKey_ABC123DEFG.p8' }
+    let(:json_path) { '/tmp/sa.json' }
+
+    before do
+      # Force local-only on without touching ENV (Helpers#local_only? OR-s
+      # flag and ENV — stubbing options is the cleanest path).
+      allow(cli).to receive(:options).and_return({ local_only: true })
+      # Suppress the banner in tests — its own contract lives in
+      # local_only_spec.rb; here we don't care.
+      allow(cli).to receive(:emit_local_only_banner)
+      # File reads — point to in-memory PEM/JSON regardless of which path
+      # the prompt returned.
+      allow(File).to receive(:exist?).and_call_original
+      allow(File).to receive(:exist?).with(p8_path).and_return(true)
+      allow(File).to receive(:exist?).with(json_path).and_return(true)
+      allow(File).to receive(:read).and_call_original
+      allow(File).to receive(:read).with(p8_path).and_return(p8_pem)
+      allow(File).to receive(:read).with(json_path).and_return(sa_json)
+      # Stub the store so we can assert on it AND avoid touching the
+      # Keychain in CI.
+      allow(Mysigner::LocalCredentials).to receive(:store).and_return(true)
+      # The local-only path never reaches Mysigner::Client, but we install
+      # a spy so the `not_to have_received(:post)` assertion is meaningful
+      # rather than a no-op against `nil`.
+      allow(Mysigner::Client).to receive(:new).and_return(client)
+      allow(client).to receive(:post)
+      allow(client).to receive(:get)
+    end
+
+    context 'user supplies both ASC and Google Play credentials' do
+      before do
+        # Both setup prompts: yes
+        allow(cli).to receive(:yes_with_default?).and_return(true)
+        # ASC prompts — Key ID auto-detects from filename, so only Issuer.
+        allow(cli).to receive(:ask).with('Path to your .p8 private key:').and_return(p8_path)
+        allow(cli).to receive(:ask).with('Enter your Issuer ID (UUID):').and_return(issuer_id)
+        # Google Play prompt
+        allow(cli).to receive(:ask).with('Path to your service-account JSON:').and_return(json_path)
+      end
+
+      it 'never POSTs credentials to the server' do
+        cli.onboard
+        expect(client).not_to have_received(:post)
+      end
+
+      it 'stores the ASC credential keyed by Key ID with a JSON envelope' do
+        cli.onboard
+        expect(Mysigner::LocalCredentials).to have_received(:store).with(
+          kind: :asc,
+          id: key_id,
+          secret: satisfy { |s|
+            payload = JSON.parse(s)
+            payload['issuer_id'] == issuer_id && payload['p8_pem'] == p8_pem
+          }
+        )
+      end
+
+      it 'stores the Google Play credential keyed by client_email with raw SA-JSON' do
+        cli.onboard
+        expect(Mysigner::LocalCredentials).to have_received(:store).with(
+          kind: :google_play,
+          id: sa_email,
+          secret: sa_json
+        )
+      end
+
+      it 'prints the local-only completion summary' do
+        expect { cli.onboard }.to output(/Local-only setup complete/).to_stdout
+      end
+    end
+
+    context 'user skips both credentials' do
+      before do
+        allow(cli).to receive(:yes_with_default?).and_return(false)
+      end
+
+      it 'stores nothing and never POSTs' do
+        cli.onboard
+        expect(Mysigner::LocalCredentials).not_to have_received(:store)
+        expect(client).not_to have_received(:post)
+      end
+
+      it 'tells the user nothing was stored' do
+        expect { cli.onboard }.to output(/No credentials were stored/).to_stdout
+      end
+    end
+
+    context 'invalid .p8 file' do
+      before do
+        # Only set up ASC; skip Play
+        allow(cli).to receive(:yes_with_default?).with(/App Store Connect/, anything).and_return(true)
+        allow(cli).to receive(:yes_with_default?).with(/Google Play/, anything).and_return(false)
+        allow(cli).to receive(:ask).with('Path to your .p8 private key:').and_return(p8_path)
+        # Replace the PEM with garbage — must raise loud, not silently store.
+        allow(File).to receive(:read).with(p8_path).and_return('not a pem')
+      end
+
+      it 'raises LocalOnlyOnboardError and stores nothing' do
+        expect { cli.onboard }.to raise_error(Mysigner::CLI::LocalOnlyOnboardError, /invalid \.p8/)
+        expect(Mysigner::LocalCredentials).not_to have_received(:store)
+      end
+    end
+
+    context 'invalid service-account JSON' do
+      before do
+        allow(cli).to receive(:yes_with_default?).with(/App Store Connect/, anything).and_return(false)
+        allow(cli).to receive(:yes_with_default?).with(/Google Play/, anything).and_return(true)
+        allow(cli).to receive(:ask).with('Path to your service-account JSON:').and_return(json_path)
+        # Missing required fields — must raise rather than write a broken
+        # credential the minter will later choke on with a cryptic error.
+        allow(File).to receive(:read).with(json_path).and_return(JSON.generate('type' => 'something_else'))
+      end
+
+      it 'raises LocalOnlyOnboardError and stores nothing' do
+        expect { cli.onboard }.to raise_error(Mysigner::CLI::LocalOnlyOnboardError, /service-account JSON/)
+        expect(Mysigner::LocalCredentials).not_to have_received(:store)
+      end
+    end
+
+    # mysigner-22 Phase 5 — when the user already has credentials reachable
+    # by the auto-discovery cascade (env vars, ~/.appstoreconnect, project-
+    # sniff, or Keychain) onboard MUST detect them and SKIP the interactive
+    # prompt for that platform. WHY: the v1 onboard always prompted, which
+    # was painful for users who already had Apple's standard layout set up.
+    context 'when ASC creds already discoverable via env vars, skip the ASC prompt' do
+      before do
+        allow(cli).to receive(:yes_with_default?).and_return(false)
+        # ASC discovery stub: pretend the resolver returns AscCreds from env.
+        ec_pem = "-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----\n"
+        creds = Mysigner::CredentialResolver::AscCreds.new(
+          key_id: 'PREEXISTING', issuer_id: 'iss', p8_pem: ec_pem, source: :env
+        )
+        allow(Mysigner::CredentialResolver).to receive(:resolve_asc).and_return(creds)
+        # Play discovery still raises (nothing there) — falls through to the
+        # original yes/no prompt for Google Play, which we said NO to above.
+        allow(Mysigner::CredentialResolver).to receive(:resolve_play)
+          .and_raise(Mysigner::CredentialResolver::CredentialNotFoundError, 'nope')
+      end
+
+      it 'tells the user we detected the credential and never prompts for ASC' do
+        # The yes/no prompt for "Set up App Store Connect..." must be skipped
+        # entirely when the resolver already finds a credential — i.e. we
+        # must not pass that exact question to yes_with_default?.
+        expect(cli).not_to receive(:yes_with_default?).with(/App Store Connect/, anything)
+        # And we must not call the collector either.
+        expect(cli).not_to receive(:collect_local_asc_credential)
+        output = capture_stdout { cli.onboard }
+        expect(output).to include('Detected App Store Connect credentials')
+      end
+
+      it 'still stores nothing for the skipped platform (no double-write)' do
+        capture_stdout { cli.onboard }
+        expect(Mysigner::LocalCredentials).not_to have_received(:store).with(hash_including(kind: :asc))
+      end
+    end
+
+    context 'when local-only mode is OFF, the server-mediated path is unchanged' do
+      # Sanity check: flipping the flag back to false must NOT short-circuit
+      # into the local-only branch. We assert this by checking that the
+      # legacy server prompt for an API token still appears.
+      it 'falls through to the existing onboard flow' do
+        allow(cli).to receive(:options).and_return({ local_only: false })
+        allow(cli).to receive(:prompt_api_url).and_return(api_url)
+        allow(cli).to receive(:ask).with('Select (1-2):', limited_to: %w[1 2]).and_return('1', '1', '2')
+        allow(cli).to receive(:yes_with_default?).with(/Have you generated/, anything).and_return(true)
+        allow(cli).to receive(:prompt_for_email).and_return(user_email)
+        allow(cli).to receive(:ask).with('Paste your API Token:', echo: false).and_return(api_token)
+        allow(client).to receive(:test_connection).and_return({ success: true })
+        allow(client).to receive(:get).with('/api/v1/organizations').and_return(
+          data: { 'organizations' => [{ 'id' => org_id, 'name' => 'Test Org' }] }
+        )
+        allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(data: org_data)
+        allow(config).to receive(:api_url=)
+        allow(config).to receive(:user_email=)
+        allow(config).to receive(:current_organization_id=)
+        allow(config).to receive(:save_token_for_org)
+
+        expect { cli.onboard }.to output(/Setup Complete/).to_stdout
+        # And the local store was never touched.
+        expect(Mysigner::LocalCredentials).not_to have_received(:store)
+      end
+    end
+  end
+
   # Helper method
   def capture_stdout
     old_stdout = $stdout

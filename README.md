@@ -316,6 +316,99 @@ mysigner signing configure --all-targets   # Configure all targets
 
 ---
 
+## Local-only mode (`--local-only` / `MYSIGNER_LOCAL_ONLY`)
+
+Local-only mode routes signing-credential auth through your machine instead of the My Signer server. Your Apple `.p8` private key and Google Play service-account JSON live in the macOS Keychain (or an AES-256-GCM-encrypted file on Linux/Windows) and the CLI mints the ASC JWT and Google OAuth token locally at upload time. Activate per command with `--local-only` or globally with `MYSIGNER_LOCAL_ONLY=1`.
+
+```bash
+mysigner --local-only ship appstore
+mysigner --local-only ship play production
+MYSIGNER_LOCAL_ONLY=1 mysigner ship testflight
+```
+
+### Local-only vs vault (server) mode
+
+|                                 | Vault (default)                        | Local-only                                       |
+| ------------------------------- | -------------------------------------- | ------------------------------------------------ |
+| Holds `.p8` / SA-JSON at rest   | My Signer server (CMK-encrypted)       | Your macOS Keychain or local AES-256-GCM file    |
+| Mints ASC JWT / Google OAuth    | Server                                 | CLI, on your machine                             |
+| Server endpoints used at ship   | All (sync, list, builds, submit, etc.) | All except credential-minting and the actual API upload |
+| Multi-machine sync              | Yes — log in from anywhere             | No — re-onboard on each machine                  |
+| Team-sharing                    | Yes — server gates per-user access     | No — per-machine only                            |
+| CI/CD setup                     | API token in CI secrets                | Pre-populate `~/.mysigner/credentials/` from a secret store |
+| Revocation surface              | Revoke at server (audit log)           | Wipe the Keychain entry / local file             |
+
+### What local-only does NOT do (v1)
+
+Local-only mode in v1 guards the **API-call-time credentials** (the ASC JWT and the Google OAuth token). The `ship` pipelines still talk to My Signer for orchestration. Be honest with yourself about which of these matter for your threat model:
+
+- **`ship appstore --local-only`** still calls My Signer for pre-upload sync, app/build lookup, the post-upload poll loop, and `submit_for_review!`. Only the upload itself goes direct to Apple.
+- **`ship play --local-only`** still calls My Signer for the Android build record, `link_to_app`, release defaults, highest-version-code lookup, **and the keystore download** (via the keystore manager). Only the Play Publishing API call goes direct to Google.
+- **Android keystore is the biggest gap.** The signing keystore is still downloaded from My Signer in local-only mode. v1 does not guard the long-lived Android signing material itself — only the OAuth token used to talk to Google.
+- **Single-account assumption.** Both `ship appstore` and `ship play` pick the first credential in storage order (`LocalCredentials.list.first`). If you have multiple ASC accounts or multiple Google Play SA-JSONs, there is no way to choose between them yet. Multi-account routing (`--asc-account`, `--google-play-account`) is a planned follow-up.
+- **CI/CD non-interactive onboarding.** `mysigner onboard --local-only` is interactive only. For CI you must pre-populate `~/.mysigner/credentials/` from a secret store before invoking the CLI; a non-interactive onboarding mode is a planned follow-up.
+
+### Setup
+
+Run the guided flow:
+
+```bash
+mysigner --local-only onboard
+```
+
+You'll be asked whether to set up App Store Connect, Google Play, or both:
+
+```
+🚀 My Signer Setup (local-only)
+================================================================================
+
+Local-only mode: credentials stay on this machine.
+
+Set up App Store Connect credentials now? [Y/n]
+
+📱 App Store Connect (local-only)
+
+Path to your .p8 private key:        # e.g. ~/Downloads/AuthKey_ABC12345.p8
+Enter your Key ID (e.g., ABC12345):  # auto-detected from filename when possible
+Enter your Issuer ID (UUID):
+
+Set up Google Play credentials now? [Y/n]
+
+🤖 Google Play (local-only)
+
+Path to your service-account JSON:   # e.g. ~/Downloads/sa-key.json
+```
+
+Storage:
+- **macOS**: Keychain service `com.mysigner.cli.credentials`, accounts namespaced as `asc:<key_id>` and `google_play:<client_email>`.
+- **Other OSes**: per-credential AES-256-GCM files under `~/.mysigner/credentials/<kind>/<id>`, mode `0600`, encrypted under the same per-machine key as `Config`.
+
+### Daily usage
+
+```bash
+# iOS — local-mint ASC JWT, upload direct to Apple
+mysigner --local-only ship testflight
+mysigner --local-only ship appstore --submit-for-review
+
+# Android — local-mint Google OAuth token, call Play Publishing API direct
+mysigner --local-only ship internal   --platform android
+mysigner --local-only ship production --platform android
+
+# Or set globally for the shell / CI job
+export MYSIGNER_LOCAL_ONLY=1
+mysigner ship testflight
+```
+
+### Threat model
+
+In vault mode, My Signer's CMK / envelope encryption gates access to your `.p8` and SA-JSON at rest on the server, and access is logged and revocable at the org level. In local-only mode the same material sits in your macOS Keychain (or AES-256-GCM file) gated by your machine's user account. The tradeoff is **who you trust**: My Signer's infrastructure vs your own machine. Single-developer teams, regulated industries, and security-paranoid setups generally prefer local-only; collaborative teams generally prefer vault mode for its revocation surface and shared visibility.
+
+### Migration
+
+To switch from vault to local-only, run `mysigner --local-only onboard` and re-enter your credentials. The server-stored credentials stay in My Signer but the CLI stops fetching them while `--local-only` / `MYSIGNER_LOCAL_ONLY` is set. To switch back, run `mysigner onboard` (no flag). There is no automated data migration — credentials are re-entered on the new side.
+
+---
+
 ## Configuration
 
 My Signer CLI stores configuration in `~/.mysigner/config.yml`:

@@ -66,6 +66,7 @@ Metrics/BlockNesting:
 Metrics/ClassLength:
   Exclude:
     - 'lib/mysigner/signing/wizard.rb'
+    - 'lib/mysigner/credential_resolver.rb'
 
 # Offense count: 26
 # Configuration parameters: AllowedMethods, AllowedPatterns, Max.
@@ -91,6 +92,7 @@ Metrics/MethodLength:
     - 'lib/mysigner/cli/diagnostic_commands.rb'
     - 'lib/mysigner/cli/resource_commands.rb'
     - 'lib/mysigner/cli/validate_commands.rb'
+    - 'lib/mysigner/credential_resolver.rb'
     - 'lib/mysigner/signing/wizard.rb'
     - 'lib/mysigner/upload/app_store_automation.rb'
 
@@ -102,14 +104,16 @@ Metrics/ModuleLength:
     - 'lib/mysigner/cli/build_commands.rb'
     - 'lib/mysigner/cli/diagnostic_commands.rb'
     - 'lib/mysigner/cli/resource_commands.rb'
+    - 'lib/mysigner/credential_resolver.rb'
 
-# Offense count: 5
+# Offense count: 6
 # Configuration parameters: Max, CountKeywordArgs, MaxOptionalParameters.
 Metrics/ParameterLists:
   Exclude:
     - 'lib/mysigner/build/executor.rb'
     - 'lib/mysigner/signing/keystore_manager.rb'
     - 'lib/mysigner/upload/asc_rest_uploader.rb'
+    - 'lib/mysigner/upload/asc_submitter.rb'
     - 'lib/mysigner/upload/play_store_uploader.rb'
 
 # Offense count: 27
@@ -122,5 +126,6 @@ Metrics/PerceivedComplexity:
     - 'lib/mysigner/cli/diagnostic_commands.rb'
     - 'lib/mysigner/cli/resource_commands.rb'
     - 'lib/mysigner/cli/validate_commands.rb'
+    - 'lib/mysigner/credential_resolver.rb'
     - 'lib/mysigner/signing/wizard.rb'
     - 'lib/mysigner/upload/app_store_automation.rb'

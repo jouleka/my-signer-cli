@@ -73,6 +73,35 @@ module Mysigner
                                          desc: 'Scheduled release date (ISO 8601, e.g., 2026-02-01T10:00:00Z)'
           method_option :auto_submit, type: :boolean,
                                       desc: 'Submit for App Store review after upload. Defaults to dashboard CLI Defaults, else true for ship appstore. Use --no-auto-submit to skip.'
+          # mysigner-22 Phase 5 — local-only credential auto-discovery
+          # overrides. These layer on top of env vars / Keychain / disk scan;
+          # see Mysigner::CredentialResolver. They are no-ops in vault mode.
+          method_option :asc_key_path, type: :string, banner: 'PATH',
+                                       desc: 'Path to your App Store Connect .p8 key (local-only mode)'
+          method_option :asc_key_id, type: :string, banner: 'KEY_ID',
+                                     desc: 'App Store Connect Key ID (local-only mode)'
+          method_option :asc_issuer_id, type: :string, banner: 'UUID',
+                                        desc: 'App Store Connect Issuer ID (local-only mode)'
+          method_option :play_credentials, type: :string, banner: 'PATH',
+                                           desc: 'Path to Google Play service-account JSON (local-only mode)'
+          # mysigner-22 Phase 7 — Android keystore overrides for --local-only.
+          # In vault mode these are ignored; the cascade only fires when
+          # local_only? is true.
+          method_option :keystore_path, type: :string, banner: 'PATH',
+                                        desc: 'Path to Android signing keystore .jks/.keystore (local-only mode)'
+          method_option :keystore_password, type: :string, banner: 'PWD',
+                                            desc: 'Android keystore password (local-only mode)'
+          method_option :key_alias, type: :string, banner: 'ALIAS',
+                                    desc: 'Android key alias inside the keystore (local-only mode)'
+          method_option :key_password, type: :string, banner: 'PWD',
+                                       desc: 'Android key password (defaults to keystore password) (local-only mode)'
+          # mysigner-22 — explicit Apple-side app id override for local-only
+          # mode. When the bundleId lookup against Apple's /v1/apps returns
+          # zero or multiple matches, the user can short-circuit it by passing
+          # the exact appstoreconnect app id from the URL of their app page
+          # (e.g. https://appstoreconnect.apple.com/apps/<APPLE_APP_ID>/...).
+          method_option :apple_id, type: :string, banner: 'APPLE_APP_ID',
+                                   desc: 'App Store Connect app id (overrides bundleId lookup in --local-only mode)'
           def ship(target)
             ios_targets = %w[testflight appstore]
             android_targets = %w[internal alpha beta production]
@@ -114,6 +143,12 @@ module Mysigner
             # iOS flow continues below...
 
             is_appstore = (target == 'appstore')
+
+            # mysigner-42 — when the user opts into local-only for `ship`
+            # (testflight/appstore), surface the banner once so they know their
+            # .p8 won't traverse the MySigner server. The uploader itself
+            # enforces the contract below.
+            emit_local_only_banner if local_only?
 
             config = load_config
             client = create_client(config)
@@ -191,28 +226,38 @@ module Mysigner
               project_team_id = parser.team_id(target_name, options[:configuration])
 
               if !team_id_to_use && (project_team_id.nil? || project_team_id.empty?)
-                say '🔍 No team set in project, fetching from My Signer...', :yellow
+                # mysigner-22 — local-only mode cannot read team-id from the
+                # MySigner org record (no client). Surface a useful hint
+                # instead of letting xcodebuild fail later with a generic
+                # signing error.
+                if local_only?
+                  say '⚠️  No team set in project and --local-only mode (cannot fetch from MySigner).', :yellow
+                  say '   Pass --team <TEAM_ID> or set DEVELOPMENT_TEAM in your Xcode project.', :yellow
+                else
+                  say '🔍 No team set in project, fetching from My Signer...', :yellow
 
-                begin
-                  org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
-                  api_team_id = org_response.dig(:data,
-                                                 'app_store_connect_team_id') || org_response['app_store_connect_team_id']
+                  begin
+                    org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
+                    api_team_id = org_response.dig(:data,
+                                                   'app_store_connect_team_id') || org_response['app_store_connect_team_id']
 
-                  if api_team_id && !api_team_id.empty?
-                    team_id_to_use = api_team_id
-                    say "✓ Using team from My Signer: #{api_team_id}", :green
-                  else
-                    say '⚠️  No team ID configured in My Signer', :yellow
+                    if api_team_id && !api_team_id.empty?
+                      team_id_to_use = api_team_id
+                      say "✓ Using team from My Signer: #{api_team_id}", :green
+                    else
+                      say '⚠️  No team ID configured in My Signer', :yellow
+                    end
+                  rescue StandardError => e
+                    say "⚠️  Failed to fetch team from API: #{e.message}", :yellow
                   end
-                rescue StandardError => e
-                  say "⚠️  Failed to fetch team from API: #{e.message}", :yellow
                 end
               end
               say ''
 
               # Pre-build validation
               say '🔍 Validating signing setup...', :cyan
-              validator = Signing::Validator.new(parser, target_name, options[:configuration], team_id: team_id_to_use)
+              validator = Signing::Validator.new(parser, target_name, options[:configuration],
+                                                 team_id: team_id_to_use, local_only: local_only?)
               validator.validate!
 
               executor = Build::Executor.new(project_info, parser)
@@ -254,9 +299,14 @@ module Mysigner
               say "📦 IPA: #{ipa_path}", :cyan
               say ''
 
-              # STEP 2.5: Get current latest build (BEFORE upload) - App Store only
+              # STEP 2.5: Get current latest build (BEFORE upload) - App Store only.
+              # mysigner-22 — in local-only mode every probe here was a
+              # MySigner-server call. We skip the whole block: Apple itself is
+              # the source of truth for whether the upload succeeded
+              # (AscRestUploader polls /v1/buildUploads directly), so the
+              # "did a new build appear server-side" comparison is moot.
               latest_build_before_upload = nil
-              if is_appstore
+              if is_appstore && !local_only?
                 say '=' * 80, :cyan
                 say 'Getting Current Latest Build', :cyan
                 say '=' * 80, :cyan
@@ -306,7 +356,9 @@ module Mysigner
 
               upload_start = Time.now
 
-              if ENV['MYSIGNER_USE_LEGACY_ASC'] == '1'
+              # mysigner-22 — legacy altool path fetches the .p8 from MySigner;
+              # it's incompatible with local-only. Force the REST path.
+              if ENV['MYSIGNER_USE_LEGACY_ASC'] == '1' && !local_only?
                 # LEGACY PATH — altool with server-fetched .p8. Will be removed in next release.
                 say '⚠️  MYSIGNER_USE_LEGACY_ASC=1 — using legacy altool upload path (deprecated).', :yellow
 
@@ -355,18 +407,41 @@ module Mysigner
                 # DEFAULT PATH — ASC REST Build Upload API. No .p8 ever leaves the server.
                 require_relative '../upload/asc_rest_uploader'
 
-                # Resolve apple_app_id from bundle_id (may already have been fetched for is_appstore)
-                if !defined?(app) || app.nil?
-                  app_response = client.get("/api/v1/organizations/#{config.current_organization_id}/apple_apps",
-                                            params: { bundle_id: bundle_id })
-                  app = Array(app_response.dig(:data, 'data', 'apps')).first
-                end
+                # In local-only mode, pre-resolve ASC creds via the cascade
+                # (flag → env → keychain → ~/.appstoreconnect → prompt) BEFORE
+                # the app-id lookup, because the lookup itself needs a JWT.
+                # The uploader will mint the JWT from these; no LocalCredentials
+                # round-trip happens inside it. In vault mode this is nil and
+                # the uploader takes the server-mediated path unchanged.
+                asc_creds_for_uploader = (resolve_local_asc_creds_or_exit if local_only?)
 
-                unless app && app['id']
-                  say "✗ App not found in MySigner for bundle_id: #{bundle_id}", :red
-                  say 'Run: mysigner sync ios', :yellow
-                  exit 1
-                end
+                # Resolve apple_app_id.
+                # - vault mode: MySigner /apple_apps lookup (may have been
+                #   pre-fetched in the appstore sync block above).
+                # - local-only: explicit --apple-id wins; otherwise hit Apple's
+                #   /v1/apps?filter[bundleId]= directly.
+                apple_app_id =
+                  if local_only?
+                    resolve_apple_app_id_local!(
+                      bundle_id: bundle_id,
+                      apple_id_override: options[:apple_id],
+                      asc_creds: asc_creds_for_uploader
+                    )
+                  else
+                    if !defined?(app) || app.nil?
+                      app_response = client.get("/api/v1/organizations/#{config.current_organization_id}/apple_apps",
+                                                params: { bundle_id: bundle_id })
+                      app = Array(app_response.dig(:data, 'data', 'apps')).first
+                    end
+
+                    unless app && app['id']
+                      say "✗ App not found in MySigner for bundle_id: #{bundle_id}", :red
+                      say 'Run: mysigner sync ios', :yellow
+                      exit 1
+                    end
+
+                    app['id']
+                  end
 
                 # Read version info from the built IPA
                 ipa_info = Upload::Uploader.extract_ipa_info(ipa_path)
@@ -377,12 +452,14 @@ module Mysigner
 
                 rest = Mysigner::Upload::AscRestUploader.new(
                   client: client,
-                  organization_id: config.current_organization_id,
+                  organization_id: local_only? ? nil : config.current_organization_id,
                   ipa_path: ipa_path,
-                  apple_app_id: app['id'],
+                  apple_app_id: apple_app_id,
                   cf_bundle_version: cf_version,
                   cf_bundle_short_version_string: cf_short,
-                  platform: 'IOS'
+                  platform: 'IOS',
+                  local_only: local_only?,
+                  asc_creds: asc_creds_for_uploader
                 )
 
                 result = rest.call
@@ -399,8 +476,40 @@ module Mysigner
 
               timings[:upload] = Time.now - upload_start
 
-              # STEP 4: Submit for App Store Review (appstore only)
-              if is_appstore
+              # STEP 4: Submit for App Store Review (appstore only).
+              # mysigner-22 follow-up — local-only now drives the same
+              # 4-step Apple REST submission flow the vault path drives via
+              # MySigner, using the JWT minted from the user's local .p8.
+              # Gated by --auto-submit (default true, --no-auto-submit opts
+              # out) so users who want "upload only, finish in dashboard"
+              # still have that path.
+              if is_appstore && local_only?
+                auto_submit_default = true
+                auto_submit = options.key?(:auto_submit) ? options[:auto_submit] : auto_submit_default
+
+                say ''
+                say '=' * 80, :cyan
+                if auto_submit
+                  say '[4/4] Submit for App Store Review (--local-only)', :cyan
+                  say '=' * 80, :cyan
+                  say ''
+                  submit_appstore_local!(
+                    asc_creds: asc_creds_for_uploader,
+                    apple_app_id: apple_app_id,
+                    cf_bundle_version: cf_version,
+                    cf_bundle_short_version_string: cf_short
+                  )
+                else
+                  say '[4/4] Submit for App Store Review (skipped: --no-auto-submit)', :cyan
+                  say '=' * 80, :cyan
+                  say ''
+                  say '⚠️  Auto-submit disabled. The build is uploaded; finish the submission at:', :yellow
+                  say '     https://appstoreconnect.apple.com/apps', :cyan
+                  say ''
+                end
+              end
+
+              if is_appstore && !local_only?
                 say ''
                 say '=' * 80, :cyan
                 say '[4/5] Waiting for Apple to Process Build', :cyan
@@ -683,6 +792,14 @@ module Mysigner
               say "✗ #{e.message}", :red
               say ''
               exit 1
+            rescue Mysigner::Upload::AscRestUploader::MissingLocalCredentialsError => e
+              # mysigner-42 — local-only requested but no credentials stored.
+              # Fail loud with a non-stack-trace message; the message already
+              # tells the user where to store the credentials.
+              say ''
+              say "✗ #{e.message}", :red
+              say ''
+              exit 1
             rescue StandardError => e
               say ''
               say '=' * 80, :red
@@ -704,8 +821,138 @@ module Mysigner
           end
 
           no_commands do
+            # mysigner-22 — local-only equivalent of the MySigner `/apple_apps`
+            # lookup. Calls Apple's /v1/apps?filter[bundleId]= directly with
+            # the resolved ASC JWT and returns the matched `id` (string).
+            # Honors --apple-id as an unconditional override (skip the lookup
+            # entirely). Exits 1 with a clear pointer to --apple-id on zero or
+            # multiple matches so the user has a one-knob fix.
+            def resolve_apple_app_id_local!(bundle_id:, apple_id_override:, asc_creds:)
+              return apple_id_override.to_s if apple_id_override && !apple_id_override.empty?
+
+              require 'mysigner/auth/asc_jwt_minter'
+              require 'faraday'
+              require 'json'
+              require 'uri'
+
+              jwt = Mysigner::Auth::AscJwtMinter.new(
+                key_id: asc_creds.key_id,
+                issuer_id: asc_creds.issuer_id,
+                p8_pem: asc_creds.p8_pem
+              ).mint
+
+              conn = Faraday.new(url: 'https://api.appstoreconnect.apple.com') do |f|
+                f.adapter Faraday.default_adapter
+              end
+              resp = conn.get('/v1/apps') do |req|
+                req.params['filter[bundleId]'] = bundle_id
+                req.headers['Authorization'] = "Bearer #{jwt}"
+              end
+
+              unless resp.status.between?(200, 299)
+                say "✗ Apple /v1/apps lookup failed for bundle_id #{bundle_id}: #{resp.status}", :red
+                say "   #{resp.body}", :yellow if resp.body && !resp.body.empty?
+                say '   Override with: mysigner ship appstore --local-only --apple-id <APPLE_APP_ID>', :yellow
+                exit 1
+              end
+
+              data = Array(JSON.parse(resp.body)['data'])
+              case data.length
+              when 0
+                say "✗ No App Store Connect app found for bundle_id: #{bundle_id}", :red
+                say "   Make sure the app exists in App Store Connect under this team's account,", :yellow
+                say '   or override with: --apple-id <APPLE_APP_ID>', :yellow
+                exit 1
+              when 1
+                data.first['id'].to_s
+              else
+                ids = data.map { |a| a['id'] }.join(', ')
+                say "✗ Apple returned multiple apps for bundle_id #{bundle_id} (ids: #{ids}).", :red
+                say '   Pick one and re-run with: --apple-id <APPLE_APP_ID>', :yellow
+                exit 1
+              end
+            end
+
+            # mysigner-22 follow-up — local-only submit-for-review.
+            # Mints a fresh JWT from the same local .p8 the uploader used,
+            # then drives Apple's REST submission flow via AscSubmitter.
+            # Translates each typed error into a one-line actionable message;
+            # exits 1 on failure so the caller's success-path doesn't run.
+            def submit_appstore_local!(asc_creds:, apple_app_id:, cf_bundle_version:,
+                                       cf_bundle_short_version_string:)
+              require 'mysigner/auth/asc_jwt_minter'
+              require_relative '../upload/asc_submitter'
+
+              say '⏳ Waiting for Apple to finish processing the build...', :yellow
+
+              jwt = Mysigner::Auth::AscJwtMinter.new(
+                key_id: asc_creds.key_id,
+                issuer_id: asc_creds.issuer_id,
+                p8_pem: asc_creds.p8_pem
+              ).mint
+
+              submission_id = Mysigner::Upload::AscSubmitter.new(
+                jwt: jwt,
+                apple_app_id: apple_app_id,
+                cf_bundle_version: cf_bundle_version,
+                cf_bundle_short_version_string: cf_bundle_short_version_string
+              ).submit!
+
+              say "✓ Submission created (id: #{submission_id})", :green
+              say '   Monitor review status at: https://appstoreconnect.apple.com/apps', :cyan
+              say ''
+            rescue Mysigner::Upload::AscSubmitter::BuildProcessingTimeoutError => e
+              say ''
+              say "✗ #{e.message}", :red
+              say ''
+              say '   Tip: this is not a CLI bug — Apple is still processing your build.', :yellow
+              say '   Re-run `mysigner ship appstore --local-only` once it shows', :yellow
+              say '   "Ready to Submit" in App Store Connect, or finish manually:', :yellow
+              say '     https://appstoreconnect.apple.com/apps', :cyan
+              say ''
+              exit 1
+            rescue Mysigner::Upload::AscSubmitter::VersionAlreadyReleasedError => e
+              say ''
+              say "✗ #{e.message}", :red
+              say ''
+              exit 1
+            rescue Mysigner::Upload::AscSubmitter::VersionInFlightError => e
+              # Apple has a version for this MARKETING_VERSION that's in an
+              # in-flight state (in review, rejected, etc). The error message
+              # names the state and the next user action verbatim.
+              say ''
+              say "✗ #{e.message}", :red
+              say ''
+              say '   Monitor or act in App Store Connect:', :yellow
+              say '     https://appstoreconnect.apple.com/apps', :cyan
+              say ''
+              exit 1
+            rescue Mysigner::Upload::AscSubmitter::SubmissionRejectedError => e
+              # Surface Apple's verbatim error body — usually missing metadata
+              # (description, what's new, screenshots). We don't pretend to
+              # auto-populate metadata; the user owns it in App Store Connect.
+              say ''
+              say "✗ Apple rejected the submission: #{e.message}", :red
+              say ''
+              say '   Missing required metadata is the most common cause.', :yellow
+              say '   Finish the listing at: https://appstoreconnect.apple.com/apps', :cyan
+              say ''
+              exit 1
+            rescue Mysigner::Upload::AscSubmitter::AppleApiError => e
+              say ''
+              say "✗ App Store Connect API error: #{e.message}", :red
+              say ''
+              exit 1
+            end
+
             # Ship Android to Google Play
             def ship_android(track)
+              # mysigner-43 — when the user opts into local-only for `ship
+              # android`, surface the banner once so they know their SA-JSON
+              # won't traverse the MySigner server. The uploader itself
+              # enforces the contract below.
+              emit_local_only_banner if local_only?
+
               config = load_config
               client = create_client(config)
 
@@ -763,12 +1010,38 @@ module Mysigner
                 local_version_code = parser.version_code.to_i
                 version_name = parser.version_name
 
-                # Check highest version code from API and auto-increment if needed
-                highest_version_code = fetch_android_highest_version_code(client, config, package_name)
+                # Check highest version code from API and auto-increment if needed.
+                # mysigner-22 follow-up — local-only mode now also runs the
+                # pre-check via Google Play directly (no MySigner round-trip):
+                # mint an OAuth2 token from local SA-JSON, list bundles on the
+                # app, take max(versionCode). Unlike vault mode we DO NOT
+                # auto-bump the AAB — that's the user's project state. We just
+                # warn so they can bump versionCode in their Gradle file and
+                # re-run rather than burn 3 minutes on a doomed upload.
+                #
+                # Best-effort: if the mint fails (network, mock, expired key)
+                # we skip the pre-check rather than fail the ship. Google will
+                # still reject at upload time with a clear message.
+                highest_version_code =
+                  if local_only?
+                    fetch_local_only_highest_version_code(package_name: package_name)
+                  else
+                    fetch_android_highest_version_code(client, config, package_name)
+                  end
                 version_code = local_version_code
                 version_code_override = nil
 
-                if highest_version_code && local_version_code <= highest_version_code
+                if local_only? && highest_version_code && local_version_code <= highest_version_code
+                  # Local-only: warn-only. Bumping the AAB's versionCode
+                  # would silently mutate the user's project state, which
+                  # the brief is explicit we should not do.
+                  say ''
+                  say "[mysigner] Your project's versionCode (#{local_version_code}) is ≤ Google Play's latest (#{highest_version_code}).", :red
+                  say "Google will reject this upload. Bump versionCode to #{highest_version_code + 1} or higher in", :red
+                  say 'android/app/build.gradle and re-run.', :red
+                  say ''
+                  exit 1
+                elsif highest_version_code && local_version_code <= highest_version_code
                   version_code = highest_version_code + 1
                   version_code_override = version_code
                   say "📦 Package: #{package_name}", :cyan
@@ -800,53 +1073,81 @@ module Mysigner
                 say '=' * 80, :cyan
                 say ''
 
-                # Fetch keystore from API (prefer app-specific, fallback to org-wide)
-                say '🔐 Fetching keystore from My Signer...', :yellow
+                # mysigner-22 Phase 7 — local-only mode resolves the keystore
+                # via the credential cascade (flag → env → keychain → project
+                # sniff → prompt). The MySigner server is never contacted for
+                # the .jks blob, passwords, or alias. In vault mode the old
+                # KeystoreManager path runs unchanged.
+                active_keystore = nil
+                keystore_path = nil
+                keystore_password = nil
+                key_password = nil
+                key_alias = nil
 
-                require_relative '../signing/keystore_manager'
-                keystore_manager = Signing::KeystoreManager.new(client, config.current_organization_id)
-
-                # Try to find the app to get app-specific + org-wide keystores
-                app_id = nil
-                begin
-                  response = client.get("/api/v1/organizations/#{config.current_organization_id}/android_apps")
-                  apps = response[:data]['android_apps'] || []
-                  app = apps.find { |a| a['package_name'] == package_name }
-                  app_id = app['id'] if app
-                rescue StandardError
-                  # Continue without app ID
-                end
-
-                active_keystore = keystore_manager.active_keystore(android_app_id: app_id, include_secrets: true)
-                unless active_keystore
+                if local_only?
+                  say '🔐 Resolving Android keystore locally (--local-only)...', :yellow
+                  android_creds = resolve_local_android_keystore_or_exit
+                  keystore_path = android_creds.keystore_path
+                  keystore_password = android_creds.keystore_password
+                  key_password = android_creds.key_password || keystore_password
+                  key_alias = android_creds.key_alias
+                  # Hold the tmpfile (if any) on a local so GC can't unlink
+                  # the materialized .jks mid-build. The local goes out of
+                  # scope when ship_android returns, which is fine — the
+                  # build/upload have both consumed the file by then.
+                  _keystore_tmpfile_hold = android_creds.tmpfile
+                  say "✓ Keystore ready at: #{keystore_path} (source: #{android_creds.source})", :green
                   say ''
-                  say '✗ No active keystore found', :red
+                else
+                  # Fetch keystore from API (prefer app-specific, fallback to org-wide)
+                  say '🔐 Fetching keystore from My Signer...', :yellow
+
+                  require_relative '../signing/keystore_manager'
+                  keystore_manager = Signing::KeystoreManager.new(client, config.current_organization_id)
+
+                  # Try to find the app to get app-specific + org-wide keystores
+                  app_id = nil
+                  begin
+                    response = client.get("/api/v1/organizations/#{config.current_organization_id}/android_apps")
+                    apps = response[:data]['android_apps'] || []
+                    app = apps.find { |a| a['package_name'] == package_name }
+                    app_id = app['id'] if app
+                  rescue StandardError
+                    # Continue without app ID
+                  end
+
+                  active_keystore = keystore_manager.active_keystore(android_app_id: app_id, include_secrets: true)
+                  unless active_keystore
+                    say ''
+                    say '✗ No active keystore found', :red
+                    say ''
+                    say 'Quick fix:', :cyan
+                    say '  1. Upload a keystore: mysigner keystore upload', :green
+                    say '  2. Or configure in My Signer dashboard', :green
+                    say ''
+                    exit 1
+                  end
+
+                  say "✓ Using keystore: #{active_keystore['name']}", :green
+
+                  # Download keystore
+                  keystore_info = keystore_manager.get_or_download(active_keystore['id'])
+                  keystore_path = keystore_info[:path]
+                  say "✓ Keystore ready at: #{keystore_path}", :green
                   say ''
-                  say 'Quick fix:', :cyan
-                  say '  1. Upload a keystore: mysigner keystore upload', :green
-                  say '  2. Or configure in My Signer dashboard', :green
-                  say ''
-                  exit 1
-                end
 
-                say "✓ Using keystore: #{active_keystore['name']}", :green
+                  # Get keystore credentials from API response
+                  keystore_password = active_keystore['keystore_password'] || ENV.fetch('MYSIGNER_KEYSTORE_PASSWORD', nil)
+                  key_password = active_keystore['key_password'] || ENV['MYSIGNER_KEY_PASSWORD'] || keystore_password
+                  key_alias = active_keystore['key_alias']
 
-                # Download keystore
-                keystore_info = keystore_manager.get_or_download(active_keystore['id'])
-                say "✓ Keystore ready at: #{keystore_info[:path]}", :green
-                say ''
-
-                # Get keystore credentials from API response
-                keystore_password = active_keystore['keystore_password'] || ENV.fetch('MYSIGNER_KEYSTORE_PASSWORD', nil)
-                key_password = active_keystore['key_password'] || ENV['MYSIGNER_KEY_PASSWORD'] || keystore_password
-                key_alias = active_keystore['key_alias']
-
-                unless keystore_password
-                  say '⚠️  Keystore password not found in My Signer', :yellow
-                  say '    Upload your keystore with password: mysigner keystore upload FILE', :yellow
-                  keystore_password = ask('Keystore password:', echo: false)
-                  say ''
-                  key_password ||= keystore_password
+                  unless keystore_password
+                    say '⚠️  Keystore password not found in My Signer', :yellow
+                    say '    Upload your keystore with password: mysigner keystore upload FILE', :yellow
+                    keystore_password = ask('Keystore password:', echo: false)
+                    say ''
+                    key_password ||= keystore_password
+                  end
                 end
 
                 # Build AAB
@@ -855,7 +1156,7 @@ module Mysigner
 
                 aab_path = executor.build_aab!(
                   variant: 'release',
-                  keystore_path: keystore_info[:path],
+                  keystore_path: keystore_path,
                   keystore_password: keystore_password,
                   key_alias: key_alias,
                   key_password: key_password,
@@ -879,35 +1180,53 @@ module Mysigner
 
                 # Phase 0: mint short-lived OAuth2 access token server-side.
                 # Service-account JSON never leaves the server.
-                say '🔐 Requesting Google Play access token...', :yellow
+                #
+                # mysigner-43: in local-only mode the token is minted *inside*
+                # PlayStoreUploader from Keychain-backed SA-JSON. Skip the
+                # server round-trip entirely.
+                access_token = nil
+                if local_only?
+                  say '🔐 Local-only mode — will mint Google Play access token locally.', :yellow
+                else
+                  say '🔐 Requesting Google Play access token...', :yellow
 
-                begin
-                  token_response = client.post(
-                    "/api/v1/organizations/#{config.current_organization_id}/credentials/google_play/access_token"
-                  )
-                  access_token = token_response[:data]['access_token']
-                rescue Mysigner::NotFoundError, Mysigner::ValidationError
-                  say ''
-                  say '✗ Google Play credentials not configured', :red
-                  say ''
-                  say 'Quick fix:', :cyan
-                  say '  Configure Google Play credentials in My Signer dashboard', :green
-                  say ''
-                  exit 1
+                  begin
+                    token_response = client.post(
+                      "/api/v1/organizations/#{config.current_organization_id}/credentials/google_play/access_token"
+                    )
+                    access_token = token_response[:data]['access_token']
+                  rescue Mysigner::NotFoundError, Mysigner::ValidationError
+                    say ''
+                    say '✗ Google Play credentials not configured', :red
+                    say ''
+                    say 'Quick fix:', :cyan
+                    say '  Configure Google Play credentials in My Signer dashboard', :green
+                    say ''
+                    exit 1
+                  end
+
+                  if access_token.nil? || access_token.to_s.empty?
+                    say '✗ Error: Failed to mint Google Play access token', :red
+                    exit 1
+                  end
+
+                  say '✓ Access token minted (valid ~1 hour)', :green
                 end
-
-                if access_token.nil? || access_token.to_s.empty?
-                  say '✗ Error: Failed to mint Google Play access token', :red
-                  exit 1
-                end
-
-                say '✓ Access token minted (valid ~1 hour)', :green
                 say ''
 
                 # Phase 0: fetch Android CLI Defaults from the dashboard
                 # (android_apps.cli_defaults JSONB). Fields here act as base
                 # values; explicit CLI flags below layer on top.
-                android_defaults = fetch_android_release_defaults(client, config, package_name)
+                # mysigner-22 Phase 7 — local-only mode bypasses dashboard
+                # defaults; the user supplies everything via flags or accepts
+                # the built-in defaults below.
+                android_defaults =
+                  if local_only?
+                    warn '[mysigner] local-only: skipping fetch_android_release_defaults (server-only feature; using CLI flags + defaults)'
+                    nil
+                  else
+                    fetch_android_release_defaults(client, config, package_name)
+                  end
                 if android_defaults
                   say "✓ Loaded CLI Defaults for #{package_name}", :green
                   say ''
@@ -938,10 +1257,18 @@ module Mysigner
                 changes_not_sent_for_review = android_defaults&.key?('changes_not_sent_for_review') ? android_defaults['changes_not_sent_for_review'] : nil
                 country_targeting = country_targeting.transform_keys(&:to_sym) if country_targeting.is_a?(Hash)
 
+                # mysigner-22 Phase 5 — pre-resolve Play creds via the
+                # cascade (flag → env → keychain → project-sniff → prompt).
+                # In vault mode this is nil and the existing access_token
+                # round-trip is unchanged.
+                play_creds_for_uploader = (resolve_local_play_creds_or_exit if local_only?)
+
                 uploader = Upload::PlayStoreUploader.new(
                   aab_path: aab_path,
                   access_token: access_token,
-                  package_name: package_name
+                  package_name: package_name,
+                  local_only: local_only?,
+                  play_creds: play_creds_for_uploader
                 )
 
                 uploader.upload!(
@@ -958,8 +1285,15 @@ module Mysigner
                 timings[:upload] = Time.now - upload_start
                 timings[:total] = Time.now - overall_start
 
-                # Link keystore to app in MySigner (so dashboard shows it)
-                if active_keystore && active_keystore['id']
+                # Link keystore to app in MySigner (so dashboard shows it).
+                # mysigner-22 Phase 7 — local-only mode never has an
+                # active_keystore record (the .jks came from the user's
+                # machine, not MySigner), so the link step is unconditionally
+                # skipped here. Surface it so users know the dashboard won't
+                # auto-update.
+                if local_only?
+                  warn '[mysigner] local-only: skipping android_keystores/:id/link_to_app (server-only feature)'
+                elsif active_keystore && active_keystore['id']
                   begin
                     client.post(
                       "/api/v1/organizations/#{config.current_organization_id}/android_keystores/#{active_keystore['id']}/link_to_app",
@@ -970,8 +1304,14 @@ module Mysigner
                   end
                 end
 
-                # Save build record to MySigner (for version tracking)
-                save_android_build_record(client, config, package_name, version_code, version_name)
+                # Save build record to MySigner (for version tracking).
+                # mysigner-22 Phase 7 — local-only mode has no MySigner
+                # record to update; skip and warn.
+                if local_only?
+                  warn '[mysigner] local-only: skipping save_android_build_record (server-only feature)'
+                else
+                  save_android_build_record(client, config, package_name, version_code, version_name)
+                end
 
                 # SUCCESS SUMMARY
                 say ''
@@ -1033,6 +1373,14 @@ module Mysigner
                 say '   → For Flutter: check android/app/build.gradle exists', :yellow
                 say ''
                 exit 1
+              rescue Upload::PlayStoreUploader::MissingLocalCredentialsError => e
+                # mysigner-43 — local-only requested but no credentials stored.
+                # Fail loud with a non-stack-trace message; the message already
+                # tells the user where to store the credentials.
+                say ''
+                say "✗ #{e.message}", :red
+                say ''
+                exit 1
               rescue Upload::PlayStoreUploader::PartialUploadError => e
                 # AAB was uploaded but track assignment/commit failed
                 # Save build record to prevent version conflicts on retry
@@ -1044,11 +1392,14 @@ module Mysigner
                 say "Error: #{e.message}", :red
                 say ''
 
-                # Save build record even on partial failure (AAB is on Play Store)
-                if e.version_code
+                # Save build record even on partial failure (AAB is on Play Store).
+                # mysigner-22 Phase 7 — skip the server write in local-only mode.
+                if e.version_code && !local_only?
                   save_android_build_record(client, config, package_name, e.version_code, version_name)
                   say "📝 Build v#{e.version_code} recorded (prevents version conflicts on retry)", :yellow
                   say ''
+                elsif e.version_code && local_only?
+                  warn '[mysigner] local-only: skipping save_android_build_record on partial-upload retry path'
                 end
 
                 # Show track setup suggestions
@@ -1113,6 +1464,28 @@ module Mysigner
             rescue StandardError => e
               # Non-fatal: log and proceed without defaults.
               puts "⚠️  Could not fetch Android CLI Defaults: #{e.message}" if ENV['MYSIGNER_VERBOSE'] == '1'
+              nil
+            end
+
+            # mysigner-22 follow-up — local-only equivalent of
+            # fetch_android_highest_version_code. Resolves Play creds via the
+            # cascade, mints an OAuth2 token, and asks Google Play directly.
+            # Best-effort: any failure (mint error, network, list error)
+            # returns nil so the ship proceeds — Google will still reject at
+            # upload time with a clear message, but a transient pre-check
+            # failure shouldn't block the user.
+            def fetch_local_only_highest_version_code(package_name:)
+              require 'mysigner/auth/google_oauth_minter'
+
+              play_creds = resolve_local_play_creds_or_exit
+              token = Mysigner::Auth::GoogleOauthMinter.new(play_creds.sa_json)
+                                                       .mint(scope: Upload::PlayStoreUploader::SCOPE)
+              Upload::PlayStoreUploader.fetch_highest_version_code(
+                package_name: package_name,
+                access_token: token
+              )
+            rescue StandardError => e
+              warn "[mysigner] local-only: skipping versionCode pre-check (#{e.class}: #{e.message})"
               nil
             end
 
@@ -1631,7 +2004,8 @@ module Mysigner
 
               # Pre-build validation
               say '🔍 Validating signing setup...', :cyan
-              validator = Signing::Validator.new(parser, target_name, options[:configuration], team_id: team_id_to_use)
+              validator = Signing::Validator.new(parser, target_name, options[:configuration],
+                                                 team_id: team_id_to_use, local_only: local_only?)
               validator.validate!
 
               # Build

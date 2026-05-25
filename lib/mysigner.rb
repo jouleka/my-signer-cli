@@ -6,6 +6,7 @@ end
 
 require 'mysigner/version'
 require 'mysigner/config'
+require 'mysigner/local_credentials'
 require 'mysigner/client'
 require 'mysigner/build/detector'
 require 'mysigner/build/parser'

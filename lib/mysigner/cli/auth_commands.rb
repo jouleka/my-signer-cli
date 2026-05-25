@@ -210,6 +210,16 @@ module Mysigner
             4. Configure your CLI
           DESC
           def onboard
+            # mysigner-44 — local-only mode short-circuits the server-mediated
+            # onboarding entirely. We never POST credentials and never ask the
+            # user for an API token; everything is captured into the local
+            # Keychain-backed store. The server-mediated path below is left
+            # untouched for backward compatibility.
+            if local_only?
+              emit_local_only_banner
+              return onboard_local_only
+            end
+
             say '🚀 My Signer Setup Guide', :cyan
             say '=' * 80, :cyan
             say ''
@@ -1380,9 +1390,210 @@ module Mysigner
                 false
               end
             end
+
+            # mysigner-44 — local-only onboarding. Captures ASC and/or Google
+            # Play credentials and persists them via LocalCredentials (Keychain
+            # on macOS, encrypted file fallback elsewhere). Never calls the
+            # server. Raises LocalOnlyOnboardError on invalid input so callers
+            # see the failure (Rule 12 — fail loud).
+            def onboard_local_only
+              say '🚀 My Signer Setup (local-only)', :cyan
+              say '=' * 80, :cyan
+              say ''
+              say 'Local-only mode: credentials stay on this machine.', :bold
+              say ''
+
+              # mysigner-22 Phase 5 — discovery first. If the user already
+              # has credentials elsewhere (env vars, ~/.appstoreconnect, a
+              # service-account JSON at the project root, GOOGLE_APPLICATION_
+              # CREDENTIALS) we tell them they don't need to onboard for that
+              # platform. We avoid prompting on discovery itself by using a
+              # non-TTY stdin proxy, so the resolver fails fast on miss
+              # instead of blocking the user.
+              asc_already, asc_hint   = discover_local_asc_silently
+              play_already, play_hint = discover_local_play_silently
+
+              if asc_already
+                say "✓ Detected App Store Connect credentials (#{asc_hint}). No onboarding needed.", :green
+                say ''
+              end
+              if play_already
+                say "✓ Detected Google Play credentials (#{play_hint}). No onboarding needed.", :green
+                say ''
+              end
+
+              stored_asc = []
+              stored_play = []
+
+              if !asc_already && yes_with_default?('Set up App Store Connect credentials now?', :cyan)
+                say ''
+                stored_asc = collect_local_asc_credential
+              end
+              say ''
+
+              if !play_already && yes_with_default?('Set up Google Play credentials now?', :cyan)
+                say ''
+                stored_play = collect_local_google_play_credential
+              end
+
+              say ''
+              say '=' * 80, :green
+              say '✓ Local-only setup complete.', :green
+              say '=' * 80, :green
+              say ''
+              if stored_asc.empty? && stored_play.empty?
+                say 'No credentials were stored.', :yellow
+                say "Re-run 'mysigner --local-only onboard' when you're ready.", :yellow
+              else
+                say 'Stored credentials:', :cyan
+                stored_asc.each  { |id| say "  • ASC key:        #{id}" }
+                stored_play.each { |id| say "  • Google Play SA: #{id}" }
+                say ''
+                say 'To ship:', :bold
+                say '  mysigner --local-only ship appstore' unless stored_asc.empty?
+                say '  mysigner --local-only ship play'     unless stored_play.empty?
+              end
+              say ''
+            end
+
+            # Returns Array<String> of ids actually stored (empty on skip).
+            def collect_local_asc_credential
+              say '📱 App Store Connect (local-only)', :cyan
+              say ''
+
+              p8_path = ask('Path to your .p8 private key:').to_s.strip.gsub(/^['"]|['"]$/, '')
+              p8_path = File.expand_path(p8_path)
+              raise_local_onboard_error!(".p8 file not found: #{p8_path}") unless File.exist?(p8_path)
+
+              p8_pem = File.read(p8_path)
+              validate_p8_pem!(p8_pem)
+
+              # Auto-detect Key ID from filename (AuthKey_ABC123.p8 → ABC123).
+              key_id = nil
+              if File.basename(p8_path) =~ /AuthKey_([A-Z0-9]+)\.p8/i
+                key_id = ::Regexp.last_match(1)
+                say "✓ Auto-detected Key ID: #{key_id}", :green
+              end
+              key_id = ask('Enter your Key ID (e.g., ABC12345):').to_s.strip if key_id.nil? || key_id.empty?
+              raise_local_onboard_error!('Key ID cannot be empty') if key_id.empty?
+
+              issuer_id = ask('Enter your Issuer ID (UUID):').to_s.strip
+              raise_local_onboard_error!('Issuer ID cannot be empty') if issuer_id.empty?
+
+              # Storage shape matches mysigner-42's Option A: id == key_id,
+              # secret is a JSON envelope so AscJwtMinter can reconstruct
+              # (key_id, issuer_id, p8_pem) from one lookup.
+              secret = JSON.generate('issuer_id' => issuer_id, 'p8_pem' => p8_pem)
+              Mysigner::LocalCredentials.store(kind: :asc, id: key_id, secret: secret)
+
+              say '✓ ASC credential stored locally.', :green
+              [key_id]
+            end
+
+            # Returns Array<String> of ids actually stored (empty on skip).
+            def collect_local_google_play_credential
+              say '🤖 Google Play (local-only)', :cyan
+              say ''
+
+              json_path = ask('Path to your service-account JSON:').to_s.strip.gsub(/^['"]|['"]$/, '')
+              json_path = File.expand_path(json_path)
+              raise_local_onboard_error!("SA-JSON file not found: #{json_path}") unless File.exist?(json_path)
+
+              raw = File.read(json_path)
+              parsed = validate_sa_json!(raw)
+              client_email = parsed['client_email']
+
+              Mysigner::LocalCredentials.store(kind: :google_play, id: client_email, secret: raw)
+
+              say "✓ Google Play credential stored locally (#{client_email}).", :green
+              [client_email]
+            end
+
+            # Verifies the file looks like an EC private key in the form
+            # AscJwtMinter requires. Fails loud — any malformed input raises
+            # before we touch the Keychain.
+            def validate_p8_pem!(pem)
+              key = OpenSSL::PKey.read(pem.to_s)
+              return if key.is_a?(OpenSSL::PKey::EC)
+
+              raise_local_onboard_error!("invalid .p8: expected EC private key, got #{key.class}")
+            rescue OpenSSL::PKey::PKeyError => e
+              raise_local_onboard_error!("invalid .p8: #{e.message}")
+            end
+
+            # Returns the parsed hash. Validates the three fields the
+            # GoogleOauthMinter (and the SA JWT spec) actually need.
+            def validate_sa_json!(raw)
+              parsed = JSON.parse(raw)
+              missing = []
+              missing << "type=='service_account'"   unless parsed['type'] == 'service_account'
+              missing << 'client_email'              if parsed['client_email'].to_s.empty?
+              missing << 'private_key'               if parsed['private_key'].to_s.empty?
+              raise_local_onboard_error!("invalid service-account JSON (missing/wrong: #{missing.join(', ')})") if missing.any?
+
+              parsed
+            rescue JSON::ParserError => e
+              raise_local_onboard_error!("invalid service-account JSON: #{e.message}")
+            end
+
+            def raise_local_onboard_error!(message)
+              raise Mysigner::CLI::LocalOnlyOnboardError, message
+            end
+
+            # mysigner-22 Phase 5 — silent ASC discovery for onboard. Returns
+            # [bool, hint_string]. We feed the resolver a non-TTY stdin proxy
+            # so the prompt tier is OFF — discovery either resolves from a
+            # higher tier or returns false-with-no-hint. Any structural
+            # surprises (Keychain corruption, multiple disk files needing
+            # disambiguation) bubble out as "no, prompt for it" rather than
+            # crashing the onboard flow.
+            def discover_local_asc_silently
+              require 'mysigner/credential_resolver'
+              no_tty = Object.new
+              def no_tty.tty?
+                false
+              end
+              creds = Mysigner::CredentialResolver.resolve_asc(stdin: no_tty, stderr: StringIO.new)
+              hint = case creds.source
+                     when :flag     then 'from --asc-* flags'
+                     when :env      then 'from APP_STORE_CONNECT_API_KEY_* env vars'
+                     when :keychain then "from Keychain (#{creds.key_id})"
+                     when :disk     then "from #{Mysigner::CredentialResolver::APPLE_PRIVATE_KEYS_DIR}/AuthKey_#{creds.key_id}.p8"
+                     else 'from cascade'
+                     end
+              [true, hint]
+            rescue Mysigner::CredentialResolver::CredentialNotFoundError,
+                   Mysigner::CredentialResolver::AmbiguousCredentialsError
+              [false, nil]
+            end
+
+            def discover_local_play_silently
+              require 'mysigner/credential_resolver'
+              no_tty = Object.new
+              def no_tty.tty?
+                false
+              end
+              creds = Mysigner::CredentialResolver.resolve_play(stdin: no_tty, stderr: StringIO.new)
+              hint = case creds.source
+                     when :flag     then 'from --play-credentials flag'
+                     when :env      then 'from GOOGLE_APPLICATION_CREDENTIALS'
+                     when :keychain then "from Keychain (#{creds.client_email})"
+                     when :disk     then "from project (#{creds.client_email})"
+                     else 'from cascade'
+                     end
+              [true, hint]
+            rescue Mysigner::CredentialResolver::CredentialNotFoundError,
+                   Mysigner::CredentialResolver::AmbiguousCredentialsError
+              [false, nil]
+            end
           end
         end
       end
     end
+
+    # Raised by `onboard` in local-only mode when user input is unusable
+    # (missing file, malformed PEM, malformed SA-JSON). Surfaces the failure
+    # to the caller rather than silently writing a broken credential.
+    class LocalOnlyOnboardError < StandardError; end
   end
 end

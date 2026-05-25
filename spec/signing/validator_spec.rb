@@ -81,6 +81,36 @@ RSpec.describe Mysigner::Signing::Validator do
       end
     end
 
+    # mysigner-22 Phase 6 ship-test regression: when the user opts into
+    # local-only mode, the validator must NOT tell them to log in to the
+    # MySigner web dashboard — they've explicitly opted out of MySigner.
+    # The remaining options (CLI flag, Xcode) are still surfaced.
+    context 'with no development team in local-only mode' do
+      let(:parser) do
+        instance_double(Mysigner::Build::Parser,
+                        team_id: nil,
+                        code_sign_style: 'Automatic',
+                        bundle_id: 'com.test.app')
+      end
+
+      let(:validator) { described_class.new(parser, 'TestApp', 'Release', local_only: true) }
+
+      it 'omits the "Add team to My Signer" suggestion' do
+        result = validator.validate
+        expect(result[:valid]).to be false
+        expect(result[:errors]).to include(match(/No development team/))
+        expect(result[:errors]).not_to include(match(/Add team to My Signer/))
+        expect(result[:errors]).not_to include(match(%r{https://mysigner\.dev}))
+      end
+
+      it 'still surfaces the local-friendly fix options' do
+        result = validator.validate
+        expect(result[:errors]).to include(match(/Fix Option 1: Pass team via CLI/))
+        expect(result[:errors]).to include(match(/mysigner build --team/))
+        expect(result[:errors]).to include(match(/Fix Option 2: Set in Xcode/))
+      end
+    end
+
     context 'with missing bundle ID' do
       let(:parser) do
         instance_double(Mysigner::Build::Parser,

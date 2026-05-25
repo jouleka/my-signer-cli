@@ -23,6 +23,7 @@ module Mysigner
     ENV_API_URL = 'MYSIGNER_API_URL'
     ENV_EMAIL = 'MYSIGNER_EMAIL'
     ENV_ORG_ID = 'MYSIGNER_ORG_ID'
+    ENV_LOCAL_ONLY = 'MYSIGNER_LOCAL_ONLY'
 
     attr_accessor :api_url, :user_email, :current_organization_id, :encryption_enabled
     attr_reader :organizations
@@ -64,6 +65,17 @@ module Mysigner
     # Whether this config was loaded from environment variables
     def from_env?
       @from_env
+    end
+
+    # Local-only mode: when true, credentials never leave the machine.
+    # Config-level check sees only ENV — Thor's --local-only flag is layered
+    # on top in the CLI Helpers concern (which can read `options`).
+    def self.local_only?
+      truthy_env?(ENV_LOCAL_ONLY)
+    end
+
+    def local_only?
+      self.class.local_only?
     end
 
     # Get API token for current organization (or specific org)
@@ -261,6 +273,25 @@ module Mysigner
     def encrypted_config?
       @organizations.values.any? { |org_data| encrypted?(org_data['token']) }
     end
+
+    # Public accessor for the per-machine 32-byte AES-256-GCM key.
+    # Exposed so sibling stores (e.g. LocalCredentials) can encrypt secrets
+    # under the same key without duplicating the keychain/file fallback.
+    # The key itself is created on first read and is stable across calls.
+    def fetch_encryption_key
+      get_or_create_encryption_key
+    end
+
+    def self.truthy_env?(name)
+      raw = ENV.fetch(name, nil)
+      return false if raw.nil?
+
+      value = raw.strip
+      return false if value.empty?
+
+      value.match?(/\A(1|true|yes)\z/i)
+    end
+    private_class_method :truthy_env?
 
     private
 
