@@ -94,3 +94,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Progress spinners (TTY::Spinner)
 - CI/CD templates for GitHub Actions and GitLab CI
 - Phased release support for App Store
+
+---
+
+## [0.2.0] - 2026-05-26
+
+### Added — `--local-only` mode
+
+Brand-new opt-in mode that lets you ship to TestFlight / Play Store
+without sending any signing credentials to the MySigner server.
+Activate via the `--local-only` flag on any command or by setting
+`MYSIGNER_LOCAL_ONLY=1`. Proven end-to-end against a real iOS app
+(real TestFlight upload).
+
+- **Credential auto-discovery cascade** (`Mysigner::CredentialResolver`):
+  walks per-command flags → env vars (`APP_STORE_CONNECT_API_KEY_*`,
+  `GOOGLE_APPLICATION_CREDENTIALS`, `MYSIGNER_KEYSTORE_*` /
+  `ANDROID_KEYSTORE_*`) → macOS Keychain (`Mysigner::LocalCredentials`)
+  → standard tool locations (`~/.appstoreconnect/private_keys/AuthKey_*.p8`,
+  `eas.json`, `android/key.properties`, `android/app/build.gradle[.kts]`
+  inline `signingConfigs`, `~/.gradle/gradle.properties`) → interactive
+  prompt (TTY-gated; non-TTY fails loud with the exact override knob to
+  set).
+- **iOS local-only ship** (`mysigner --local-only ship appstore`):
+  bypasses MySigner auth bootstrap entirely (no login required). Mints
+  ASC JWT locally and shells out to `xcrun altool --upload-app` (Apple's
+  canonical CLI). Submit-for-review automated via the modern 3-step
+  `/v1/reviewSubmissions` choreography.
+- **Android local-only ship** (`mysigner --local-only ship play`): mints
+  Google OAuth2 access token locally from the discovered SA-JSON.
+  Pre-checks Play's highest existing `versionCode` and exits with a
+  "bump versionCode to N+1" hint before wasting an upload Google would
+  reject. Bypasses every MySigner server endpoint that previously ran
+  on the Android path (keystore download, build records, etc.).
+- **`mysigner onboard --local-only`**: walks the user through local
+  credential setup interactively; skips the per-platform prompt when
+  credentials are already discoverable via the cascade.
+
+### Added — Security & hygiene
+
+- **`mysigner logout --purge`**: optionally hard-deletes stored
+  credentials on the MySigner server AND wipes local Keychain entries.
+  Default behavior prompts (TTY-only; non-TTY defaults to No). New
+  `--no-purge` flag opts out without prompting.
+- Two new global flags: `--local-only` and `--auto-submit` /
+  `--no-auto-submit`.
+- New per-command flags on `ship`: `--asc-key-path`, `--asc-key-id`,
+  `--asc-issuer-id`, `--apple-id`, `--play-credentials`,
+  `--keystore-path`, `--keystore-password`, `--key-alias`,
+  `--key-password`.
+
+### Changed
+
+- "Not logged in" error now also suggests `--local-only` as an
+  alternative for users who don't want a MySigner account.
+- `Signing::Validator`'s no-team error message no longer suggests "Add
+  team to My Signer" when in `--local-only` mode.
+- Multiple Apple `appStoreState` values handled with actionable typed
+  errors during submit-for-review (`VersionInFlightError`,
+  `VersionAlreadyReleasedError`, `SubmissionRejectedError`,
+  `BuildProcessingTimeoutError`, `AppleApiError`).
+- Submit-for-review poll loop is resilient to transient errors and
+  respects HTTP 429 `Retry-After`.
+- `Config#load` uses `YAML.safe_load_file` instead of `YAML.load_file`
+  — rejects `!ruby/object:` directives loud.
+
+### Removed (breaking)
+
+- **`MYSIGNER_USE_LEGACY_ASC` env var + the legacy altool path it
+  gated**. The modern envelope-encryption path (vault mode) and the new
+  `--local-only` mode supersede it. Users relying on this env var will
+  need to migrate.
+- `Mysigner::Signing::KeystoreManager#list` / `#active_keystore` no
+  longer accept the deprecated `include_secrets:` keyword (fetch
+  passwords via `#fetch_secrets` instead — already the modern path).
+- Test certs / mobileprovision files removed from the gem bundle.
+
+### Fixed
+
+- Thor parser bug where `--local-only` (or any class_option) placed
+  before the subcommand was eaten by Thor's command-name lookup,
+  silently routing to `help`. The `exe/mysigner` entry point now hoists
+  leading class_options past the subcommand word.
+- The previous iOS REST upload reinvented Apple's `/v1/buildUploads`
+  payload shape and got it wrong (Apple rejected with
+  `ENTITY_ERROR.ATTRIBUTE.UNKNOWN` on `fileName` / `fileSize`); the
+  resulting 409 handler silently mapped every 409 to "build version
+  conflict" and masked the real error. Replaced with `xcrun altool`
+  shell-out (Apple's canonical CLI).
+- README's "Secure" bullet no longer says "credentials stored locally"
+  — was misleading in default vault mode. New copy names the AES-256
+  at-rest server encryption and points at the `--local-only` opt-in
+  that delivers the literal property.
