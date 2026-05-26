@@ -15,7 +15,6 @@ module Mysigner
       end
 
       def call
-        return if ENV['MYSIGNER_USE_LEGACY_ASC'] == '1'
         return if File.exist?(marker_path)
 
         LEGACY_DIRS.each do |dir|

@@ -44,16 +44,4 @@ RSpec.describe Mysigner::Cleanup::PrivateKeysPurger do
     described_class.new.call
     expect(File).to exist("#{@home}/.private_keys/AuthKey_NEW2.p8")
   end
-
-  it 'skips when MYSIGNER_USE_LEGACY_ASC=1' do
-    FileUtils.mkdir_p("#{@home}/.private_keys")
-    File.write("#{@home}/.private_keys/AuthKey_LEG.p8", 'fake')
-
-    original_flag = ENV.fetch('MYSIGNER_USE_LEGACY_ASC', nil)
-    ENV['MYSIGNER_USE_LEGACY_ASC'] = '1'
-    described_class.new.call
-    ENV['MYSIGNER_USE_LEGACY_ASC'] = original_flag
-
-    expect(File).to exist("#{@home}/.private_keys/AuthKey_LEG.p8")
-  end
 end

@@ -356,122 +356,75 @@ module Mysigner
 
               upload_start = Time.now
 
-              # mysigner-22 — legacy altool path fetches the .p8 from MySigner;
-              # it's incompatible with local-only. Force the REST path.
-              if ENV['MYSIGNER_USE_LEGACY_ASC'] == '1' && !local_only?
-                # LEGACY PATH — altool with server-fetched .p8. Will be removed in next release.
-                say '⚠️  MYSIGNER_USE_LEGACY_ASC=1 — using legacy altool upload path (deprecated).', :yellow
+              # ASC REST Build Upload API. No .p8 ever leaves the server in
+              # vault mode; local-only mode delegates to altool via the
+              # uploader itself.
+              require_relative '../upload/asc_rest_uploader'
 
-                # Fetch App Store Connect credentials
-                say '🔐 Fetching App Store Connect credentials...', :yellow
+              # In local-only mode, pre-resolve ASC creds via the cascade
+              # (flag → env → keychain → ~/.appstoreconnect → prompt) BEFORE
+              # the app-id lookup, because the lookup itself needs a JWT.
+              # The uploader will mint the JWT from these; no LocalCredentials
+              # round-trip happens inside it. In vault mode this is nil and
+              # the uploader takes the server-mediated path unchanged.
+              asc_creds_for_uploader = (resolve_local_asc_creds_or_exit if local_only?)
 
-                org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
-                org_data = org_response[:data]
-
-                unless org_data['app_store_connect_configured']
-                  say ''
-                  say '✗ App Store Connect credentials not configured', :red
-                  say ''
-                  say 'Quick fix:', :cyan
-                  say '  mysigner doctor    # Auto-configure now', :green
-                  say ''
-                  say 'Or manually:', :cyan
-                  say '  1. Run: mysigner onboard'
-                  say '  2. Follow Step 5 to add credentials'
-                  say ''
-                  exit 1
-                end
-
-                api_key = org_data['app_store_connect_key_id']
-                api_issuer = org_data['app_store_connect_issuer_id']
-                private_key = org_data['app_store_connect_private_key']
-
-                unless api_key && api_issuer && private_key
-                  say '✗ Error: Invalid credentials received from API', :red
-                  exit 1
-                end
-
-                say '✓ Credentials loaded', :green
-                say ''
-
-                # Upload (Uploader writes .p8 to Dir.mktmpdir + cleans up in ensure)
-                uploader = Upload::Uploader.new(
-                  ipa_path,
-                  api_key: api_key,
-                  api_issuer: api_issuer,
-                  private_key: private_key
-                )
-
-                uploader.upload!(wait_for_processing: options[:wait])
-              else
-                # DEFAULT PATH — ASC REST Build Upload API. No .p8 ever leaves the server.
-                require_relative '../upload/asc_rest_uploader'
-
-                # In local-only mode, pre-resolve ASC creds via the cascade
-                # (flag → env → keychain → ~/.appstoreconnect → prompt) BEFORE
-                # the app-id lookup, because the lookup itself needs a JWT.
-                # The uploader will mint the JWT from these; no LocalCredentials
-                # round-trip happens inside it. In vault mode this is nil and
-                # the uploader takes the server-mediated path unchanged.
-                asc_creds_for_uploader = (resolve_local_asc_creds_or_exit if local_only?)
-
-                # Resolve apple_app_id.
-                # - vault mode: MySigner /apple_apps lookup (may have been
-                #   pre-fetched in the appstore sync block above).
-                # - local-only: explicit --apple-id wins; otherwise hit Apple's
-                #   /v1/apps?filter[bundleId]= directly.
-                apple_app_id =
-                  if local_only?
-                    resolve_apple_app_id_local!(
-                      bundle_id: bundle_id,
-                      apple_id_override: options[:apple_id],
-                      asc_creds: asc_creds_for_uploader
-                    )
-                  else
-                    if !defined?(app) || app.nil?
-                      app_response = client.get("/api/v1/organizations/#{config.current_organization_id}/apple_apps",
-                                                params: { bundle_id: bundle_id })
-                      app = Array(app_response.dig(:data, 'data', 'apps')).first
-                    end
-
-                    unless app && app['id']
-                      say "✗ App not found in MySigner for bundle_id: #{bundle_id}", :red
-                      say 'Run: mysigner sync ios', :yellow
-                      exit 1
-                    end
-
-                    app['id']
+              # Resolve apple_app_id.
+              # - vault mode: MySigner /apple_apps lookup (may have been
+              #   pre-fetched in the appstore sync block above).
+              # - local-only: explicit --apple-id wins; otherwise hit Apple's
+              #   /v1/apps?filter[bundleId]= directly.
+              apple_app_id =
+                if local_only?
+                  resolve_apple_app_id_local!(
+                    bundle_id: bundle_id,
+                    apple_id_override: options[:apple_id],
+                    asc_creds: asc_creds_for_uploader
+                  )
+                else
+                  if !defined?(app) || app.nil?
+                    app_response = client.get("/api/v1/organizations/#{config.current_organization_id}/apple_apps",
+                                              params: { bundle_id: bundle_id })
+                    app = Array(app_response.dig(:data, 'data', 'apps')).first
                   end
 
-                # Read version info from the built IPA
-                ipa_info = Upload::Uploader.extract_ipa_info(ipa_path)
-                cf_version = ipa_info[:cf_bundle_version] || '1'
-                cf_short   = ipa_info[:cf_bundle_short_version_string] || '1.0'
+                  unless app && app['id']
+                    say "✗ App not found in MySigner for bundle_id: #{bundle_id}", :red
+                    say 'Run: mysigner sync ios', :yellow
+                    exit 1
+                  end
 
-                say "📤 Uploading via App Store Connect REST API (version #{cf_short} build #{cf_version})...", :cyan
-
-                rest = Mysigner::Upload::AscRestUploader.new(
-                  client: client,
-                  organization_id: local_only? ? nil : config.current_organization_id,
-                  ipa_path: ipa_path,
-                  apple_app_id: apple_app_id,
-                  cf_bundle_version: cf_version,
-                  cf_bundle_short_version_string: cf_short,
-                  platform: 'IOS',
-                  local_only: local_only?,
-                  asc_creds: asc_creds_for_uploader
-                )
-
-                result = rest.call
-                case result[:final_state]
-                when 'COMPLETE'
-                  say '✓ Upload complete — Apple accepted the build', :green
-                when 'FAILED', 'INVALIDATED'
-                  say "✗ Apple rejected the upload: #{result[:final_state]}", :red
-                  exit 1
-                when 'TIMEOUT'
-                  say '⚠ Apple is still processing — check App Store Connect.', :yellow
+                  app['id']
                 end
+
+              # Read version info from the built IPA
+              ipa_info = Upload::Uploader.extract_ipa_info(ipa_path)
+              cf_version = ipa_info[:cf_bundle_version] || '1'
+              cf_short   = ipa_info[:cf_bundle_short_version_string] || '1.0'
+
+              say "📤 Uploading via App Store Connect REST API (version #{cf_short} build #{cf_version})...", :cyan
+
+              rest = Mysigner::Upload::AscRestUploader.new(
+                client: client,
+                organization_id: local_only? ? nil : config.current_organization_id,
+                ipa_path: ipa_path,
+                apple_app_id: apple_app_id,
+                cf_bundle_version: cf_version,
+                cf_bundle_short_version_string: cf_short,
+                platform: 'IOS',
+                local_only: local_only?,
+                asc_creds: asc_creds_for_uploader
+              )
+
+              result = rest.call
+              case result[:final_state]
+              when 'COMPLETE'
+                say '✓ Upload complete — Apple accepted the build', :green
+              when 'FAILED', 'INVALIDATED'
+                say "✗ Apple rejected the upload: #{result[:final_state]}", :red
+                exit 1
+              when 'TIMEOUT'
+                say '⚠ Apple is still processing — check App Store Connect.', :yellow
               end
 
               timings[:upload] = Time.now - upload_start
@@ -2148,101 +2101,51 @@ module Mysigner
                 exit 1
               end
 
-              if ENV['MYSIGNER_USE_LEGACY_ASC'] == '1'
-                # LEGACY PATH — altool with server-fetched .p8. Will be removed in next release.
-                say '⚠️  MYSIGNER_USE_LEGACY_ASC=1 — using legacy altool upload path (deprecated).', :yellow
-                say '🔐 Fetching App Store Connect credentials...', :yellow
+              # ASC REST Build Upload API.
+              require_relative '../upload/asc_rest_uploader'
 
-                begin
-                  org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
-                  org_data = org_response[:data]
+              ipa_info = Upload::Uploader.extract_ipa_info(ipa_path)
+              bundle_id = ipa_info[:bundle_id]
+              cf_version = ipa_info[:cf_bundle_version] || '1'
+              cf_short   = ipa_info[:cf_bundle_short_version_string] || '1.0'
 
-                  unless org_data['app_store_connect_configured']
-                    say ''
-                    say '✗ App Store Connect credentials not configured', :red
-                    say ''
-                    say 'Quick fix:', :cyan
-                    say '  mysigner doctor    # Auto-configure now', :green
-                    say ''
-                    say 'Or manually:', :cyan
-                    say '  1. Run: mysigner onboard'
-                    say '  2. Follow Step 5 to add credentials'
-                    say ''
-                    exit 1
-                  end
+              if bundle_id.nil? || bundle_id.empty?
+                say '✗ Could not extract bundle identifier from IPA.', :red
+                say '  Ensure the file is a valid iOS .ipa with a Payload/*.app/Info.plist.', :yellow
+                exit 1
+              end
 
-                  api_key = org_data['app_store_connect_key_id']
-                  api_issuer = org_data['app_store_connect_issuer_id']
-                  private_key = org_data['app_store_connect_private_key']
+              app_response = client.get("/api/v1/organizations/#{config.current_organization_id}/apple_apps",
+                                        params: { bundle_id: bundle_id })
+              app = Array(app_response.dig(:data, 'data', 'apps')).first
 
-                  unless api_key && api_issuer && private_key
-                    say '✗ Error: Invalid credentials received from API', :red
-                    exit 1
-                  end
+              unless app && app['id']
+                say "✗ App with bundle ID '#{bundle_id}' not found in MySigner.", :red
+                say '  Run: mysigner sync ios', :yellow
+                exit 1
+              end
 
-                  say '✓ Credentials loaded', :green
-                  say ''
-                rescue Mysigner::ClientError => e
-                  say ''
-                  say "✗ Error fetching credentials: #{e.message}", :red
-                  exit 1
-                end
+              say "📤 Uploading #{File.basename(ipa_path)} via App Store Connect REST API (version #{cf_short} build #{cf_version})...", :cyan
 
-                uploader = Upload::Uploader.new(
-                  ipa_path,
-                  api_key: api_key,
-                  api_issuer: api_issuer,
-                  private_key: private_key
-                )
+              rest = Mysigner::Upload::AscRestUploader.new(
+                client: client,
+                organization_id: config.current_organization_id,
+                ipa_path: ipa_path,
+                apple_app_id: app['id'],
+                cf_bundle_version: cf_version,
+                cf_bundle_short_version_string: cf_short,
+                platform: 'IOS'
+              )
 
-                uploader.upload!(wait_for_processing: options[:wait])
-              else
-                # DEFAULT PATH — ASC REST Build Upload API.
-                require_relative '../upload/asc_rest_uploader'
-
-                ipa_info = Upload::Uploader.extract_ipa_info(ipa_path)
-                bundle_id = ipa_info[:bundle_id]
-                cf_version = ipa_info[:cf_bundle_version] || '1'
-                cf_short   = ipa_info[:cf_bundle_short_version_string] || '1.0'
-
-                if bundle_id.nil? || bundle_id.empty?
-                  say '✗ Could not extract bundle identifier from IPA.', :red
-                  say '  Ensure the file is a valid iOS .ipa with a Payload/*.app/Info.plist.', :yellow
-                  exit 1
-                end
-
-                app_response = client.get("/api/v1/organizations/#{config.current_organization_id}/apple_apps",
-                                          params: { bundle_id: bundle_id })
-                app = Array(app_response.dig(:data, 'data', 'apps')).first
-
-                unless app && app['id']
-                  say "✗ App with bundle ID '#{bundle_id}' not found in MySigner.", :red
-                  say '  Run: mysigner sync ios', :yellow
-                  exit 1
-                end
-
-                say "📤 Uploading #{File.basename(ipa_path)} via App Store Connect REST API (version #{cf_short} build #{cf_version})...", :cyan
-
-                rest = Mysigner::Upload::AscRestUploader.new(
-                  client: client,
-                  organization_id: config.current_organization_id,
-                  ipa_path: ipa_path,
-                  apple_app_id: app['id'],
-                  cf_bundle_version: cf_version,
-                  cf_bundle_short_version_string: cf_short,
-                  platform: 'IOS'
-                )
-
-                result = rest.call
-                case result[:final_state]
-                when 'COMPLETE'
-                  say '✓ Upload complete — Apple accepted the build', :green
-                when 'FAILED', 'INVALIDATED'
-                  say "✗ Apple rejected the upload: #{result[:final_state]}", :red
-                  exit 1
-                when 'TIMEOUT'
-                  say '⚠ Apple is still processing — check App Store Connect.', :yellow
-                end
+              result = rest.call
+              case result[:final_state]
+              when 'COMPLETE'
+                say '✓ Upload complete — Apple accepted the build', :green
+              when 'FAILED', 'INVALIDATED'
+                say "✗ Apple rejected the upload: #{result[:final_state]}", :red
+                exit 1
+              when 'TIMEOUT'
+                say '⚠ Apple is still processing — check App Store Connect.', :yellow
               end
 
               say '🎉 Upload complete!', :green
@@ -2252,14 +2155,6 @@ module Mysigner
               say '  • Wait for processing (5-15 minutes)'
               say '  • Distribute to TestFlight testers'
               say ''
-            rescue Upload::Uploader::TransporterNotFoundError => e
-              say ''
-              say "✗ Error: #{e.message}", :red
-              exit 1
-            rescue Upload::Uploader::UploadError => e
-              say ''
-              say "✗ Upload Error: #{e.message}", :red
-              exit 1
             rescue Mysigner::Upload::AscRestUploader::BuildVersionConflictError => e
               say ''
               say "✗ #{e.message}", :red

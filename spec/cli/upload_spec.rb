@@ -2,6 +2,7 @@
 
 require 'spec_helper'
 require 'stringio'
+require 'mysigner/upload/asc_rest_uploader'
 
 RSpec.describe 'mysigner upload testflight', type: :cli do
   let(:cli) { Mysigner::CLI.new }
@@ -26,12 +27,6 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
     allow(Mysigner::Config).to receive(:new).and_return(config)
     allow(Mysigner::Client).to receive(:new).and_return(client)
     allow(cli).to receive(:exit) # Stub exit
-    # Legacy uploader path (default is ASC REST uploader now)
-    ENV['MYSIGNER_USE_LEGACY_ASC'] = '1'
-  end
-
-  after do
-    ENV.delete('MYSIGNER_USE_LEGACY_ASC')
   end
 
   describe 'when not logged in' do
@@ -122,121 +117,11 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
     end
   end
 
-  describe 'when App Store Connect credentials not configured' do
-    let(:org_response) do
-      {
-        data: {
-          'app_store_connect_configured' => false
-        }
-      }
-    end
-
-    before do
-      allow(config).to receive(:exists?).and_return(true)
-      allow(config).to receive(:load)
-      allow(config).to receive(:api_url).and_return(api_url)
-      allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(org_id)
-      allow(config).to receive(:current_organization_id).and_return(org_id)
-      allow(config).to receive(:user_email).and_return(nil)
-      allow(File).to receive(:exist?).with(ipa_path).and_return(true)
-      allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
-    end
-
-    it 'shows fetching credentials message' do
-      output = capture_stdout { cli.upload('testflight', ipa_path) }
-      expect(output).to include('Fetching App Store Connect credentials')
-    end
-
-    it 'shows error message' do
-      output = capture_stdout { cli.upload('testflight', ipa_path) }
-      expect(output).to include('App Store Connect credentials not configured')
-    end
-
-    it 'shows setup guidance' do
-      output = capture_stdout { cli.upload('testflight', ipa_path) }
-      expect(output).to include('mysigner doctor')
-      expect(output).to include('mysigner onboard')
-    end
-
-    it 'exits with code 1' do
-      expect(cli).to receive(:exit).with(1)
-      cli.upload('testflight', ipa_path)
-    end
-  end
-
-  describe 'when credentials fetch fails' do
-    before do
-      allow(config).to receive(:exists?).and_return(true)
-      allow(config).to receive(:load)
-      allow(config).to receive(:api_url).and_return(api_url)
-      allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(org_id)
-      allow(config).to receive(:current_organization_id).and_return(org_id)
-      allow(config).to receive(:user_email).and_return(nil)
-      allow(File).to receive(:exist?).with(ipa_path).and_return(true)
-      allow(client).to receive(:get).and_raise(Mysigner::ClientError.new('API connection failed'))
-    end
-
-    it 'shows error message' do
-      output = capture_stdout { cli.upload('testflight', ipa_path) }
-      expect(output).to include('Error fetching credentials')
-      expect(output).to include('API connection failed')
-    end
-
-    it 'exits with code 1' do
-      expect(cli).to receive(:exit).with(1)
-      cli.upload('testflight', ipa_path)
-    end
-  end
-
-  describe 'when credentials are invalid' do
-    let(:org_response) do
-      {
-        data: {
-          'app_store_connect_configured' => true,
-          'app_store_connect_key_id' => 'ABC123',
-          'app_store_connect_issuer_id' => nil, # Missing issuer
-          'app_store_connect_private_key' => 'key_content'
-        }
-      }
-    end
-
-    before do
-      allow(config).to receive(:exists?).and_return(true)
-      allow(config).to receive(:load)
-      allow(config).to receive(:api_url).and_return(api_url)
-      allow(config).to receive(:api_token).and_return(api_token)
-      allow(config).to receive(:organization_id).and_return(org_id)
-      allow(config).to receive(:current_organization_id).and_return(org_id)
-      allow(config).to receive(:user_email).and_return(nil)
-      allow(File).to receive(:exist?).with(ipa_path).and_return(true)
-      allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
-    end
-
-    it 'shows error message' do
-      output = capture_stdout { cli.upload('testflight', ipa_path) }
-      expect(output).to include('Invalid credentials received from API')
-    end
-
-    it 'exits with code 1' do
-      expect(cli).to receive(:exit).with(1)
-      cli.upload('testflight', ipa_path)
-    end
-  end
-
   describe 'successful upload' do
-    let(:org_response) do
-      {
-        data: {
-          'app_store_connect_configured' => true,
-          'app_store_connect_key_id' => 'ABC123',
-          'app_store_connect_issuer_id' => 'def456-ghi-789',
-          'app_store_connect_private_key' => '-----BEGIN PRIVATE KEY-----\nkey_content\n-----END PRIVATE KEY-----'
-        }
-      }
+    let(:rest_uploader) { instance_double(Mysigner::Upload::AscRestUploader) }
+    let(:apple_apps_response) do
+      { data: { 'data' => { 'apps' => [{ 'id' => 'apple-app-1' }] } } }
     end
-    let(:uploader) { instance_double(Mysigner::Upload::Uploader) }
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -247,9 +132,15 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:current_organization_id).and_return(org_id)
       allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).with(ipa_path).and_return(true)
-      allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
-      allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
-      allow(uploader).to receive(:upload!).and_return({ success: true })
+      allow(Mysigner::Upload::Uploader).to receive(:extract_ipa_info)
+        .with(ipa_path)
+        .and_return(cf_bundle_version: '1', cf_bundle_short_version_string: '1.0', bundle_id: 'com.example.app')
+      allow(client).to receive(:get).with(
+        "/api/v1/organizations/#{org_id}/apple_apps",
+        params: { bundle_id: 'com.example.app' }
+      ).and_return(apple_apps_response)
+      allow(Mysigner::Upload::AscRestUploader).to receive(:new).and_return(rest_uploader)
+      allow(rest_uploader).to receive(:call).and_return({ final_state: 'COMPLETE' })
       # Default options
       cli.options = { wait: false }
     end
@@ -259,28 +150,29 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       expect(output).to include('Upload to TestFlight')
     end
 
-    it 'shows fetching credentials' do
-      output = capture_stdout { cli.upload('testflight', ipa_path) }
-      expect(output).to include('Fetching App Store Connect credentials')
-    end
-
-    it 'shows credentials loaded' do
-      output = capture_stdout { cli.upload('testflight', ipa_path) }
-      expect(output).to include('Credentials loaded')
-    end
-
-    it 'creates uploader with credentials' do
-      expect(Mysigner::Upload::Uploader).to receive(:new).with(
-        ipa_path,
-        api_key: 'ABC123',
-        api_issuer: 'def456-ghi-789',
-        private_key: '-----BEGIN PRIVATE KEY-----\nkey_content\n-----END PRIVATE KEY-----'
-      )
+    it 'looks up the Apple app via MySigner using the IPA bundle ID' do
+      expect(client).to receive(:get).with(
+        "/api/v1/organizations/#{org_id}/apple_apps",
+        params: { bundle_id: 'com.example.app' }
+      ).and_return(apple_apps_response)
       cli.upload('testflight', ipa_path)
     end
 
-    it 'uploads without waiting by default' do
-      expect(uploader).to receive(:upload!).with(wait_for_processing: false)
+    it 'creates the REST uploader with the resolved apple_app_id' do
+      expect(Mysigner::Upload::AscRestUploader).to receive(:new).with(
+        hash_including(
+          client: client,
+          organization_id: org_id,
+          ipa_path: ipa_path,
+          apple_app_id: 'apple-app-1',
+          platform: 'IOS'
+        )
+      ).and_return(rest_uploader)
+      cli.upload('testflight', ipa_path)
+    end
+
+    it 'invokes the REST uploader' do
+      expect(rest_uploader).to receive(:call).and_return({ final_state: 'COMPLETE' })
       cli.upload('testflight', ipa_path)
     end
 
@@ -296,32 +188,9 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       expect(output).to include('Wait for processing')
       expect(output).to include('Distribute to TestFlight testers')
     end
-
-    context 'with --wait flag' do
-      before do
-        cli.options = { wait: true }
-      end
-
-      it 'uploads with waiting enabled' do
-        expect(uploader).to receive(:upload!).with(wait_for_processing: true)
-        cli.upload('testflight', ipa_path)
-      end
-    end
   end
 
-  describe 'when transporter not found' do
-    let(:org_response) do
-      {
-        data: {
-          'app_store_connect_configured' => true,
-          'app_store_connect_key_id' => 'ABC123',
-          'app_store_connect_issuer_id' => 'def456-ghi-789',
-          'app_store_connect_private_key' => 'key_content'
-        }
-      }
-    end
-    let(:uploader) { instance_double(Mysigner::Upload::Uploader) }
-
+  describe 'when bundle ID is missing from the IPA' do
     before do
       allow(config).to receive(:exists?).and_return(true)
       allow(config).to receive(:load)
@@ -331,38 +200,25 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:current_organization_id).and_return(org_id)
       allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).with(ipa_path).and_return(true)
-      allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
-      allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
-      allow(uploader).to receive(:upload!).and_raise(
-        Mysigner::Upload::Uploader::TransporterNotFoundError.new('No upload tool available')
-      )
+      # extract_ipa_info comes back with no bundle_id — covers a corrupt IPA.
+      allow(Mysigner::Upload::Uploader).to receive(:extract_ipa_info)
+        .with(ipa_path)
+        .and_return(cf_bundle_version: '1', cf_bundle_short_version_string: '1.0', bundle_id: nil)
+      # `exit` is stubbed at the top level so execution falls through; stub
+      # the /apple_apps lookup with an empty match so the downstream code
+      # doesn't explode on the unstubbed client call.
+      allow(client).to receive(:get).and_return({ data: { 'data' => { 'apps' => [] } } })
       cli.options = { wait: false }
     end
 
-    it 'shows error message' do
+    it 'shows a clear extraction error and exits 1' do
+      expect(cli).to receive(:exit).with(1).at_least(:once)
       output = capture_stdout { cli.upload('testflight', ipa_path) }
-      expect(output).to include('No upload tool available')
-    end
-
-    it 'exits with code 1' do
-      expect(cli).to receive(:exit).with(1)
-      cli.upload('testflight', ipa_path)
+      expect(output).to include('Could not extract bundle identifier')
     end
   end
 
-  describe 'when upload fails' do
-    let(:org_response) do
-      {
-        data: {
-          'app_store_connect_configured' => true,
-          'app_store_connect_key_id' => 'ABC123',
-          'app_store_connect_issuer_id' => 'def456-ghi-789',
-          'app_store_connect_private_key' => 'key_content'
-        }
-      }
-    end
-    let(:uploader) { instance_double(Mysigner::Upload::Uploader) }
-
+  describe 'when the Apple app is unknown to MySigner' do
     before do
       allow(config).to receive(:exists?).and_return(true)
       allow(config).to receive(:load)
@@ -372,38 +228,27 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:current_organization_id).and_return(org_id)
       allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).with(ipa_path).and_return(true)
-      allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
-      allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
-      allow(uploader).to receive(:upload!).and_raise(
-        Mysigner::Upload::Uploader::UploadError.new('Upload failed: authentication error')
-      )
+      allow(Mysigner::Upload::Uploader).to receive(:extract_ipa_info)
+        .with(ipa_path)
+        .and_return(cf_bundle_version: '1', cf_bundle_short_version_string: '1.0', bundle_id: 'com.unknown.app')
+      # /apple_apps returns no matches — the user has not synced this app yet.
+      allow(client).to receive(:get).with(
+        "/api/v1/organizations/#{org_id}/apple_apps",
+        params: { bundle_id: 'com.unknown.app' }
+      ).and_return({ data: { 'data' => { 'apps' => [] } } })
       cli.options = { wait: false }
     end
 
-    it 'shows upload error message' do
-      output = capture_stdout { cli.upload('testflight', ipa_path) }
-      expect(output).to include('Upload Error')
-      expect(output).to include('authentication error')
-    end
-
-    it 'exits with code 1' do
+    it 'surfaces the bundle ID and hints to run sync' do
       expect(cli).to receive(:exit).with(1)
-      cli.upload('testflight', ipa_path)
+      output = capture_stdout { cli.upload('testflight', ipa_path) }
+      expect(output).to include("'com.unknown.app'")
+      expect(output).to include('mysigner sync ios')
     end
   end
 
   describe 'when unexpected error occurs' do
-    let(:org_response) do
-      {
-        data: {
-          'app_store_connect_configured' => true,
-          'app_store_connect_key_id' => 'ABC123',
-          'app_store_connect_issuer_id' => 'def456-ghi-789',
-          'app_store_connect_private_key' => 'key_content'
-        }
-      }
-    end
-    let(:uploader) { instance_double(Mysigner::Upload::Uploader) }
+    let(:rest_uploader) { instance_double(Mysigner::Upload::AscRestUploader) }
 
     before do
       allow(config).to receive(:exists?).and_return(true)
@@ -414,9 +259,15 @@ RSpec.describe 'mysigner upload testflight', type: :cli do
       allow(config).to receive(:current_organization_id).and_return(org_id)
       allow(config).to receive(:user_email).and_return(nil)
       allow(File).to receive(:exist?).with(ipa_path).and_return(true)
-      allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
-      allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
-      allow(uploader).to receive(:upload!).and_raise(StandardError.new('Unexpected failure'))
+      allow(Mysigner::Upload::Uploader).to receive(:extract_ipa_info)
+        .with(ipa_path)
+        .and_return(cf_bundle_version: '1', cf_bundle_short_version_string: '1.0', bundle_id: 'com.example.app')
+      allow(client).to receive(:get).with(
+        "/api/v1/organizations/#{org_id}/apple_apps",
+        params: { bundle_id: 'com.example.app' }
+      ).and_return({ data: { 'data' => { 'apps' => [{ 'id' => 'apple-app-1' }] } } })
+      allow(Mysigner::Upload::AscRestUploader).to receive(:new).and_return(rest_uploader)
+      allow(rest_uploader).to receive(:call).and_raise(StandardError.new('Unexpected failure'))
       cli.options = { wait: false }
     end
 

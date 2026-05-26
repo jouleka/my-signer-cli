@@ -5,6 +5,7 @@ require 'tempfile'
 require 'mysigner/cli'
 require 'mysigner/upload/app_store_submission'
 require 'mysigner/upload/app_store_automation'
+require 'mysigner/upload/asc_rest_uploader'
 
 RSpec.describe 'App Store Distribution', type: :cli do
   let(:cli) { Mysigner::CLI.new }
@@ -24,8 +25,6 @@ RSpec.describe 'App Store Distribution', type: :cli do
     allow(cli).to receive(:say)
     allow(cli).to receive(:error)
     allow(cli).to receive(:exit)
-    # Force legacy altool upload path (default is ASC REST uploader now)
-    ENV['MYSIGNER_USE_LEGACY_ASC'] = '1'
     # Prevent real sleep in polling loops (product calls global sleep, not cli.sleep)
     allow_any_instance_of(Object).to receive(:sleep)
     allow(client).to receive(:post).with(
@@ -53,10 +52,16 @@ RSpec.describe 'App Store Distribution', type: :cli do
       build_num = @builds_calls == 1 ? '0' : '99'
       { data: { 'data' => { 'builds' => [{ 'build_number' => build_num, 'processing_state' => 'PROCESSING_COMPLETE' }] } } }
     end
-  end
 
-  after do
-    ENV.delete('MYSIGNER_USE_LEGACY_ASC')
+    # The modern (and now only) upload path goes through AscRestUploader and
+    # calls Upload::Uploader.extract_ipa_info to read the IPA's build info.
+    # Stub both at file scope so every example below exercises the same path
+    # without re-stubbing in each nested before.
+    allow(Mysigner::Upload::Uploader).to receive(:extract_ipa_info).and_return(
+      cf_bundle_version: '99', cf_bundle_short_version_string: '1.0', bundle_id: 'com.example.app'
+    )
+    rest_uploader = instance_double(Mysigner::Upload::AscRestUploader, call: { final_state: 'COMPLETE' })
+    allow(Mysigner::Upload::AscRestUploader).to receive(:new).and_return(rest_uploader)
   end
 
   describe 'mysigner ship appstore' do
@@ -548,6 +553,11 @@ RSpec.describe 'App Store Distribution', type: :cli do
       allow(cli_local).to receive(:say)
       allow(cli_local).to receive(:exit) { |code| raise SystemExit, code.to_s }
 
+      # Undo the top-level AscRestUploader.new stub — this block exercises
+      # the REAL local-only altool delegation inside AscRestUploader#call,
+      # which the outer stub would short-circuit.
+      allow(Mysigner::Upload::AscRestUploader).to receive(:new).and_call_original
+
       # Make sure no MySigner ENV slips in.
       ENV.delete('MYSIGNER_API_TOKEN')
       ENV.delete('MYSIGNER_ORG_ID')
@@ -556,9 +566,6 @@ RSpec.describe 'App Store Distribution', type: :cli do
 
       # No real sleep in poll loops.
       allow_any_instance_of(Object).to receive(:sleep)
-
-      # Force the new REST path (the legacy altool path is server-mediated).
-      ENV.delete('MYSIGNER_USE_LEGACY_ASC')
 
       # CredentialResolver — short-circuit the cascade with a static struct so
       # the test doesn't touch Keychain / disk / prompt. Verifying the

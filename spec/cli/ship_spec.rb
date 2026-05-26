@@ -2,6 +2,7 @@
 
 require 'spec_helper'
 require 'stringio'
+require 'mysigner/upload/asc_rest_uploader'
 
 RSpec.describe 'mysigner ship testflight', type: :cli do
   let(:cli) { Mysigner::CLI.new }
@@ -25,12 +26,6 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
     allow(Mysigner::Config).to receive(:new).and_return(config)
     allow(Mysigner::Client).to receive(:new).and_return(client)
     allow(cli).to receive(:exit) # Stub exit
-    # Force legacy altool upload path (default is ASC REST uploader now)
-    ENV['MYSIGNER_USE_LEGACY_ASC'] = '1'
-  end
-
-  after do
-    ENV.delete('MYSIGNER_USE_LEGACY_ASC')
   end
 
   describe 'when not logged in' do
@@ -100,19 +95,11 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
     let(:validator) { instance_double(Mysigner::Signing::Validator) }
     let(:executor) { instance_double(Mysigner::Build::Executor) }
     let(:exporter) { instance_double(Mysigner::Export::Exporter) }
-    let(:uploader) { instance_double(Mysigner::Upload::Uploader) }
+    let(:rest_uploader) { instance_double(Mysigner::Upload::AscRestUploader) }
     let(:archive_path) { '/path/to/MyApp.xcarchive' }
     let(:ipa_path) { '/path/to/MyApp.ipa' }
-    let(:org_response) do
-      {
-        data: {
-          'app_store_connect_configured' => true,
-          'app_store_connect_key_id' => 'ABC123',
-          'app_store_connect_issuer_id' => 'def456-ghi-789',
-          'app_store_connect_private_key' => 'key_content',
-          'app_store_connect_team_id' => 'TEAM123'
-        }
-      }
+    let(:apple_apps_response) do
+      { data: { 'data' => { 'apps' => [{ 'id' => 'apple-app-1' }] } } }
     end
 
     before do
@@ -151,15 +138,21 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
       allow(Mysigner::Export::Exporter).to receive(:new).and_return(exporter)
       allow(exporter).to receive(:export!).and_return(ipa_path)
 
-      # Mock IPA file size
+      # Mock IPA file size + introspection used by the modern REST path
       allow(File).to receive(:size).with(ipa_path).and_return(10_000_000) # 10MB
+      allow(Mysigner::Upload::Uploader).to receive(:extract_ipa_info)
+        .with(ipa_path)
+        .and_return(cf_bundle_version: '1', cf_bundle_short_version_string: '1.0', bundle_id: 'com.example.myapp')
 
-      # Mock API credential fetch
-      allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
+      # Mock /apple_apps lookup used by the modern REST upload path
+      allow(client).to receive(:get).with(
+        "/api/v1/organizations/#{org_id}/apple_apps",
+        params: { bundle_id: 'com.example.myapp' }
+      ).and_return(apple_apps_response)
 
-      # Mock uploader
-      allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
-      allow(uploader).to receive(:upload!).and_return({ success: true })
+      # Mock REST uploader (the modern, default — and now only — path)
+      allow(Mysigner::Upload::AscRestUploader).to receive(:new).and_return(rest_uploader)
+      allow(rest_uploader).to receive(:call).and_return({ final_state: 'COMPLETE' })
     end
 
     it 'shows ship header' do
@@ -215,13 +208,16 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
       expect(output).to include('[3/3] Uploading to TestFlight')
     end
 
-    it 'fetches credentials' do
-      expect(client).to receive(:get).with("/api/v1/organizations/#{org_id}")
+    it 'looks up the Apple app via MySigner before uploading' do
+      expect(client).to receive(:get).with(
+        "/api/v1/organizations/#{org_id}/apple_apps",
+        params: { bundle_id: 'com.example.myapp' }
+      ).and_return(apple_apps_response)
       cli.ship('testflight')
     end
 
-    it 'uploads to TestFlight' do
-      expect(uploader).to receive(:upload!)
+    it 'uploads to TestFlight via the ASC REST uploader' do
+      expect(rest_uploader).to receive(:call).and_return({ final_state: 'COMPLETE' })
       cli.ship('testflight')
     end
 
@@ -251,17 +247,6 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
     it 'shows next steps' do
       output = capture_stdout { cli.ship('testflight') }
       expect(output).to include('Next Steps')
-    end
-
-    context 'with --wait flag' do
-      before do
-        cli.options = { configuration: 'Release', scheme: nil, wait: true, team: nil }
-      end
-
-      it 'passes wait flag to uploader' do
-        expect(uploader).to receive(:upload!).with(wait_for_processing: true)
-        cli.ship('testflight')
-      end
     end
 
     context 'with --team flag' do
@@ -383,53 +368,6 @@ RSpec.describe 'mysigner ship testflight', type: :cli do
           catch(:system_exit) { cli.ship('testflight') }
         end
         expect(output).to include('Export failed')
-      end
-
-      it 'exits with code 1' do
-        expect(cli).to receive(:exit).with(1) { throw :system_exit }
-        catch(:system_exit) { cli.ship('testflight') }
-      end
-    end
-
-    context 'when credentials not configured' do
-      let(:project_info) { { path: '/path/to/App.xcodeproj', type: :project, framework: :native } }
-      let(:parser) { instance_double(Mysigner::Build::Parser) }
-      let(:main_target) { double('target', name: 'App') }
-      let(:validator) { instance_double(Mysigner::Signing::Validator) }
-      let(:executor) { instance_double(Mysigner::Build::Executor) }
-      let(:exporter) { instance_double(Mysigner::Export::Exporter) }
-      let(:org_response) do
-        {
-          data: {
-            'app_store_connect_configured' => false
-          }
-        }
-      end
-
-      before do
-        allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
-        allow(Mysigner::Build::Parser).to receive(:new).and_return(parser)
-        allow(parser).to receive(:main_target).and_return(main_target)
-        allow(parser).to receive(:bundle_id).and_return('com.example.app')
-        allow(parser).to receive(:team_id).and_return('TEAM123')
-        allow(parser).to receive(:code_sign_style).and_return('Automatic')
-        allow(Mysigner::Signing::Validator).to receive(:new).and_return(validator)
-        allow(validator).to receive(:validate!)
-        allow(Mysigner::Build::Executor).to receive(:new).and_return(executor)
-        allow(executor).to receive(:build!).and_return('/path/to/archive.xcarchive')
-        allow(Mysigner::Export::Exporter).to receive(:new).and_return(exporter)
-        allow(exporter).to receive(:export!).and_return('/path/to/app.ipa')
-        allow(client).to receive(:get).with("/api/v1/organizations/#{org_id}").and_return(org_response)
-        allow(File).to receive(:exist?).and_return(true)
-        allow(File).to receive(:size).and_return(10_000_000)
-        allow(cli).to receive(:exit) { throw :system_exit }
-      end
-
-      it 'shows error message' do
-        output = capture_stdout do
-          catch(:system_exit) { cli.ship('testflight') }
-        end
-        expect(output).to include('App Store Connect credentials not configured')
       end
 
       it 'exits with code 1' do

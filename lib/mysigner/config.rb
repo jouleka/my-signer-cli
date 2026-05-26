@@ -133,7 +133,15 @@ module Mysigner
     def load
       return false unless exists?
 
-      data = YAML.load_file(CONFIG_FILE)
+      # mysigner-51 — safe_load_file rejects arbitrary Ruby object
+      # instantiation in the YAML (`!ruby/object:Foo` etc.). The config
+      # shape is just String/Integer/Hash (api_url, user_email,
+      # current_organization_id, organizations: {id => {name, token}}),
+      # all in safe_load's default allowed set, so no permitted_classes
+      # extension is needed. Low risk (the file is 0600 and user-owned)
+      # but cheap hardening against a future RCE if config write or read
+      # ever moves outside the owner-only assumption.
+      data = YAML.safe_load_file(CONFIG_FILE)
 
       @api_url = data['api_url']
       @user_email = data['user_email']

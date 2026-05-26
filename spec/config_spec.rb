@@ -135,6 +135,25 @@ RSpec.describe Mysigner::Config do
       expect(config.api_token(42)).to eq('secret_token')
       expect(config.current_organization_id).to eq(42)
     end
+
+    it 'refuses to instantiate Ruby objects from `!ruby/object:` directives (mysigner-51)' do
+      # WHY: the previous YAML.load_file was unsafe — a malicious YAML
+      # containing `!ruby/object:Gem::Specification` (or any class name)
+      # would invoke Marshal-style instantiation and could chain into RCE
+      # if any later code calls a method on the loaded value. The config
+      # file is 0600 user-owned so the risk is low, but if it's ever
+      # accidentally world-readable (or a future code path loads YAML
+      # from a different source), safe_load_file rejects it loud.
+      FileUtils.mkdir_p(test_config_dir)
+      File.write(test_config_file, <<~YAML)
+        api_url: http://example.com
+        user_email: !ruby/object:Gem::Specification {}
+      YAML
+
+      # Config.new auto-loads in initialize when the file exists, so the
+      # raise fires here — not on a separate config.load call.
+      expect { Mysigner::Config.new }.to raise_error(Mysigner::ConfigError, /Tried to load unspecified class|DisallowedClass/i)
+    end
   end
 
   describe '#clear' do
