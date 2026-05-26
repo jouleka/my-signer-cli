@@ -605,6 +605,27 @@ module Mysigner
           end
 
           desc 'logout', 'Log out and clear stored credentials'
+          long_desc <<~DESC
+            Log out of MySigner. Always clears local CLI config.
+
+            By default, ALSO asks whether to delete your stored credentials
+            (App Store Connect .p8 keys, Apple Search Ads keys, Google Play
+            service-account JSON, Android keystores) on the server and in
+            your local Keychain. The prompt defaults to No — the safer
+            choice — because logging out and back in restores access to
+            them otherwise.
+
+              --purge      Skip the prompt and DELETE the credentials.
+              --no-purge   Skip the prompt and KEEP them on the server.
+
+            In non-interactive contexts (CI, pipes), the prompt defaults
+            to No as well, matching `yes_with_default?` elsewhere.
+
+            See docs/policy/credential-retention.md (server repo) for the
+            authoritative retention policy.
+          DESC
+          method_option :purge, type: :boolean, default: nil,
+                                desc: 'Also delete stored credentials on the server and in local Keychain (skips prompt)'
           def logout
             config = Config.new
 
@@ -613,13 +634,44 @@ module Mysigner
               return
             end
 
-            if yes?('Are you sure you want to logout? (y/n)')
-              config.clear
-              say '✓ Successfully logged out', :green
-              say "Config file removed: #{Config::CONFIG_FILE}", :green
-            else
+            # Preserve the existing "Are you sure?" gate. Tests pin this exact
+            # prompt and a No answer must abort the entire logout. With
+            # --purge / --no-purge a user has already declared intent, but
+            # we still require the top-level confirmation when interactive —
+            # less surprising than two layered changes in one release.
+            unless yes?('Are you sure you want to logout? (y/n)')
               say 'Logout cancelled', :yellow
+              return
             end
+
+            # Now we know the local logout is happening. Decide whether to
+            # ALSO purge server + local-Keychain credentials. Resolution
+            # order: explicit flag > interactive prompt > non-TTY default No.
+            should_purge = resolve_purge_decision(options[:purge])
+
+            if should_purge
+              # Load the config so we have the api_url/token/email needed
+              # for the server call. Failure here is loud — we don't fall
+              # back to "local-only clear" silently, that would leave the
+              # user's server credentials on disk against their explicit
+              # request.
+              begin
+                config.load
+                purge_server_credentials(config)
+                purge_local_credentials
+              rescue Mysigner::ClientError, Mysigner::ConfigError => e
+                error "Failed to purge credentials on the server: #{e.message}"
+                say ''
+                say 'Local config was NOT cleared so you can retry. Options:', :yellow
+                say "  • Re-run 'mysigner logout --purge' once the server is reachable", :yellow
+                say "  • Run 'mysigner logout --no-purge' to log out locally only", :yellow
+                exit 1
+              end
+            end
+
+            config.clear
+            say '✓ Successfully logged out', :green
+            say "Config file removed: #{Config::CONFIG_FILE}", :green
           end
 
           desc 'status', 'Check connection, credentials, and App Store Connect setup'
@@ -979,6 +1031,93 @@ module Mysigner
               end
               response = ask("#{statement} [Y/n]", color).to_s.strip.downcase
               response.empty? || response == 'y' || response == 'yes'
+            end
+
+            # Default-NO variant of yes_with_default? — used when the
+            # destructive answer must be opt-in (mysigner-47 logout purge).
+            # Non-TTY also defaults to No so CI never silently wipes server
+            # credentials. Only an explicit "y" or "yes" returns true.
+            def no_default_yes?(statement, color = nil)
+              unless $stdin.tty?
+                say "#{statement} [y/N] (non-interactive: assuming no)", color
+                return false
+              end
+              response = ask("#{statement} [y/N]", color).to_s.strip.downcase
+              %w[y yes].include?(response)
+            end
+
+            # mysigner-47 — resolve the purge decision for `mysigner logout`.
+            # `flag` is options[:purge] (true / false / nil).
+            #   true  → --purge passed; skip prompt, purge
+            #   false → --no-purge passed; skip prompt, keep
+            #   nil   → no flag; ask the user (default No), CI defaults to No
+            def resolve_purge_decision(flag)
+              return flag unless flag.nil?
+
+              no_default_yes?(
+                'Also delete your stored credentials on the server? ' \
+                'They will be gone forever.',
+                :yellow
+              )
+            end
+
+            # mysigner-47 — call DELETE /api/v1/organizations/:org/credentials
+            # using the loaded config. Surfaces per-kind counts on success.
+            # Raises Mysigner::ClientError on transport/auth failure so the
+            # caller can decide whether to abort the local clear.
+            def purge_server_credentials(config)
+              org_id = config.current_organization_id
+              if org_id.nil?
+                say '⚠️  No active organization in local config; skipping server purge.', :yellow
+                return
+              end
+
+              client = Client.new(
+                api_url: config.api_url,
+                api_token: config.api_token,
+                user_email: config.user_email
+              )
+
+              say 'Deleting stored credentials on the server...', :yellow
+              response = client.delete("/api/v1/organizations/#{org_id}/credentials")
+
+              deleted = response.dig(:data, 'deleted') || {}
+              asc   = deleted['asc'].to_i
+              ads   = deleted['apple_ads'].to_i
+              gp    = deleted['google_play'].to_i
+              ks    = deleted['android_keystore'].to_i
+
+              say '✓ Server credentials deleted:', :green
+              say "  • App Store Connect: #{asc}"
+              say "  • Apple Search Ads:  #{ads}"
+              say "  • Google Play:       #{gp}"
+              say "  • Android keystore:  #{ks}"
+            end
+
+            # mysigner-47 — wipe every locally stored credential the
+            # LocalCredentials store knows about, across all four kinds.
+            # We swallow per-entry deletion errors with a loud log line
+            # rather than aborting (Rule 12 — fail loud, but a corrupted
+            # Keychain entry must not block the rest of the wipe).
+            def purge_local_credentials
+              return unless defined?(Mysigner::LocalCredentials)
+
+              total = 0
+              Mysigner::LocalCredentials::KINDS.each do |kind|
+                ids = Mysigner::LocalCredentials.list(kind: kind)
+                ids.each do |id|
+                  Mysigner::LocalCredentials.delete(kind: kind, id: id)
+                  total += 1
+                rescue Mysigner::LocalCredentials::LocalCredentialsError => e
+                  say "⚠️  Failed to delete local credential #{kind}/#{id}: #{e.message}", :yellow
+                end
+              end
+
+              if total.positive?
+                say "✓ Local Keychain / file credentials deleted: #{total}", :green
+              else
+                say 'No local-only credentials to delete.', :white
+              end
             end
 
             # Helper method for App Store Connect credential setup

@@ -27,7 +27,7 @@ Mobile developers spend hours dealing with:
 ✅ **CI/CD Ready** - Automate builds in GitHub Actions, GitLab CI, etc.  
 ✅ **API-Powered** - Backed by My Signer API for team collaboration  
 ✅ **Smart Version Handling** - Auto-increment version codes for Android  
-✅ **Secure** - Token-based authentication, credentials stored locally
+✅ **Secure** - Token-based auth; signing credentials are AES-256 encrypted at rest on the MySigner server by default, with opt-in `--local-only` mode that keeps Apple `.p8` and Google service-account JSON on your machine
 
 ---
 

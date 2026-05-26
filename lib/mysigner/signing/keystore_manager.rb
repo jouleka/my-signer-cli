@@ -20,13 +20,11 @@ module Mysigner
         ensure_keystores_dir
       end
 
-      # List all keystores from API
+      # List all keystores from API. The list payload never contains the
+      # keystore_password or key_password (mysigner-49) — callers that need
+      # the secrets must use #fetch_secrets.
       # @param android_app_id [Integer, nil] Filter by app ID
-      # @param include_secrets [Boolean] DEPRECATED and silently ignored. Kept
-      #   for signature-compat during the 10.0 transition; will be removed in
-      #   the next release. Passwords are now fetched via #fetch_secrets.
-      def list(android_app_id: nil, include_secrets: nil)
-        _ = include_secrets # intentionally unused — see note above
+      def list(android_app_id: nil)
         params = {}
         params[:android_app_id] = android_app_id if android_app_id
 
@@ -37,10 +35,9 @@ module Mysigner
         response[:data]['android_keystores'] || []
       end
 
-      # Get active keystore for an app (or any active keystore if no app specified)
-      # @param include_secrets [Boolean] DEPRECATED — see #list.
-      def active_keystore(android_app_id: nil, include_secrets: nil)
-        _ = include_secrets
+      # Get active keystore for an app (or any active keystore if no app
+      # specified). Returns the same secret-free payload shape as #list.
+      def active_keystore(android_app_id: nil)
         keystores = list(android_app_id: android_app_id)
         keystores.find { |k| k['active'] }
       end

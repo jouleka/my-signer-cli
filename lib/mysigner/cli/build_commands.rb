@@ -1069,7 +1069,7 @@ module Mysigner
                     # Continue without app ID
                   end
 
-                  active_keystore = keystore_manager.active_keystore(android_app_id: app_id, include_secrets: true)
+                  active_keystore = keystore_manager.active_keystore(android_app_id: app_id)
                   unless active_keystore
                     say ''
                     say '✗ No active keystore found', :red
@@ -1089,10 +1089,14 @@ module Mysigner
                   say "✓ Keystore ready at: #{keystore_path}", :green
                   say ''
 
-                  # Get keystore credentials from API response
-                  keystore_password = active_keystore['keystore_password'] || ENV.fetch('MYSIGNER_KEYSTORE_PASSWORD', nil)
-                  key_password = active_keystore['key_password'] || ENV['MYSIGNER_KEY_PASSWORD'] || keystore_password
-                  key_alias = active_keystore['key_alias']
+                  # mysigner-49: passwords are never returned inline on the
+                  # active_keystore (list) payload. Fetch them through the
+                  # dedicated, audit-logged /secrets endpoint instead. ENV
+                  # vars remain a manual override for power users.
+                  secrets = keystore_manager.fetch_secrets(active_keystore['id'])
+                  keystore_password = secrets['keystore_password'] || ENV.fetch('MYSIGNER_KEYSTORE_PASSWORD', nil)
+                  key_password = secrets['key_password'] || ENV['MYSIGNER_KEY_PASSWORD'] || keystore_password
+                  key_alias = secrets['key_alias'] || active_keystore['key_alias']
 
                   unless keystore_password
                     say '⚠️  Keystore password not found in My Signer', :yellow

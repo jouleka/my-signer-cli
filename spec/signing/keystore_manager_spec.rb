@@ -48,12 +48,12 @@ RSpec.describe Mysigner::Signing::KeystoreManager do
       { data: { 'android_keystores' => [{ 'id' => 1, 'active' => true }] } }
     end
 
-    it 'does not pass include_secrets even if provided (deprecated)' do
-      expect(client).to receive(:get).with(
-        "/api/v1/organizations/#{org_id}/android_keystores",
-        params: {}
-      ).and_return(list_response)
-      manager.list(include_secrets: true)
+    # mysigner-49: the legacy include_secrets keyword was removed from #list
+    # and #active_keystore — the server list payload never carries the
+    # passwords. Surface stragglers at boot instead of silently fetching
+    # nothing (Rule 12 — fail loud).
+    it 'rejects the deprecated include_secrets keyword' do
+      expect { manager.list(include_secrets: true) }.to raise_error(ArgumentError)
     end
 
     it 'filters by android_app_id when given' do
@@ -84,8 +84,9 @@ RSpec.describe Mysigner::Signing::KeystoreManager do
       expect(manager.active_keystore).to eq(keystores[1])
     end
 
-    it 'silently ignores a legacy include_secrets keyword arg' do
-      expect { manager.active_keystore(include_secrets: true) }.not_to raise_error
+    # mysigner-49: see #list — the deprecated kwarg is gone everywhere.
+    it 'rejects the deprecated include_secrets keyword' do
+      expect { manager.active_keystore(include_secrets: true) }.to raise_error(ArgumentError)
     end
   end
 

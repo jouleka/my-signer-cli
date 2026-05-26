@@ -65,13 +65,22 @@ RSpec.describe 'mysigner ship android', type: :cli do
       }
     end
 
+    # mysigner-49: the server list/active payload no longer carries the
+    # plaintext passwords. The CLI fetches them through #fetch_secrets, so
+    # this fixture mirrors the real (secret-free) shape and the matching
+    # stub returns the secrets separately.
     let(:keystore_data) do
       {
         'id' => 1,
         'name' => 'test-keystore',
-        'key_alias' => 'key0',
+        'key_alias' => 'key0'
+      }
+    end
+    let(:keystore_secrets) do
+      {
         'keystore_password' => 'password123',
-        'key_password' => 'password123'
+        'key_password' => 'password123',
+        'key_alias' => 'key0'
       }
     end
 
@@ -97,9 +106,11 @@ RSpec.describe 'mysigner ship android', type: :cli do
       allow(parser).to receive(:version_code).and_return(6)
       allow(parser).to receive(:version_name).and_return('1.0.0')
 
-      # Mock keystore manager
+      # Mock keystore manager. fetch_secrets is the dedicated /secrets
+      # endpoint call introduced by mysigner-49.
       allow(Mysigner::Signing::KeystoreManager).to receive(:new).and_return(keystore_manager)
       allow(keystore_manager).to receive(:active_keystore).and_return(keystore_data)
+      allow(keystore_manager).to receive(:fetch_secrets).with(keystore_data['id']).and_return(keystore_secrets)
       allow(keystore_manager).to receive(:get_or_download).and_return({ path: '/tmp/keystore.jks' })
 
       # Mock executor
