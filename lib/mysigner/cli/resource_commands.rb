@@ -123,6 +123,7 @@ module Mysigner
           DESC
           method_option :platform, type: :string, default: 'IOS', aliases: '-p', desc: 'Platform (IOS, MAC_OS, TV_OS)'
           def device(action, *args)
+            exit_unless_local_supported!("device #{action}") unless action == 'detect'
             config = load_config
             client = create_client(config)
 
@@ -130,7 +131,6 @@ module Mysigner
             when 'detect'
               detect_connected_devices(config, client)
             when 'add'
-              exit_unless_local_supported!('device add')
               if args.length < 2
                 error 'Usage: mysigner device add NAME UDID [--platform IOS]'
                 say ''
@@ -205,7 +205,6 @@ module Mysigner
                 exit 1
               end
             when 'update'
-              exit_unless_local_supported!('device update')
               if args.length < 2
                 error 'Usage: mysigner device update ID NEW_NAME'
                 say ''
@@ -839,6 +838,7 @@ module Mysigner
           DESC
           method_option :output, type: :string, aliases: '-o', desc: 'Output file path (default: certificate name)'
           def certificate(action, *args)
+            exit_unless_local_supported!("certificate #{action}") unless action == 'check'
             config = load_config
             client = create_client(config)
 
@@ -944,7 +944,6 @@ module Mysigner
               end
 
             when 'download'
-              exit_unless_local_supported!('certificate download')
               if args.empty?
                 error 'Usage: mysigner certificate download ID [--output path.cer]'
                 exit 1
