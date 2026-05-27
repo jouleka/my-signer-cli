@@ -77,48 +77,54 @@ module Mysigner
               say ''
 
               # Check 4: My Signer Configuration
-              say 'Checking My Signer configuration...', :yellow
               client = nil
               org_data = nil
 
-              config = if Config.env_configured?
-                         Config.from_env
-                       else
-                         Config.new
-                       end
+              say 'Checking My Signer configuration...', :yellow
 
-              if config.from_env? || config.exists?
-                config.load unless config.from_env?
-                say config.from_env? ? '  ✓ Configured via environment variables' : '  ✓ Logged in', :green
-
-                begin
-                  client = Client.new(api_url: config.api_url, api_token: config.api_token,
-                                      user_email: config.user_email)
-                  client.test_connection
-                  say '  ✓ API connection working', :green
-
-                  # Get organization details
-                  if config.current_organization_id
-                    org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
-                    org_data = org_response[:data]
-                  end
-                rescue Mysigner::UnauthorizedError
-                  say '  ✗ Token is invalid or expired', :red
-                  issues << "Token authentication failed - run 'mysigner onboard' to re-authenticate"
-                  client = nil
-                rescue Mysigner::ConnectionError => e
-                  say "  ✗ Cannot connect to API: #{e.message}", :red
-                  issues << 'API connection failed - check your network or API URL'
-                  client = nil
-                rescue StandardError => e
-                  say "  ✗ API error: #{e.message}", :red
-                  issues << 'API connection failed - check your configuration'
-                  client = nil
-                end
+              if local_only?
+                say '  ✓ Local-only mode active — MySigner login not required', :green
               else
-                say '  ✗ Not logged in', :red
-                issues << "Run 'mysigner onboard' to authenticate"
+                config = if Config.env_configured?
+                           Config.from_env
+                         else
+                           Config.new
+                         end
+
+                if config.from_env? || config.exists?
+                  config.load unless config.from_env?
+                  say config.from_env? ? '  ✓ Configured via environment variables' : '  ✓ Logged in', :green
+
+                  begin
+                    client = Client.new(api_url: config.api_url, api_token: config.api_token,
+                                        user_email: config.user_email)
+                    client.test_connection
+                    say '  ✓ API connection working', :green
+
+                    # Get organization details
+                    if config.current_organization_id
+                      org_response = client.get("/api/v1/organizations/#{config.current_organization_id}")
+                      org_data = org_response[:data]
+                    end
+                  rescue Mysigner::UnauthorizedError
+                    say '  ✗ Token is invalid or expired', :red
+                    issues << "Token authentication failed - run 'mysigner onboard' to re-authenticate"
+                    client = nil
+                  rescue Mysigner::ConnectionError => e
+                    say "  ✗ Cannot connect to API: #{e.message}", :red
+                    issues << 'API connection failed - check your network or API URL'
+                    client = nil
+                  rescue StandardError => e
+                    say "  ✗ API error: #{e.message}", :red
+                    issues << 'API connection failed - check your configuration'
+                    client = nil
+                  end
+                else
+                  say '  ✗ Not logged in', :red
+                  issues << "Run 'mysigner onboard' to authenticate"
+                end
               end
+
               say ''
 
               # Check 4a: Signing Identity in Keychain (CRITICAL)
@@ -446,7 +452,11 @@ module Mysigner
                 end
                 say ''
               elsif project_info && (!client || !org_data)
-                say '⚠️  Project detected but cannot check signing (not logged in)', :yellow
+                if local_only?
+                  say '⚠️  Project detected — local-only mode (signing checks limited).', :yellow
+                else
+                  say '⚠️  Project detected but cannot check signing (not logged in)', :yellow
+                end
                 say ''
               end
             end

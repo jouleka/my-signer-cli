@@ -370,6 +370,38 @@ RSpec.describe 'mysigner doctor' do
     end
   end
 
+  describe 'mysigner doctor --local-only' do
+    let(:cli) { Mysigner::CLI.new }
+
+    before do
+      ENV.delete('MYSIGNER_LOCAL_ONLY')
+      allow(cli).to receive(:options).and_return({ local_only: true, platform: 'ios' })
+      allow(cli).to receive(:system).and_return(true)
+      allow(cli).to receive(:`).and_return('')
+      allow(Socket).to receive(:tcp)
+      allow(Mysigner::Build::Detector).to receive(:detect).and_raise(StandardError)
+    end
+    after { ENV.delete('MYSIGNER_LOCAL_ONLY') }
+
+    it 'announces local-only mode instead of demanding login' do
+      output = capture_stdout { cli.doctor }
+      expect(output).to include('Local-only mode active')
+      expect(output).not_to include('Not logged in')
+      expect(output).not_to match(/Run ['`]mysigner onboard['`]/)
+    end
+
+    it 'does not add "Run mysigner onboard" to the issues list' do
+      output = capture_stdout { cli.doctor }
+      expect(output).not_to include("Run 'mysigner onboard' to authenticate")
+    end
+
+    it 'still runs the local environment checks' do
+      output = capture_stdout { cli.doctor }
+      expect(output).to include('Checking Xcode')
+      expect(output).to include('Checking disk space')
+    end
+  end
+
   # Helper method
   def capture_stdout
     old_stdout = $stdout
