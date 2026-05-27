@@ -88,6 +88,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Persistent local-only mode: `mysigner config set local-only true` writes to `~/.mysigner/config.yml`, no flag repetition required ([mysigner-22](https://mysigner.youtrack.cloud/issue/mysigner-22) follow-up).
+- `mysigner config set <key> <value>` — extensible CLI knob for tweaking `~/.mysigner/config.yml`. Settable keys: `local-only`.
+- `Helpers#exit_unless_local_supported!` — every MySigner-only command now exits cleanly with an explanation when local-only is active, instead of the generic "Not logged in" error.
+
+### Changed
+- `doctor` now announces local-only mode and skips MySigner-side checks instead of reporting "Not logged in" as an issue.
+- `status` prints a local-mode credential-discovery summary when local-only is active.
+- `validate` runs the local `Signing::Validator` (same one used by `ship`) and skips the server POST when local-only is active.
+- `--local-only` Thor class_option no longer defaults to `false` — `--no-local-only` now correctly overrides the env var and the new persistent file setting.
+
+### Fixed
+- Precedence bug: with `MYSIGNER_LOCAL_ONLY=1` in the environment, `--no-local-only` did not actually disable local-only mode for that invocation.
+
 ### Planned
 - `--json` flag for scripting output
 - Pretty tables (TTY::Table)

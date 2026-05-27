@@ -338,6 +338,47 @@ MYSIGNER_LOCAL_ONLY=1 mysigner ship testflight
 | CI/CD setup                     | API token in CI secrets                | Pre-populate `~/.mysigner/credentials/` from a secret store |
 | Revocation surface              | Revoke at server (audit log)           | Wipe the Keychain entry / local file             |
 
+### Enabling local-only mode persistently
+
+Set it once per machine — no flag repetition required:
+
+```bash
+mysigner config set local-only true
+```
+
+This writes `local_only: true` to `~/.mysigner/config.yml`. Every subsequent command behaves as if `--local-only` was passed.
+
+**Precedence (most specific wins):**
+
+1. `--local-only` / `--no-local-only` on the command line
+2. `MYSIGNER_LOCAL_ONLY=1` in the environment
+3. `local_only: true` in `~/.mysigner/config.yml`
+4. Default off
+
+To temporarily override the persistent setting:
+
+```bash
+mysigner --no-local-only sync           # one-off server hit
+mysigner config set local-only false    # permanent disable
+```
+
+### What works locally
+
+| Command | Local-only? |
+|---|---|
+| `ship testflight/appstore/internal/alpha/beta/production` | ✅ |
+| `build`, `export`, `upload testflight` | ✅ |
+| `onboard` | ✅ |
+| `signing configure` | ✅ |
+| `doctor`, `status`, `validate` | ✅ (limited — no MySigner-side checks) |
+| `certificate check`, `device detect` | ✅ |
+| `android init/add/build/list` | ✅ |
+| `config`, `config set`, `version`, `help`, `tree`, `logout` | ✅ |
+| `login`, `switch`, `orgs`, `sync` | ❌ MySigner-only |
+| `apps`, `devices`, `certificates`, `profiles`, `bundleid`, `app-group(s)`, `merchant-id(s)`, `keystore`, `gp-credential`, `release`, `tracks`, `track`, `submit`, `device add/update`, `certificate download`, `profile download/delete` | ❌ MySigner-only |
+
+Server-only commands in local-only mode exit 2 with a one-line explanation and the override hint.
+
 ### What local-only does NOT do (v1)
 
 Local-only mode in v1 guards the **API-call-time credentials** (the ASC JWT and the Google OAuth token). The `ship` pipelines still talk to My Signer for orchestration. Be honest with yourself about which of these matter for your threat model:
