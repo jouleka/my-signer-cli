@@ -25,7 +25,7 @@ module Mysigner
     ENV_ORG_ID = 'MYSIGNER_ORG_ID'
     ENV_LOCAL_ONLY = 'MYSIGNER_LOCAL_ONLY'
 
-    attr_accessor :api_url, :user_email, :current_organization_id, :encryption_enabled
+    attr_accessor :api_url, :user_email, :current_organization_id, :encryption_enabled, :local_only
     attr_reader :organizations
 
     def initialize
@@ -34,6 +34,7 @@ module Mysigner
       @current_organization_id = nil
       @organizations = {}
       @encryption_enabled = true # Enable by default for security
+      @local_only = false
       @from_env = false
       load if exists?
     end
@@ -135,9 +136,10 @@ module Mysigner
 
       # mysigner-51 — safe_load_file rejects arbitrary Ruby object
       # instantiation in the YAML (`!ruby/object:Foo` etc.). The config
-      # shape is just String/Integer/Hash (api_url, user_email,
-      # current_organization_id, organizations: {id => {name, token}}),
-      # all in safe_load's default allowed set, so no permitted_classes
+      # shape is just String/Integer/Boolean/Hash (api_url, user_email,
+      # current_organization_id, local_only, organizations: {id => {name,
+      # token}}), all in safe_load's default allowed set, so no
+      # permitted_classes
       # extension is needed. Low risk (the file is 0600 and user-owned)
       # but cheap hardening against a future RCE if config write or read
       # ever moves outside the owner-only assumption.
@@ -147,6 +149,7 @@ module Mysigner
       @user_email = data['user_email']
       @current_organization_id = data['current_organization_id']
       @organizations = data['organizations'] || {}
+      @local_only = data['local_only'] == true
 
       # Auto-detect encryption from config
       @encryption_enabled = encrypted_config?
@@ -164,7 +167,8 @@ module Mysigner
         'api_url' => @api_url,
         'user_email' => @user_email,
         'current_organization_id' => @current_organization_id,
-        'organizations' => @organizations
+        'organizations' => @organizations,
+        'local_only' => @local_only
       }
 
       File.write(CONFIG_FILE, data.to_yaml)

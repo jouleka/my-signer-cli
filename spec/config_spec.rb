@@ -495,6 +495,40 @@ RSpec.describe Mysigner::Config do
     end
   end
 
+  describe '#local_only persistence' do
+    let(:tmp_dir) { Dir.mktmpdir }
+    let(:config_file) { File.join(tmp_dir, 'config.yml') }
+
+    before { stub_const('Mysigner::Config::CONFIG_FILE', config_file) }
+    after  { FileUtils.rm_rf(tmp_dir) }
+
+    it 'defaults to false on a fresh Config' do
+      expect(Mysigner::Config.new.local_only).to be false
+    end
+
+    it 'survives a save/load round-trip' do
+      writer = Mysigner::Config.new
+      writer.api_url = 'https://mysigner.dev'
+      writer.local_only = true
+      writer.save
+
+      reader = Mysigner::Config.new
+      reader.load
+      expect(reader.local_only).to be true
+    end
+
+    it 'reads `false` back as false (not nil)' do
+      writer = Mysigner::Config.new
+      writer.local_only = false
+      writer.api_url = 'https://mysigner.dev'
+      writer.save
+
+      reader = Mysigner::Config.new
+      reader.load
+      expect(reader.local_only).to be false
+    end
+  end
+
   describe 'encryption' do
     let(:config) { Mysigner::Config.new }
     let(:test_token) { 'test_token_12345678' }
