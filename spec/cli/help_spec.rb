@@ -50,6 +50,7 @@ RSpec.describe 'mysigner help' do
       expect(stdout).to include('Build .xcarchive only')
       expect(stdout).to include('Log in with existing API token')
       expect(stdout).to include('Run health check and diagnose')
+      expect(stdout).to include('Show or set CLI configuration')
     end
   end
 
@@ -167,6 +168,7 @@ RSpec.describe 'mysigner help' do
       expect(status.exitstatus).to eq(0)
       expect(stdout).to include('Usage:')
       expect(stdout).to include('mysigner config')
+      expect(stdout).to include('local-only')
     end
   end
 

@@ -22,7 +22,7 @@ RSpec.describe 'mysigner config', type: :cli do
     allow(Mysigner::Config).to receive(:new).and_return(config)
     stub_const('Mysigner::Config::CONFIG_FILE', config_file)
     allow(cli).to receive(:exit) # Stub exit
-    allow(config).to receive(:local_only).and_return(false)
+    allow(config).to receive(:local_only?).and_return(false)
   end
 
   describe 'when not logged in' do

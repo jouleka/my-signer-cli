@@ -1002,7 +1002,7 @@ module Mysigner
             end
           end
 
-          desc 'config [ACTION] [KEY] [VALUE]',
+          desc 'config [ACTION] [ARGS...]',
                'Show or set CLI configuration (e.g. `mysigner config set local-only true`)'
           long_desc <<~DESC
             Without arguments: prints the current configuration.
@@ -1016,8 +1016,8 @@ module Mysigner
             `set` does NOT require a MySigner login — it is the bootstrap path
             for users who want to use local-only mode from a fresh machine.
           DESC
-          def config(action = nil, key = nil, value = nil)
-            return config_set(key, value) if action == 'set'
+          def config(action = nil, *args)
+            return config_set(*args) if action == 'set'
 
             if action && action != 'set'
               error "Unknown config action: #{action}"
@@ -1039,13 +1039,13 @@ module Mysigner
             cfg.display.each do |key, val|
               say "  #{key.to_s.ljust(20)}: #{val}"
             end
-            say "  #{'local-only'.ljust(20)}: #{cfg.local_only}"
+            say "  #{'local-only'.ljust(20)}: #{cfg.local_only?}"
             say ''
             say "Config file: #{Config::CONFIG_FILE}"
           end
 
           no_commands do
-            def config_set(key, value)
+            def config_set(key = nil, value = nil)
               if key.nil? || value.nil?
                 error 'Usage: mysigner config set <key> <value>'
                 say "Settable keys: #{SETTABLE_CONFIG_KEYS.join(', ')}", :yellow
@@ -1072,11 +1072,11 @@ module Mysigner
 
             def parse_bool_or_exit(value, key)
               case value.to_s.downcase
-              when 'true', '1', 'yes', 'on'  then true
-              when 'false', '0', 'no', 'off' then false
+              when 'true', '1', 'yes'  then true
+              when 'false', '0', 'no'  then false
               else
                 error "Invalid boolean for #{key}: #{value}"
-                say 'Use: true / false (also accepts 1/0, yes/no, on/off)', :yellow
+                say 'Use: true / false (also accepts 1/0, yes/no)', :yellow
                 exit 1
               end
             end
