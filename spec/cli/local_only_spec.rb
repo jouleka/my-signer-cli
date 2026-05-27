@@ -346,13 +346,11 @@ RSpec.describe 'mysigner --local-only' do
     end
   end
 
-  # mysigner-22 Phase 7 — Android keystore helper. Same shape as
-  # `resolve_local_asc_creds_or_exit` / `resolve_local_play_creds_or_exit`:
-  # delegate to the resolver, log the winning source on stderr (TTY only),
-  # exit 1 with a clean message on cascade miss / ambiguity. The contract
-  # is that the helper is a SINGLE choke point — every `ship play
-  # --local-only` invocation funnels through it, so a regression here
-  # silently re-introduces the server keystore download the epic killed.
+  # mysigner-22 Task 5 — server-only command guard. When local-only mode is
+  # active, commands that manage MySigner-side resources (apps, orgs, sync,
+  # certificates, etc.) must exit 2 with a clear explanation rather than
+  # falling through to the "Not logged in" path. Exit 2 (not 1) distinguishes
+  # "wrong mode" from "missing credential" so CI scripts can branch on it.
   describe 'Helpers#exit_unless_local_supported!' do
     let(:cli) { Mysigner::CLI.new }
 
@@ -380,6 +378,7 @@ RSpec.describe 'mysigner --local-only' do
 
       output = out.string
       expect(output).to include('`apps` manages MySigner-side resources')
+      expect(output).to include("isn't available in local-only mode.")
       expect(output).to include('mysigner config set local-only false')
       expect(output).to include('mysigner --no-local-only apps')
     ensure
