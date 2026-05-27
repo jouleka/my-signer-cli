@@ -442,5 +442,22 @@ RSpec.describe 'mysigner validate', type: :cli do
 
       expect(output).to include('Local-only validation')
     end
+
+    it 'exits 1 with a clean error message when Signing::Validator raises' do
+      # Resolve the actual error class name from the Validator class
+      error_class = if Mysigner::Signing::Validator.const_defined?(:ValidationError)
+                      Mysigner::Signing::Validator::ValidationError
+                    else
+                      StandardError
+                    end
+      allow(validator).to receive(:validate!).and_raise(error_class, 'no team set')
+      allow(cli).to receive(:exit).and_call_original
+
+      output = capture_stdout do
+        expect { cli.validate }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+      end
+
+      expect(output).to include('no team set')
+    end
   end
 end

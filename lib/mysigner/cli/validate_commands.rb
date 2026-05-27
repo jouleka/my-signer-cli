@@ -141,7 +141,7 @@ module Mysigner
 
           no_commands do
             def validate_local_only
-              say 'Local-only validation', :cyan
+              say '🔍 Local-only validation', :cyan
               say '=' * 50, :cyan
               say ''
               say 'Running local Signing::Validator (server checks skipped in local-only mode).', :yellow
@@ -155,9 +155,15 @@ module Mysigner
                 parser, target_name, options[:configuration] || 'Release',
                 team_id: options[:team], local_only: true
               )
-              validator.validate!
 
-              say 'Local validation passed.', :green
+              begin
+                validator.validate!
+              rescue Mysigner::Signing::Validator::ValidationError => e
+                error e.message
+                exit 1
+              end
+
+              say '✓ Local validation passed.', :green
             end
           end
 
