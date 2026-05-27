@@ -25,7 +25,7 @@ Mysigner::Cleanup::PrivateKeysPurger.new.call
 module Mysigner
   class CLI < Thor
     class_option :verbose, type: :boolean, aliases: '-v', desc: 'Verbose output'
-    class_option :local_only, type: :boolean, default: false,
+    class_option :local_only, type: :boolean,
                               desc: 'Do not send credentials to the server (local-only mode)'
 
     def self.exit_on_failure?

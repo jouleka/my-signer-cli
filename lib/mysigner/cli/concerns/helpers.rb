@@ -146,11 +146,15 @@ module Mysigner
           say "✗ Error: #{message}", :red
         end
 
-        # Local-only mode is active if either the --local-only flag is set
-        # on this invocation OR MYSIGNER_LOCAL_ONLY is truthy in ENV.
-        # Subsequent tickets gate credential-sending behavior on this.
+        # Local-only mode is active when any of, in precedence order:
+        #   1. --local-only / --no-local-only flag on this invocation
+        #   2. MYSIGNER_LOCAL_ONLY env var
+        #   3. `local_only: true` in ~/.mysigner/config.yml
+        # `Config.local_only?` (class method) walks #2 then #3.
         def local_only?
-          options[:local_only] || Mysigner::Config.local_only?
+          return options[:local_only] unless options[:local_only].nil?
+
+          Mysigner::Config.local_only?
         end
 
         # mysigner-22 Phase 5 — resolve ASC creds via the cascade (flag →

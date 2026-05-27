@@ -62,9 +62,12 @@ RSpec.describe 'mysigner --local-only' do
       expect(cli.local_only?).to be true
     end
 
-    it 'returns true when ENV is truthy even with --local-only flag false' do
+    it 'returns true when ENV is truthy and no --local-only flag is passed' do
+      # Flag not passed at all (nil) → fall through to env var.
+      # (When --no-local-only IS passed, options[:local_only] is false and
+      # overrides the env — that contract is covered by the precedence block below.)
       ENV['MYSIGNER_LOCAL_ONLY'] = '1'
-      allow(cli).to receive(:options).and_return({ local_only: false })
+      allow(cli).to receive(:options).and_return({})
       expect(cli.local_only?).to be true
     end
 
@@ -249,6 +252,35 @@ RSpec.describe 'mysigner --local-only' do
       expect(combined).to match(/--local-only/)
       expect(combined).to match(/mysigner --local-only ship appstore/)
       expect(combined).to match(/Local-only mode.*README/i)
+    end
+  end
+
+  describe 'Helpers#local_only? precedence (flag > env > file > false)' do
+    let(:cli) { Mysigner::CLI.new }
+
+    before { ENV.delete('MYSIGNER_LOCAL_ONLY') }
+    after  { ENV.delete('MYSIGNER_LOCAL_ONLY') }
+
+    it 'returns false when nothing is set' do
+      allow(cli).to receive(:options).and_return({})
+      expect(cli.send(:local_only?)).to be false
+    end
+
+    it 'returns true when --local-only flag is passed' do
+      allow(cli).to receive(:options).and_return({ local_only: true })
+      expect(cli.send(:local_only?)).to be true
+    end
+
+    it '--no-local-only flag overrides MYSIGNER_LOCAL_ONLY=1' do
+      ENV['MYSIGNER_LOCAL_ONLY'] = '1'
+      allow(cli).to receive(:options).and_return({ local_only: false })
+      expect(cli.send(:local_only?)).to be false
+    end
+
+    it 'env var alone enables local-only' do
+      ENV['MYSIGNER_LOCAL_ONLY'] = '1'
+      allow(cli).to receive(:options).and_return({})
+      expect(cli.send(:local_only?)).to be true
     end
   end
 
