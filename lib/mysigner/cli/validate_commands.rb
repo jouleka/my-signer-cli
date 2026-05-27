@@ -37,6 +37,8 @@ module Mysigner
           method_option :bundle_id, type: :string, aliases: '-b', desc: 'Bundle identifier (e.g., com.example.app)'
           method_option :type, type: :string, aliases: '-t', desc: 'Signing type: development, appstore, adhoc, inhouse'
           def validate
+            return validate_local_only if local_only?
+
             config = load_config
             client = create_client(config)
 
@@ -134,6 +136,28 @@ module Mysigner
               say '   → Check your network connection', :yellow
               say '   → Verify API token: mysigner status', :yellow
               exit 1
+            end
+          end
+
+          no_commands do
+            def validate_local_only
+              say 'Local-only validation', :cyan
+              say '=' * 50, :cyan
+              say ''
+              say 'Running local Signing::Validator (server checks skipped in local-only mode).', :yellow
+              say ''
+
+              project_info = Mysigner::Build::Detector.detect
+              parser = Mysigner::Build::Parser.new(project_info)
+              target_name = parser.main_target.name
+
+              validator = Mysigner::Signing::Validator.new(
+                parser, target_name, options[:configuration] || 'Release',
+                team_id: options[:team], local_only: true
+              )
+              validator.validate!
+
+              say 'Local validation passed.', :green
             end
           end
 

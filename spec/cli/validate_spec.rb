@@ -416,4 +416,31 @@ RSpec.describe 'mysigner validate', type: :cli do
       expect(output).to include('Not logged in')
     end
   end
+
+  describe 'mysigner validate --local-only' do
+    let(:cli) { Mysigner::CLI.new }
+    let(:project_info) { { path: '/tmp/fake.xcodeproj', framework: :native } }
+    let(:parser) { instance_double(Mysigner::Build::Parser) }
+    let(:validator) { instance_double(Mysigner::Signing::Validator) }
+
+    before do
+      ENV.delete('MYSIGNER_LOCAL_ONLY')
+      allow(cli).to receive(:options).and_return({ local_only: true })
+      allow(Mysigner::Build::Detector).to receive(:detect).and_return(project_info)
+      allow(Mysigner::Build::Parser).to receive(:new).with(project_info).and_return(parser)
+      allow(parser).to receive(:main_target).and_return(double(name: 'App'))
+      allow(Mysigner::Signing::Validator).to receive(:new).and_return(validator)
+      allow(validator).to receive(:validate!)
+    end
+    after { ENV.delete('MYSIGNER_LOCAL_ONLY') }
+
+    it 'uses the local Signing::Validator and does not POST to the server' do
+      expect(validator).to receive(:validate!)
+      expect(cli).not_to receive(:create_client)
+
+      output = capture_stdout { cli.validate }
+
+      expect(output).to include('Local-only validation')
+    end
+  end
 end
