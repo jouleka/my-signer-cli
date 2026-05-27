@@ -50,6 +50,7 @@ module Mysigner
       config = allocate
       config.instance_variable_set(:@encryption_enabled, false)
       config.instance_variable_set(:@from_env, true)
+      config.instance_variable_set(:@local_only, false)
 
       org_id = ENV.fetch(ENV_ORG_ID, nil)
       token = ENV.fetch(ENV_API_TOKEN, nil)
@@ -68,11 +69,22 @@ module Mysigner
       @from_env
     end
 
-    # Local-only mode: when true, credentials never leave the machine.
-    # Config-level check sees only ENV — Thor's --local-only flag is layered
-    # on top in the CLI Helpers concern (which can read `options`).
+    # Local-only mode at the Config level: cascade ENV → file. The CLI
+    # Helpers concern layers --local-only / --no-local-only on top.
     def self.local_only?
-      truthy_env?(ENV_LOCAL_ONLY)
+      truthy_env?(ENV_LOCAL_ONLY) || local_only_from_file?
+    end
+
+    # Lightweight check that reads only ~/.mysigner/config.yml's
+    # `local_only:` key without invoking #load (which decrypts tokens
+    # via the Keychain). A user with no MySigner account still needs
+    # to flip this setting, so we never raise on a missing/corrupt
+    # or absent file — we just return false.
+    def self.local_only_from_file?
+      data = YAML.safe_load_file(CONFIG_FILE)
+      data.is_a?(Hash) && data['local_only'] == true
+    rescue StandardError
+      false
     end
 
     def local_only?
@@ -184,6 +196,7 @@ module Mysigner
       @user_email = nil
       @current_organization_id = nil
       @organizations = {}
+      @local_only = false
 
       File.delete(CONFIG_FILE) if exists?
 

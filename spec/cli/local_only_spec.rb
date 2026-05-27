@@ -11,7 +11,7 @@ require 'tmpdir'
 
 # mysigner-38 — these specs encode the contract every later sub-ticket of
 # Epic mysigner-22 will consume:
-#   * Config.local_only? reads ENV strictly (Thor flag is layered on top).
+#   * Config.local_only? cascades ENV → ~/.mysigner/config.yml's local_only: key.
 #   * Helpers#local_only? priority-chains the flag (when non-nil) → Config.local_only?
 #     (env then file), so --no-local-only correctly overrides the env / file setting.
 #   * Banner is opt-in user-facing UX: TTY-only, exactly once per process.
@@ -282,6 +282,67 @@ RSpec.describe 'mysigner --local-only' do
       ENV['MYSIGNER_LOCAL_ONLY'] = '1'
       allow(cli).to receive(:options).and_return({})
       expect(cli.local_only?).to be true
+    end
+  end
+
+  describe 'Mysigner::Config.local_only_from_file?' do
+    let(:tmp_dir) { Dir.mktmpdir }
+    let(:config_file) { File.join(tmp_dir, 'config.yml') }
+
+    before { stub_const('Mysigner::Config::CONFIG_FILE', config_file) }
+    after  { FileUtils.rm_rf(tmp_dir) }
+
+    it 'returns false when the file does not exist' do
+      expect(Mysigner::Config.local_only_from_file?).to be false
+    end
+
+    it 'returns true when YAML has local_only: true' do
+      File.write(config_file, { 'local_only' => true }.to_yaml)
+      expect(Mysigner::Config.local_only_from_file?).to be true
+    end
+
+    it 'returns false when YAML has local_only: false' do
+      File.write(config_file, { 'local_only' => false }.to_yaml)
+      expect(Mysigner::Config.local_only_from_file?).to be false
+    end
+
+    it 'returns false when YAML omits the key' do
+      File.write(config_file, { 'api_url' => 'x' }.to_yaml)
+      expect(Mysigner::Config.local_only_from_file?).to be false
+    end
+
+    it 'returns false on malformed YAML (no raise)' do
+      File.write(config_file, 'not: valid: yaml: at: all')
+      expect { Mysigner::Config.local_only_from_file? }.not_to raise_error
+      expect(Mysigner::Config.local_only_from_file?).to be false
+    end
+  end
+
+  describe 'Mysigner::Config.local_only? cascade (env → file)' do
+    let(:tmp_dir) { Dir.mktmpdir }
+    let(:config_file) { File.join(tmp_dir, 'config.yml') }
+
+    before do
+      ENV.delete('MYSIGNER_LOCAL_ONLY')
+      stub_const('Mysigner::Config::CONFIG_FILE', config_file)
+    end
+    after do
+      ENV.delete('MYSIGNER_LOCAL_ONLY')
+      FileUtils.rm_rf(tmp_dir)
+    end
+
+    it 'returns false when neither env nor file is set' do
+      expect(Mysigner::Config.local_only?).to be false
+    end
+
+    it 'env true alone enables it' do
+      ENV['MYSIGNER_LOCAL_ONLY'] = '1'
+      expect(Mysigner::Config.local_only?).to be true
+    end
+
+    it 'file true alone enables it' do
+      File.write(config_file, { 'local_only' => true }.to_yaml)
+      expect(Mysigner::Config.local_only?).to be true
     end
   end
 

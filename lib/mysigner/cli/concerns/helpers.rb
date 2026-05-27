@@ -139,6 +139,7 @@ module Mysigner
           config.instance_variable_set(:@organizations, {})
           config.instance_variable_set(:@encryption_enabled, false)
           config.instance_variable_set(:@from_env, false)
+          config.instance_variable_set(:@local_only, true)
           config
         end
 
