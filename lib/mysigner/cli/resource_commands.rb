@@ -12,6 +12,8 @@ module Mysigner
           method_option :page, type: :numeric, default: 1, desc: 'Page number'
           method_option :per_page, type: :numeric, default: 50, desc: 'Devices per page'
           def devices
+            exit_unless_local_supported!('devices')
+
             config = load_config
             client = create_client(config)
 
@@ -128,6 +130,7 @@ module Mysigner
             when 'detect'
               detect_connected_devices(config, client)
             when 'add'
+              exit_unless_local_supported!('device add')
               if args.length < 2
                 error 'Usage: mysigner device add NAME UDID [--platform IOS]'
                 say ''
@@ -202,6 +205,7 @@ module Mysigner
                 exit 1
               end
             when 'update'
+              exit_unless_local_supported!('device update')
               if args.length < 2
                 error 'Usage: mysigner device update ID NEW_NAME'
                 say ''
@@ -457,6 +461,8 @@ module Mysigner
           method_option :page, type: :numeric, default: 1, desc: 'Page number'
           method_option :per_page, type: :numeric, default: 50, desc: 'Profiles per page'
           def profiles
+            exit_unless_local_supported!('profiles')
+
             config = load_config
             client = create_client(config)
 
@@ -589,6 +595,7 @@ module Mysigner
 
             case action
             when 'download'
+              exit_unless_local_supported!('profile download')
               if args.empty?
                 error 'Usage: mysigner profile download ID [--output path.mobileprovision]'
                 say ''
@@ -703,6 +710,7 @@ module Mysigner
                 exit 1
               end
             when 'delete'
+              exit_unless_local_supported!('profile delete')
               if args.empty?
                 error 'Usage: mysigner profile delete ID'
                 say ''
@@ -760,6 +768,8 @@ module Mysigner
           method_option :page, type: :numeric, default: 1, desc: 'Page number'
           method_option :per_page, type: :numeric, default: 50, desc: 'Certificates per page'
           def certificates
+            exit_unless_local_supported!('certificates')
+
             config = load_config
             client = create_client(config)
 
@@ -934,6 +944,7 @@ module Mysigner
               end
 
             when 'download'
+              exit_unless_local_supported!('certificate download')
               if args.empty?
                 error 'Usage: mysigner certificate download ID [--output path.cer]'
                 exit 1
@@ -1104,6 +1115,8 @@ module Mysigner
           method_option :app_id, type: :numeric, desc: 'Associate with Android app ID'
           method_option :output, type: :string, aliases: '-o', desc: 'Output path for download'
           def keystore(action, *args)
+            exit_unless_local_supported!("keystore #{action}")
+
             config = load_config
             client = create_client(config)
 
@@ -2217,6 +2230,8 @@ module Mysigner
               • After registering, run 'mysigner sync ios' to update local cache
           DESC
           def bundleid(action, *args)
+            exit_unless_local_supported!("bundleid #{action}")
+
             config = load_config
             client = create_client(config)
 
@@ -2419,6 +2434,8 @@ module Mysigner
           method_option :page, type: :numeric, default: 1, desc: 'Page number'
           method_option :per_page, type: :numeric, default: 50, desc: 'Apps per page'
           def apps
+            exit_unless_local_supported!('apps')
+
             config = load_config
             client = create_client(config)
 
@@ -2521,6 +2538,8 @@ module Mysigner
           method_option :page, type: :numeric, default: 1, desc: 'Page number'
           method_option :per_page, type: :numeric, default: 50, desc: 'Items per page'
           def merchant_ids
+            exit_unless_local_supported!('merchant-ids')
+
             config = load_config
             client = create_client(config)
 
@@ -2584,6 +2603,8 @@ module Mysigner
           DESC
           method_option :name, type: :string, aliases: '-n', desc: 'Friendly name for the Merchant ID'
           def merchant_id(action, identifier = nil)
+            exit_unless_local_supported!("merchant-id #{action}")
+
             config = load_config
             client = create_client(config)
 
@@ -2681,6 +2702,8 @@ module Mysigner
           desc 'tracks PACKAGE_NAME', 'List Google Play tracks for an Android app'
           method_option :sort, type: :boolean, desc: 'Sort by track name'
           def tracks(package_name = nil)
+            exit_unless_local_supported!('tracks')
+
             config = load_config
             client = create_client(config)
 
@@ -2754,6 +2777,8 @@ module Mysigner
 
           desc 'track PACKAGE_NAME TRACK_NAME', 'Show details for a specific Google Play track'
           def track(package_name = nil, track_name = nil)
+            exit_unless_local_supported!('track')
+
             config = load_config
             client = create_client(config)
 
@@ -2851,6 +2876,8 @@ module Mysigner
           method_option :page, type: :numeric, default: 1, desc: 'Page number'
           method_option :per_page, type: :numeric, default: 50, desc: 'Items per page'
           def app_groups
+            exit_unless_local_supported!('app-groups')
+
             config = load_config
             client = create_client(config)
 
@@ -2920,6 +2947,8 @@ module Mysigner
           DESC
           method_option :name, type: :string, aliases: '-n', desc: 'Friendly name for the App Group'
           def app_group(action, identifier = nil)
+            exit_unless_local_supported!("app-group #{action}")
+
             config = load_config
             client = create_client(config)
 
@@ -3055,6 +3084,8 @@ module Mysigner
               mysigner gp-credential delete 3
           DESC
           def gp_credential(action, *args)
+            exit_unless_local_supported!("gp-credential #{action}")
+
             config = load_config
             client = create_client(config)
 
@@ -3274,6 +3305,8 @@ module Mysigner
           method_option :release_type, type: :string, desc: 'Release type: manual, after_approval, scheduled'
           method_option :scheduled_date, type: :string, desc: 'Scheduled release date (ISO 8601)'
           def release(action, *args)
+            exit_unless_local_supported!("release #{action}")
+
             config = load_config
             client = create_client(config)
 

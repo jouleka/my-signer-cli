@@ -34,6 +34,8 @@ module Mysigner
             grant access to the organization it was created in.
           DESC
           def login
+            exit_unless_local_supported!('login')
+
             # Check if already logged in
             config = Config.new
             if config.exists?
@@ -754,6 +756,8 @@ module Mysigner
 
           desc 'orgs', "List all organizations you're a member of"
           def orgs
+            exit_unless_local_supported!('orgs')
+
             config = load_config
             client = create_client(config)
 
@@ -827,6 +831,8 @@ module Mysigner
             from different user accounts will be rejected.
           DESC
           def switch(target_org_id = nil)
+            exit_unless_local_supported!('switch')
+
             config = load_config
             client = create_client(config)
 

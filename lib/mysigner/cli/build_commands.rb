@@ -2222,6 +2222,8 @@ module Mysigner
           method_option :auto_submit, type: :boolean,
                                       desc: 'Submit for review. Defaults to dashboard CLI Defaults, else true. Use --no-auto-submit to skip.'
           def submit(track = nil)
+            exit_unless_local_supported!('submit')
+
             config = load_config
             client = create_client(config)
 

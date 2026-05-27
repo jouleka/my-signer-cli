@@ -903,6 +903,8 @@ module Mysigner
           DESC
           option :force, type: :boolean, aliases: '-f', desc: 'Force sync even if recently synced'
           def sync(platform = 'ios')
+            exit_unless_local_supported!('sync')
+
             config = load_config
             client = create_client(config)
 
