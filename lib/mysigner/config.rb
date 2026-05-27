@@ -83,12 +83,16 @@ module Mysigner
     def self.local_only_from_file?
       data = YAML.safe_load_file(CONFIG_FILE)
       data.is_a?(Hash) && data['local_only'] == true
-    rescue StandardError
+    rescue Errno::ENOENT, Psych::SyntaxError
       false
     end
 
+    # Instance-level predicate. Merges two surfaces:
+    #   - @local_only: set to true by Helpers#blank_local_only_config so a
+    #     sentinel config always answers true without touching ENV or disk.
+    #   - self.class.local_only?: the normal ENV → file cascade.
     def local_only?
-      self.class.local_only?
+      @local_only || self.class.local_only?
     end
 
     # Get API token for current organization (or specific org)

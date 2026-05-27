@@ -139,6 +139,9 @@ module Mysigner
           config.instance_variable_set(:@organizations, {})
           config.instance_variable_set(:@encryption_enabled, false)
           config.instance_variable_set(:@from_env, false)
+          # The whole point of this sentinel is to BE a local-only config —
+          # set @local_only = true so `config.local_only?` (and any caller
+          # reading `config.local_only`) agrees.
           config.instance_variable_set(:@local_only, true)
           config
         end
