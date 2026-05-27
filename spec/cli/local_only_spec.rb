@@ -12,7 +12,8 @@ require 'tmpdir'
 # mysigner-38 — these specs encode the contract every later sub-ticket of
 # Epic mysigner-22 will consume:
 #   * Config.local_only? reads ENV strictly (Thor flag is layered on top).
-#   * Helpers#local_only? is OR(flag, ENV) so either path enables the mode.
+#   * Helpers#local_only? priority-chains the flag (when non-nil) → Config.local_only?
+#     (env then file), so --no-local-only correctly overrides the env / file setting.
 #   * Banner is opt-in user-facing UX: TTY-only, exactly once per process.
 # A regression in any of these silently breaks the local-only mode the
 # whole epic depends on, so the assertions are intentionally tight.
@@ -263,24 +264,24 @@ RSpec.describe 'mysigner --local-only' do
 
     it 'returns false when nothing is set' do
       allow(cli).to receive(:options).and_return({})
-      expect(cli.send(:local_only?)).to be false
+      expect(cli.local_only?).to be false
     end
 
     it 'returns true when --local-only flag is passed' do
       allow(cli).to receive(:options).and_return({ local_only: true })
-      expect(cli.send(:local_only?)).to be true
+      expect(cli.local_only?).to be true
     end
 
     it '--no-local-only flag overrides MYSIGNER_LOCAL_ONLY=1' do
       ENV['MYSIGNER_LOCAL_ONLY'] = '1'
       allow(cli).to receive(:options).and_return({ local_only: false })
-      expect(cli.send(:local_only?)).to be false
+      expect(cli.local_only?).to be false
     end
 
     it 'env var alone enables local-only' do
       ENV['MYSIGNER_LOCAL_ONLY'] = '1'
       allow(cli).to receive(:options).and_return({})
-      expect(cli.send(:local_only?)).to be true
+      expect(cli.local_only?).to be true
     end
   end
 
