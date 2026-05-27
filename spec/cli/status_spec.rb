@@ -2,6 +2,7 @@
 
 require 'spec_helper'
 require 'stringio'
+require 'mysigner/credential_resolver'
 
 RSpec.describe 'mysigner status', type: :cli do
   let(:cli) { Mysigner::CLI.new }
@@ -196,6 +197,31 @@ RSpec.describe 'mysigner status', type: :cli do
       help_output = capture_stdout { Mysigner::CLI.start(%w[help status]) }
 
       expect(help_output).to include('Check connection, credentials, and App Store Connect setup')
+    end
+  end
+
+  describe 'in local-only mode' do
+    let(:cli) { Mysigner::CLI.new }
+
+    before do
+      ENV.delete('MYSIGNER_LOCAL_ONLY')
+      allow(cli).to receive(:options).and_return({ local_only: true })
+    end
+    after { ENV.delete('MYSIGNER_LOCAL_ONLY') }
+
+    it 'prints the local-mode summary and does not require MySigner login' do
+      allow(Mysigner::CredentialResolver).to receive(:resolve_asc)
+        .and_raise(Mysigner::CredentialResolver::CredentialNotFoundError, 'none')
+      allow(Mysigner::CredentialResolver).to receive(:resolve_play)
+        .and_raise(Mysigner::CredentialResolver::CredentialNotFoundError, 'none')
+      allow(Mysigner::CredentialResolver).to receive(:resolve_android_keystore)
+        .and_raise(Mysigner::CredentialResolver::CredentialNotFoundError, 'none')
+
+      output = capture_stdout { cli.status }
+
+      expect(output).to include('Local-only mode: ENABLED')
+      expect(output).to match(/Source:.*(--local-only flag|MYSIGNER_LOCAL_ONLY|config file)/)
+      expect(output).not_to include('Not logged in')
     end
   end
 end

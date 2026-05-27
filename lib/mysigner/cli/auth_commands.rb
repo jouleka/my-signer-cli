@@ -678,6 +678,8 @@ module Mysigner
 
           desc 'status', 'Check connection, credentials, and App Store Connect setup'
           def status
+            return status_local_only if local_only?
+
             config = load_config
 
             say '📊 My Signer Status', :cyan
@@ -1045,6 +1047,42 @@ module Mysigner
           end
 
           no_commands do
+            def status_local_only
+              require 'mysigner/credential_resolver'
+
+              source = if options[:local_only] == true
+                         '--local-only flag'
+                       elsif ENV['MYSIGNER_LOCAL_ONLY'] && !ENV['MYSIGNER_LOCAL_ONLY'].empty?
+                         'MYSIGNER_LOCAL_ONLY env var'
+                       else
+                         'config file (~/.mysigner/config.yml)'
+                       end
+
+              say '📡 My Signer Status', :cyan
+              say '=' * 50, :cyan
+              say ''
+              say 'Local-only mode: ENABLED', :green
+              say "  Source: #{source}"
+              say ''
+              say 'Credential discovery:'
+              say "  ASC keys:        #{count_or_dash { Mysigner::CredentialResolver.resolve_asc(options: options.to_h) }}"
+              say "  Play SA-JSON:    #{count_or_dash { Mysigner::CredentialResolver.resolve_play(options: options.to_h) }}"
+              say "  Android keystore: #{count_or_dash { Mysigner::CredentialResolver.resolve_android_keystore(options: options.to_h) }}"
+              say ''
+              say "Config file: #{Mysigner::Config::CONFIG_FILE}"
+            end
+
+            def count_or_dash
+              yield
+              '1 (discovered)'
+            rescue Mysigner::CredentialResolver::CredentialNotFoundError
+              '0'
+            rescue Mysigner::CredentialResolver::AmbiguousCredentialsError
+              '2+ (ambiguous — pass via flag)'
+            rescue StandardError
+              '?'
+            end
+
             def config_set(key = nil, value = nil)
               if key.nil? || value.nil?
                 error 'Usage: mysigner config set <key> <value>'
