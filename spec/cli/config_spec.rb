@@ -22,6 +22,7 @@ RSpec.describe 'mysigner config', type: :cli do
     allow(Mysigner::Config).to receive(:new).and_return(config)
     stub_const('Mysigner::Config::CONFIG_FILE', config_file)
     allow(cli).to receive(:exit) # Stub exit
+    allow(config).to receive(:local_only).and_return(false)
   end
 
   describe 'when not logged in' do
@@ -246,7 +247,8 @@ RSpec.describe 'mysigner config', type: :cli do
   describe 'help text' do
     it 'has description' do
       help_output = capture_stdout { Mysigner::CLI.start(%w[help config]) }
-      expect(help_output).to include('Show current CLI configuration')
+      expect(help_output).to include('config')
+      expect(help_output).to include('local-only')
     end
   end
 
@@ -258,6 +260,57 @@ RSpec.describe 'mysigner config', type: :cli do
 
       output = capture_stdout { Mysigner::CLI.start(['config']) }
       expect(output).to include('No configuration found')
+    end
+  end
+
+  describe 'mysigner config set' do
+    let(:tmp_dir) { Dir.mktmpdir }
+    let(:config_file) { File.join(tmp_dir, 'config.yml') }
+
+    before do
+      stub_const('Mysigner::Config::CONFIG_FILE', config_file)
+      # Allow the real Config — these tests exercise the file write.
+      allow(Mysigner::Config).to receive(:new).and_call_original
+    end
+    after { FileUtils.rm_rf(tmp_dir) }
+
+    it 'writes local_only: true to a fresh config file' do
+      output = capture_stdout do
+        Mysigner::CLI.start(%w[config set local-only true])
+      end
+
+      data = YAML.safe_load_file(config_file)
+      expect(data['local_only']).to be true
+      expect(output).to include('local-only: true')
+    end
+
+    it 'writes local_only: false when value is "false"' do
+      File.write(config_file, { 'local_only' => true }.to_yaml)
+
+      Mysigner::CLI.start(%w[config set local-only false])
+
+      data = YAML.safe_load_file(config_file)
+      expect(data['local_only']).to be false
+    end
+
+    it 'rejects unknown setting keys with a non-zero exit' do
+      expect do
+        Mysigner::CLI.start(%w[config set bogus-key true])
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+    end
+
+    it 'rejects non-boolean values for local-only' do
+      expect do
+        Mysigner::CLI.start(%w[config set local-only maybe])
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+    end
+
+    it 'works without an existing MySigner login (bootstraps the file)' do
+      expect(File.exist?(config_file)).to be false
+
+      Mysigner::CLI.start(%w[config set local-only true])
+
+      expect(File.exist?(config_file)).to be true
     end
   end
 end

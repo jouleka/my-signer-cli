@@ -3,6 +3,8 @@
 module Mysigner
   class CLI < Thor
     module AuthCommands
+      SETTABLE_CONFIG_KEYS = %w[local-only].freeze
+
       def self.included(base)
         base.class_eval do
           desc 'version', 'Show version information'
@@ -1000,27 +1002,85 @@ module Mysigner
             end
           end
 
-          desc 'config', 'Show current CLI configuration (API URL, tokens, org)'
-          def config
-            config = Config.new
+          desc 'config [ACTION] [KEY] [VALUE]',
+               'Show or set CLI configuration (e.g. `mysigner config set local-only true`)'
+          long_desc <<~DESC
+            Without arguments: prints the current configuration.
 
-            unless config.exists?
+            Set a value:
+              mysigner config set local-only true
+              mysigner config set local-only false
+
+            Settable keys: local-only
+
+            `set` does NOT require a MySigner login — it is the bootstrap path
+            for users who want to use local-only mode from a fresh machine.
+          DESC
+          def config(action = nil, key = nil, value = nil)
+            return config_set(key, value) if action == 'set'
+
+            if action && action != 'set'
+              error "Unknown config action: #{action}"
+              say 'Did you mean: `mysigner config set <key> <value>`?', :yellow
+              exit 1
+            end
+
+            cfg = Config.new
+
+            unless cfg.exists?
               error "No configuration found. Run 'mysigner login' first."
               exit 1
             end
 
-            config.load
+            cfg.load
 
             say '⚙️  Configuration', :cyan
             say ''
-            config.display.each do |key, value|
-              say "  #{key.to_s.ljust(20)}: #{value}"
+            cfg.display.each do |key, val|
+              say "  #{key.to_s.ljust(20)}: #{val}"
             end
+            say "  #{'local-only'.ljust(20)}: #{cfg.local_only}"
             say ''
             say "Config file: #{Config::CONFIG_FILE}"
           end
 
           no_commands do
+            def config_set(key, value)
+              if key.nil? || value.nil?
+                error 'Usage: mysigner config set <key> <value>'
+                say "Settable keys: #{SETTABLE_CONFIG_KEYS.join(', ')}", :yellow
+                exit 1
+              end
+
+              unless SETTABLE_CONFIG_KEYS.include?(key)
+                error "Unknown config key: #{key}"
+                say "Settable keys: #{SETTABLE_CONFIG_KEYS.join(', ')}", :yellow
+                exit 1
+              end
+
+              case key
+              when 'local-only'
+                bool = parse_bool_or_exit(value, key)
+                cfg = Config.new
+                cfg.load if cfg.exists?
+                cfg.local_only = bool
+                cfg.save
+                say "✓ Saved #{key}: #{bool}", :green
+                say "  #{key}: #{bool}"
+              end
+            end
+
+            def parse_bool_or_exit(value, key)
+              case value.to_s.downcase
+              when 'true', '1', 'yes', 'on'  then true
+              when 'false', '0', 'no', 'off' then false
+              else
+                error "Invalid boolean for #{key}: #{value}"
+                say 'Use: true / false (also accepts 1/0, yes/no, on/off)', :yellow
+                exit 1
+              end
+            end
+
             # Helper method for yes/no prompts with Enter defaulting to yes.
             # Defaults to NO when stdin is not a TTY so automation (CI, pipes)
             # never silently opts-in to mutating operations.
