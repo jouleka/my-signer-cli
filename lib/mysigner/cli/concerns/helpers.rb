@@ -230,6 +230,22 @@ module Mysigner
                '(other MySigner APIs may still be used; see docs).'
         end
 
+        # Server-only command guard. SERVER commands (apps, orgs, sync,
+        # certificates, etc.) hit MySigner-side resources and have no
+        # local equivalent. Print a clean explanation and exit 2 when
+        # local-only mode is active, instead of letting load_config bail
+        # with the generic "Not logged in" path.
+        def exit_unless_local_supported!(command_name)
+          return unless local_only?
+
+          say "✗ `#{command_name}` manages MySigner-side resources and " \
+              "isn't available in local-only mode.", :red
+          say ''
+          say 'Disable persistently:  mysigner config set local-only false', :yellow
+          say "Override for one call: mysigner --no-local-only #{command_name}", :yellow
+          exit 2
+        end
+
         class << self
           def banner_emitted?
             @local_only_banner_emitted == true

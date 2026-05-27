@@ -353,6 +353,48 @@ RSpec.describe 'mysigner --local-only' do
   # is that the helper is a SINGLE choke point — every `ship play
   # --local-only` invocation funnels through it, so a regression here
   # silently re-introduces the server keystore download the epic killed.
+  describe 'Helpers#exit_unless_local_supported!' do
+    let(:cli) { Mysigner::CLI.new }
+
+    before do
+      ENV.delete('MYSIGNER_LOCAL_ONLY')
+      allow(cli).to receive(:options).and_return({})
+    end
+    after { ENV.delete('MYSIGNER_LOCAL_ONLY') }
+
+    it 'is a no-op when local-only is OFF' do
+      expect do
+        cli.send(:exit_unless_local_supported!, 'apps')
+      end.not_to raise_error
+    end
+
+    it 'exits 2 with explanation when local-only is ON (via flag)' do
+      allow(cli).to receive(:options).and_return({ local_only: true })
+
+      out = StringIO.new
+      $stdout = out
+
+      expect do
+        cli.send(:exit_unless_local_supported!, 'apps')
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(2) }
+
+      output = out.string
+      expect(output).to include('`apps` manages MySigner-side resources')
+      expect(output).to include('mysigner config set local-only false')
+      expect(output).to include('mysigner --no-local-only apps')
+    ensure
+      $stdout = STDOUT
+    end
+
+    it 'exits 2 when local-only is ON (via env)' do
+      ENV['MYSIGNER_LOCAL_ONLY'] = '1'
+
+      expect do
+        cli.send(:exit_unless_local_supported!, 'sync')
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(2) }
+    end
+  end
+
   describe 'Helpers#resolve_local_android_keystore_or_exit' do
     let(:cli) { Mysigner::CLI.new }
 
