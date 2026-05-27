@@ -222,6 +222,10 @@ RSpec.describe 'mysigner status', type: :cli do
       expect(output).to include('Local-only mode: ENABLED')
       expect(output).to match(/Source:.*(--local-only flag|MYSIGNER_LOCAL_ONLY|config file)/)
       expect(output).not_to include('Not logged in')
+      expect(output).to include('Credential discovery:')
+      expect(output).to include('ASC keys:')
+      expect(output).to include('Play SA-JSON:')
+      expect(output).to include('Android keystore:')
     end
   end
 end

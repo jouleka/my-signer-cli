@@ -1079,7 +1079,8 @@ module Mysigner
               '0'
             rescue Mysigner::CredentialResolver::AmbiguousCredentialsError
               '2+ (ambiguous — pass via flag)'
-            rescue StandardError
+            rescue StandardError => e
+              warn "[mysigner] Unexpected error probing credentials: #{e.class}: #{e.message}"
               '?'
             end
 
