@@ -40,3 +40,7 @@ service-account*.json
 /.ruby-lsp/
 *.swp
 *~
+
+# Local design docs / plans (superpowers skill output — kept local-only)
+/docs/superpowers/
+CLAUDE.md
