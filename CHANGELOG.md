@@ -88,6 +88,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+- `--json` flag for scripting output
+- Pretty tables (TTY::Table)
+- Progress spinners (TTY::Spinner)
+- CI/CD templates for GitHub Actions and GitLab CI
+- Phased release support for App Store
+
+---
+
+## [0.3.0] - 2026-05-28
+
 ### Added
 - Persistent local-only mode: `mysigner config set local-only true` writes to `~/.mysigner/config.yml`, no flag repetition required ([mysigner-22](https://mysigner.youtrack.cloud/issue/mysigner-22) follow-up).
 - `mysigner config set <key> <value>` — extensible CLI knob for tweaking `~/.mysigner/config.yml`. Settable keys: `local-only`.
@@ -101,13 +112,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Precedence bug: with `MYSIGNER_LOCAL_ONLY=1` in the environment, `--no-local-only` did not actually disable local-only mode for that invocation.
-
-### Planned
-- `--json` flag for scripting output
-- Pretty tables (TTY::Table)
-- Progress spinners (TTY::Spinner)
-- CI/CD templates for GitHub Actions and GitLab CI
-- Phased release support for App Store
 
 ---
 
