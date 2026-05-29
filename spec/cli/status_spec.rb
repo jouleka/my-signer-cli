@@ -41,6 +41,11 @@ RSpec.describe 'mysigner status', type: :cli do
   before do
     allow(Mysigner::Config).to receive(:new).and_return(config)
     allow(Mysigner::Client).to receive(:new).and_return(client)
+    # 0.3.1 — keep these specs hermetic against the dev machine's own
+    # ~/.mysigner/config.yml. Without this, a developer with
+    # `local_only: true` set persistently would see every status example
+    # take the local-only branch, breaking the logged-in path tests.
+    allow(Mysigner::Config).to receive(:local_only_from_file?).and_return(false)
   end
 
   describe 'when not logged in' do
@@ -226,6 +231,28 @@ RSpec.describe 'mysigner status', type: :cli do
       expect(output).to include('ASC keys:')
       expect(output).to include('Play SA-JSON:')
       expect(output).to include('Android keystore:')
+    end
+
+    # 0.3.1 — pre-fix, status used `ENV[…] && !empty?` for source
+    # attribution, so MYSIGNER_LOCAL_ONLY=0 (falsy per Config.truthy_env?)
+    # plus file=true would incorrectly report "Source: env var" instead of
+    # "Source: config file". Now the env-source check uses the same
+    # truthy parser the cascade uses.
+    it 'attributes the source to the config file when env var is set to a falsy value' do
+      ENV['MYSIGNER_LOCAL_ONLY'] = '0'
+      allow(cli).to receive(:options).and_return({}) # no --local-only flag
+      allow(Mysigner::Config).to receive(:local_only_from_file?).and_return(true)
+      allow(Mysigner::CredentialResolver).to receive(:resolve_asc)
+        .and_raise(Mysigner::CredentialResolver::CredentialNotFoundError, 'none')
+      allow(Mysigner::CredentialResolver).to receive(:resolve_play)
+        .and_raise(Mysigner::CredentialResolver::CredentialNotFoundError, 'none')
+      allow(Mysigner::CredentialResolver).to receive(:resolve_android_keystore)
+        .and_raise(Mysigner::CredentialResolver::CredentialNotFoundError, 'none')
+
+      output = capture_stdout { cli.status }
+
+      expect(output).to include('Source: config file')
+      expect(output).not_to include('Source: MYSIGNER_LOCAL_ONLY env var')
     end
   end
 end

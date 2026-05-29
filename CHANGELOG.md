@@ -97,6 +97,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.1] - 2026-05-29
+
+### Fixed
+- `mysigner android add PACKAGE_NAME` crashed with `NoMethodError: undefined method 'post' for nil` in local-only mode. The `android` dispatcher now gates `init` / `add` / `list` (which manage MySigner-registered records) — only `android build` is purely local. `android list`'s banner now reads "android list" instead of "apps" (it had been showing the underlying apps-command name because list is implemented as an alias).
+- `mysigner status` reported `Source: MYSIGNER_LOCAL_ONLY env var` when `MYSIGNER_LOCAL_ONLY=0` was set in the environment AND the config file had `local_only: true`. The env value "0" is falsy per the cascade's truthy parser, so the source was actually the file. Status now uses the new `Mysigner::Config.local_only_from_env?` predicate (mirroring `local_only_from_file?`) for accurate attribution.
+- README's local-only audit table classified `android init/add/build/list` as ✅ LOCAL across the board. Corrected: only `android build` is local; the other three are MySigner-only.
+
+### Added
+- `Mysigner::Config.local_only_from_env?` — public, mirrors `local_only_from_file?`. Symmetric source predicates so `mysigner status` can attribute the active source using the same truthy parser the cascade uses.
+
+---
+
 ## [0.3.0] - 2026-05-28
 
 ### Added

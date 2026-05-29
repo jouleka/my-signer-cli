@@ -20,6 +20,12 @@ require 'tmpdir'
 RSpec.describe 'mysigner --local-only' do
   before do
     ENV.delete('MYSIGNER_LOCAL_ONLY')
+    # 0.3.1 — every spec in this file exercises Config.local_only? at some
+    # depth. Stub the file source to false by default so the tests stay
+    # hermetic against the dev machine's own ~/.mysigner/config.yml (which
+    # may legitimately have local_only: true for personal use). Individual
+    # examples that want to test the file source override this stub.
+    allow(Mysigner::Config).to receive(:local_only_from_file?).and_return(false)
   end
 
   after do
@@ -289,8 +295,12 @@ RSpec.describe 'mysigner --local-only' do
     let(:tmp_dir) { Dir.mktmpdir }
     let(:config_file) { File.join(tmp_dir, 'config.yml') }
 
-    before { stub_const('Mysigner::Config::CONFIG_FILE', config_file) }
-    after  { FileUtils.rm_rf(tmp_dir) }
+    before do
+      stub_const('Mysigner::Config::CONFIG_FILE', config_file)
+      # Override the outer-block stub — this block tests the real method.
+      allow(Mysigner::Config).to receive(:local_only_from_file?).and_call_original
+    end
+    after { FileUtils.rm_rf(tmp_dir) }
 
     it 'returns false when the file does not exist' do
       expect(Mysigner::Config.local_only_from_file?).to be false
@@ -318,6 +328,38 @@ RSpec.describe 'mysigner --local-only' do
     end
   end
 
+  # 0.3.1 — public mirror of local_only_from_file? for symmetric source
+  # attribution in `mysigner status`. Uses the same truthy parser as the
+  # cascade, so MYSIGNER_LOCAL_ONLY=0 reads false (not "set therefore on").
+  describe 'Mysigner::Config.local_only_from_env?' do
+    before { ENV.delete('MYSIGNER_LOCAL_ONLY') }
+    after  { ENV.delete('MYSIGNER_LOCAL_ONLY') }
+
+    it 'returns false when the env var is unset' do
+      expect(Mysigner::Config.local_only_from_env?).to be false
+    end
+
+    it 'returns true when the env var is truthy (1)' do
+      ENV['MYSIGNER_LOCAL_ONLY'] = '1'
+      expect(Mysigner::Config.local_only_from_env?).to be true
+    end
+
+    it 'returns false when the env var is "0" (was the source-attribution bug)' do
+      ENV['MYSIGNER_LOCAL_ONLY'] = '0'
+      expect(Mysigner::Config.local_only_from_env?).to be false
+    end
+
+    it 'returns false when the env var is "false"' do
+      ENV['MYSIGNER_LOCAL_ONLY'] = 'false'
+      expect(Mysigner::Config.local_only_from_env?).to be false
+    end
+
+    it 'returns false when the env var is an empty string' do
+      ENV['MYSIGNER_LOCAL_ONLY'] = ''
+      expect(Mysigner::Config.local_only_from_env?).to be false
+    end
+  end
+
   describe 'Mysigner::Config.local_only? cascade (env → file)' do
     let(:tmp_dir) { Dir.mktmpdir }
     let(:config_file) { File.join(tmp_dir, 'config.yml') }
@@ -325,6 +367,8 @@ RSpec.describe 'mysigner --local-only' do
     before do
       ENV.delete('MYSIGNER_LOCAL_ONLY')
       stub_const('Mysigner::Config::CONFIG_FILE', config_file)
+      # Override the outer-block stub — this block tests the real cascade.
+      allow(Mysigner::Config).to receive(:local_only_from_file?).and_call_original
     end
     after do
       ENV.delete('MYSIGNER_LOCAL_ONLY')

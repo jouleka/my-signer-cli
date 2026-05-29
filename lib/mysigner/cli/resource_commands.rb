@@ -1421,6 +1421,13 @@ module Mysigner
           DESC
           method_option :name, type: :string, desc: 'Display name for the app'
           def android(action, *args)
+            # mysigner-22 follow-up — `android build` is the only LOCAL action;
+            # init/add/list all manage MySigner-registered records. Gate the
+            # rest at the dispatcher top so users see "android add" in the
+            # banner (not the underlying "apps" call that `list` invokes) and
+            # so `android add` doesn't crash with NoMethodError on the nil
+            # client further down.
+            exit_unless_local_supported!("android #{action}") unless %w[build help].include?(action)
             config = load_config
             client = create_client(config)
 

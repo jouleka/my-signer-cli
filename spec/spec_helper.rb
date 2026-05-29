@@ -19,4 +19,14 @@ RSpec.configure do |config|
   # with `bundle exec rspec --tag integration`. See spec/integration/README
   # in spec/README.md for the required ENV vars.
   config.filter_run_excluding integration: true unless ENV['INTEGRATION'] == '1'
+
+  # 0.3.1 — hermetic local-only baseline. Without this, a developer who has
+  # `local_only: true` persistently set in their own ~/.mysigner/config.yml
+  # would see every SERVER-command spec take the local-only-gate branch
+  # (exit 2) instead of the "not logged in" branch (exit 1) those specs
+  # encode. Per-test overrides via `and_call_original` are used by the
+  # specs that intentionally exercise the file source.
+  config.before do
+    allow(Mysigner::Config).to receive(:local_only_from_file?).and_return(false) if defined?(Mysigner::Config)
+  end
 end

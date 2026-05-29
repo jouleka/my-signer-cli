@@ -32,7 +32,14 @@ SERVER_COMMAND_INVOCATIONS = [
   %w[release list],
   %w[keystore list],
   %w[gp-credential list],
-  %w[submit]
+  %w[submit],
+  # 0.3.1 — android dispatcher: init/add/list register or read MySigner
+  # records (list is documented as an alias for `apps --platform android`).
+  # Only `build` is purely local. Before 0.3.1 these slipped past the gate
+  # and `android add` crashed with NoMethodError on the nil client.
+  %w[android init],
+  %w[android add com.example.foo],
+  %w[android list]
 ].freeze
 
 RSpec.describe 'Server-only commands in --local-only mode' do
@@ -75,7 +82,11 @@ LOCAL_COMMAND_INVOCATIONS = [
   %w[help],
   %w[tree],
   %w[device detect],
-  %w[certificate check]
+  %w[certificate check],
+  # 0.3.1 — `android build` is the only LOCAL android action; the rest are
+  # gated in the SERVER block above. Catches a regression where someone
+  # widens the gate whitelist past `build` / `help`.
+  %w[android help]
 ].freeze
 
 RSpec.describe 'Local commands still work in --local-only mode' do

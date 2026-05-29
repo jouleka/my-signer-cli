@@ -1058,7 +1058,7 @@ module Mysigner
 
               source = if options[:local_only] == true
                          '--local-only flag'
-                       elsif ENV['MYSIGNER_LOCAL_ONLY'] && !ENV['MYSIGNER_LOCAL_ONLY'].empty?
+                       elsif Mysigner::Config.local_only_from_env?
                          'MYSIGNER_LOCAL_ONLY env var'
                        else
                          'config file (~/.mysigner/config.yml)'

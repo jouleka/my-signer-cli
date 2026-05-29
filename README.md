@@ -372,9 +372,10 @@ mysigner config set local-only false    # permanent disable
 | `signing configure` | ✅ |
 | `doctor`, `status`, `validate` | ✅ (limited — no MySigner-side checks) |
 | `certificate check`, `device detect` | ✅ |
-| `android init/add/build/list` | ✅ |
+| `android build` | ✅ |
 | `config`, `config set`, `version`, `help`, `tree`, `logout` | ✅ |
 | `login`, `switch`, `orgs`, `sync` | ❌ MySigner-only |
+| `android init`, `android add`, `android list` | ❌ MySigner-only (register or list MySigner-side records) |
 | `apps`, `devices`, `certificates`, `profiles`, `bundleid`, `app-group(s)`, `merchant-id(s)`, `keystore`, `gp-credential`, `release`, `tracks`, `track`, `submit`, `device add/update`, `certificate download`, `profile download/delete` | ❌ MySigner-only |
 
 Server-only commands in local-only mode exit 2 with a one-line explanation and the override hint.

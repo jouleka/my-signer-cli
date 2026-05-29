@@ -72,7 +72,15 @@ module Mysigner
     # Local-only mode at the Config level: cascade ENV → file. The CLI
     # Helpers concern layers --local-only / --no-local-only on top.
     def self.local_only?
-      truthy_env?(ENV_LOCAL_ONLY) || local_only_from_file?
+      local_only_from_env? || local_only_from_file?
+    end
+
+    # Public predicate for the env-var source. Mirrors local_only_from_file?
+    # so status's "Source: …" attribution can distinguish env vs file
+    # using the same truthy parser the cascade uses (a literal env value
+    # of "0" / "false" reads as off, not as "env var enabled it").
+    def self.local_only_from_env?
+      truthy_env?(ENV_LOCAL_ONLY)
     end
 
     # Lightweight check that reads only ~/.mysigner/config.yml's
