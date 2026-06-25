@@ -108,4 +108,13 @@ rescue Errno::ENOENT => e
   warn 'On Linux or Windows you can still build Android: mysigner ship internal --platform android'
   warn e.full_message(highlight: false) if ENV['DEBUG']
   exit 1
+rescue StandardError => e
+  # Last-resort safety net: a published CLI should never dump a raw Ruby
+  # backtrace at the user. Turn any unhandled error into one clean line; show the
+  # trace only under DEBUG. (SystemExit / Interrupt are not StandardError, so
+  # normal `exit` and Ctrl-C still pass through untouched.)
+  warn "✗ Something went wrong: #{e.message}"
+  warn 'Run the same command with DEBUG=1 for details, or `mysigner doctor` to check your setup.'
+  warn e.full_message(highlight: false) if ENV['DEBUG']
+  exit 1
 end

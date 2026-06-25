@@ -250,14 +250,17 @@ module Mysigner
             system('npx cap sync android > /dev/null 2>&1')
           end
         when :react_native
-          # React Native: might need to install dependencies
-          if File.exist?(File.join(@project_info[:directory], 'node_modules'))
-            # Dependencies already installed
-          else
-            puts '📦 Installing npm dependencies...'
-            Dir.chdir(@project_info[:directory]) do
-              system('npm install > /dev/null 2>&1') || system('yarn install > /dev/null 2>&1')
-            end
+          # React Native: install JS deps if missing. Use the project's OWN
+          # package manager (blindly running `npm install` on a yarn/pnpm project
+          # corrupts the lockfile), keep output visible, and fail loud — a silent
+          # install failure otherwise surfaces as a cryptic Gradle autolink error.
+          dir = @project_info[:directory]
+          unless File.exist?(File.join(dir, 'node_modules'))
+            require 'mysigner/build/detector'
+            cmd = Detector.install_command(Detector.detect_package_manager(dir))
+            puts "📦 Installing JavaScript dependencies (#{cmd})..."
+            ok = Dir.chdir(dir) { system(*cmd.split) }
+            raise BuildError, "`#{cmd}` failed — install dependencies manually, then re-run." unless ok
           end
         when :flutter
           # Flutter: ensure dependencies are fetched

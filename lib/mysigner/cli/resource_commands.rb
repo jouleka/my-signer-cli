@@ -1647,6 +1647,10 @@ module Mysigner
               project_dir = Dir.pwd
               is_expo = expo_project?(project_dir)
 
+              # Expo / React-Native: offer to install JS deps (or auto with
+              # --setup / MYSIGNER_AUTO_SETUP) before the native build.
+              maybe_install_node_deps!(project_dir)
+
               # For Expo, we may need to regenerate android folder with correct versionCode
               # Get package name from app.json first if Expo
               if is_expo

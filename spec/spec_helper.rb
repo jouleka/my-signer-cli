@@ -34,5 +34,11 @@ RSpec.configure do |config|
     # OS-independent; specs that intentionally exercise the non-macOS guard
     # override with `allow(cli).to receive(:macos?).and_return(false)`.
     allow_any_instance_of(Mysigner::CLI).to receive(:macos?).and_return(true) if defined?(Mysigner::CLI)
+
+    # maybe_install_node_deps! is a setup side-effect (it may prompt / run a
+    # package install). No-op it by default so build/ship specs aren't tripped by
+    # a fixture with package.json but no node_modules; node_deps_spec uses
+    # and_call_original to exercise the real method.
+    allow_any_instance_of(Mysigner::CLI).to receive(:maybe_install_node_deps!) if defined?(Mysigner::CLI)
   end
 end

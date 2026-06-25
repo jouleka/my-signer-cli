@@ -34,6 +34,11 @@ module Mysigner
 
         FileUtils.mkdir_p(File.dirname(marker_path))
         FileUtils.touch(marker_path)
+      rescue SystemCallError => e
+        # A read-only / unwritable HOME must never abort startup (this runs at
+        # require time, before any command). The purger is idempotent, so it
+        # simply retries next run. Surface only under verbose.
+        warn "mysigner: skipped legacy-key cleanup (#{e.class})" if ENV['MYSIGNER_VERBOSE'] == '1'
       end
     end
   end

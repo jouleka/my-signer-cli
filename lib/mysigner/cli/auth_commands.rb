@@ -227,7 +227,16 @@ module Mysigner
             # untouched for backward compatibility.
             if local_only?
               emit_local_only_banner
-              return onboard_local_only
+              begin
+                return onboard_local_only
+              rescue LocalOnlyOnboardError => e
+                # Ordinary user mistakes (mistyped key path, empty alias, etc.)
+                # must read as a clean message, not a raw backtrace.
+                error e.message
+                say ''
+                say "Re-run 'mysigner --local-only onboard' once that's fixed.", :yellow
+                exit 1
+              end
             end
 
             say '🚀 My Signer Setup Guide', :cyan
@@ -971,7 +980,13 @@ module Mysigner
                                end
                                match
                              else
-                               org_index = ask("Select organization (1-#{organizations_list.length}, or 'q' to cancel):")
+                               org_index = ask("Select organization (1-#{organizations_list.length}, or 'q' to cancel):").to_s.strip
+
+                               if org_index.empty?
+                                 say 'No selection. To switch non-interactively, pass an org ID:', :yellow
+                                 say '  mysigner switch <ID>', :cyan
+                                 return
+                               end
 
                                if org_index.downcase == 'q'
                                  say 'Cancelled', :yellow
@@ -1003,7 +1018,9 @@ module Mysigner
                 say '  3. Paste it below'
                 say ''
 
-                new_token = ask("Paste API token for '#{selected_org[:name]}' (or 'q' to cancel):", echo: false)
+                # .to_s.strip so a non-tty/empty paste can't crash on nil.downcase
+                # (and stray whitespace around a pasted token is trimmed).
+                new_token = ask("Paste API token for '#{selected_org[:name]}' (or 'q' to cancel):", echo: false).to_s.strip
                 say ''
 
                 if new_token.downcase == 'q' || new_token.empty?

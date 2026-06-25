@@ -83,9 +83,9 @@ module Mysigner
       # Fail fast (before shelling out) for the two common prebuild blockers.
       def self.ensure_expo_prereqs!(directory, platform)
         unless Dir.exist?("#{directory}/node_modules/expo")
+          install = install_command(detect_package_manager(directory))
           raise NoProjectError, expo_prebuild_failed_message(
-            platform, hint: 'The `expo` package is not installed. Run `npm install` ' \
-                            '(or yarn/pnpm install) in the project first.'
+            platform, hint: "JavaScript dependencies aren't installed. Run `#{install}` in the project first."
           )
         end
 
@@ -104,6 +104,22 @@ module Mysigner
         m && m[1].to_i
       rescue StandardError
         nil
+      end
+
+      # Detect the JS package manager from the lockfile so we suggest the EXACT
+      # install command for this project. Running the wrong one (e.g. `npm
+      # install` on a yarn/pnpm project) can corrupt the dependency tree, so we
+      # never guess blindly.
+      def self.detect_package_manager(directory)
+        return :yarn if File.exist?("#{directory}/yarn.lock")
+        return :pnpm if File.exist?("#{directory}/pnpm-lock.yaml")
+        return :bun if File.exist?("#{directory}/bun.lockb") || File.exist?("#{directory}/bun.lock")
+
+        :npm
+      end
+
+      def self.install_command(pkg_manager)
+        { yarn: 'yarn install', pnpm: 'pnpm install', bun: 'bun install' }.fetch(pkg_manager, 'npm install')
       end
 
       def self.expo_prebuild_failed_message(platform, hint: nil)

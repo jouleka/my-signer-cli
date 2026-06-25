@@ -33,6 +33,13 @@ RSpec.describe Mysigner::Cleanup::PrivateKeysPurger do
     expect(File).to exist("#{@home}/.private_keys/notmatched.txt")
   end
 
+  it 'never aborts startup when the marker write fails (e.g. read-only home)' do
+    # This runs at require time before any command, so a SystemCallError here
+    # must NOT crash every invocation with a raw Errno backtrace.
+    allow(FileUtils).to receive(:mkdir_p).and_raise(Errno::EACCES.new('read-only'))
+    expect { described_class.new.call }.not_to raise_error
+  end
+
   it 'writes the purged marker file and skips next time' do
     FileUtils.mkdir_p("#{@home}/.private_keys")
     File.write("#{@home}/.private_keys/AuthKey_NEW.p8", 'fake')

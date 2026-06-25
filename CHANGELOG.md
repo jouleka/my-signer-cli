@@ -5,6 +5,16 @@ All notable changes to My Signer CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-06-25
+
+### Added
+- Smart dependency setup for Expo / React-Native projects: if `node_modules` is missing, `mysigner ship` / `android build` now detect the project's package manager from the lockfile (npm/yarn/pnpm/bun), suggest the EXACT install command, and offer to run it interactively — or auto-run with `--setup` / `MYSIGNER_AUTO_SETUP=1` for CI. It never silently installs (a wrong package manager can corrupt the lockfile).
+
+### Fixed
+- No more raw backtraces: a top-level safety net turns any unhandled error into one clean line (full trace under `DEBUG=1`). Specific crash fixes: `onboard --local-only` on a mistyped key/keystore path, `switch` on non-interactive input, and the startup legacy-key cleanup on a read-only HOME.
+- On an Expo prebuild failure, the precise "run `<pm> install`" message is no longer followed by a generic, irrelevant "No Android Project Found → check build.gradle" checklist; that checklist now appears only when there is genuinely no Android project.
+- React-Native pre-build dependency install now uses the project's own package manager (not a blind `npm install` that can corrupt a yarn/pnpm lockfile), shows its output, and fails loudly instead of dying later with a cryptic Gradle error.
+
 ## [0.3.3] - 2026-06-25
 
 ### Fixed

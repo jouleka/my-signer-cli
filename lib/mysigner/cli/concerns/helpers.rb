@@ -187,6 +187,68 @@ module Mysigner
           exit 1
         end
 
+        # For an Expo / React-Native project, the native android build can't run
+        # until JS dependencies are installed. Rather than failing deep inside
+        # `expo prebuild`, detect it up front and: auto-run with --setup /
+        # MYSIGNER_AUTO_SETUP, OR offer to run it interactively, OR print the
+        # EXACT install command for this project's package manager and exit.
+        # We never silently run a package install (it's slow and the wrong
+        # manager can corrupt the lockfile) — only with consent or an opt-in.
+        def maybe_install_node_deps!(project_dir = Dir.pwd)
+          require 'json'
+          require 'mysigner/build/detector'
+
+          pkg_path = File.join(project_dir, 'package.json')
+          return unless File.exist?(pkg_path)
+          return if Dir.exist?(File.join(project_dir, 'node_modules'))
+
+          pkg = begin
+            JSON.parse(File.read(pkg_path))
+          rescue StandardError
+            {}
+          end
+          deps = {}
+          deps.merge!(pkg['dependencies']) if pkg['dependencies'].is_a?(Hash)
+          deps.merge!(pkg['devDependencies']) if pkg['devDependencies'].is_a?(Hash)
+          # Only Expo / React-Native projects need node deps to produce a native
+          # Android build; a plain native/Flutter project does not.
+          return unless deps.key?('expo') || deps.key?('react-native')
+
+          cmd = Mysigner::Build::Detector.install_command(
+            Mysigner::Build::Detector.detect_package_manager(project_dir)
+          )
+
+          auto = setup_requested?
+          auto ||= $stdin.tty? && yes_with_default?(
+            "JavaScript dependencies aren't installed (no node_modules). Run `#{cmd}` now?", :cyan
+          )
+
+          unless auto
+            error "JavaScript dependencies aren't installed (no node_modules)."
+            say 'Install them first, then re-run:', :yellow
+            say "  #{cmd}", :cyan
+            say '(or pass --setup / set MYSIGNER_AUTO_SETUP=1 to let mysigner run it for you)', :yellow
+            exit 1
+          end
+
+          say "📦 Installing JavaScript dependencies: #{cmd}", :cyan
+          ok = Dir.chdir(project_dir) { system(*cmd.split) }
+          unless ok
+            error "`#{cmd}` failed — install dependencies manually, then re-run."
+            exit 1
+          end
+          say '✓ Dependencies installed.', :green
+          say ''
+        end
+
+        # Whether the user opted into automatic setup (package install / prebuild)
+        # via the --setup flag or MYSIGNER_AUTO_SETUP=1. Commands without a
+        # --setup option still honour the env var.
+        def setup_requested?
+          flag = respond_to?(:options) && options.respond_to?(:[]) ? options[:setup] : nil
+          flag == true || ENV['MYSIGNER_AUTO_SETUP'] == '1'
+        end
+
         # Local-only mode is active when any of, in precedence order:
         #   1. --local-only / --no-local-only flag on this invocation
         #   2. MYSIGNER_LOCAL_ONLY env var

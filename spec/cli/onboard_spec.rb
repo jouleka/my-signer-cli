@@ -568,8 +568,10 @@ RSpec.describe 'mysigner onboard' do
         allow(File).to receive(:read).with(p8_path).and_return('not a pem')
       end
 
-      it 'raises LocalOnlyOnboardError and stores nothing' do
-        expect { cli.onboard }.to raise_error(Mysigner::CLI::LocalOnlyOnboardError, /invalid \.p8/)
+      it 'fails cleanly (no raw backtrace) and stores nothing' do
+        expect do
+          expect { cli.onboard }.to raise_error(SystemExit)
+        end.to output(/invalid \.p8/).to_stdout
         expect(Mysigner::LocalCredentials).not_to have_received(:store)
       end
     end
@@ -584,8 +586,10 @@ RSpec.describe 'mysigner onboard' do
         allow(File).to receive(:read).with(json_path).and_return(JSON.generate('type' => 'something_else'))
       end
 
-      it 'raises LocalOnlyOnboardError and stores nothing' do
-        expect { cli.onboard }.to raise_error(Mysigner::CLI::LocalOnlyOnboardError, /service-account JSON/)
+      it 'fails cleanly (no raw backtrace) and stores nothing' do
+        expect do
+          expect { cli.onboard }.to raise_error(SystemExit)
+        end.to output(/service-account JSON/).to_stdout
         expect(Mysigner::LocalCredentials).not_to have_received(:store)
       end
     end

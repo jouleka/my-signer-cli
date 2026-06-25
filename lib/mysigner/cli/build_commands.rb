@@ -113,6 +113,8 @@ module Mysigner
           # (e.g. https://appstoreconnect.apple.com/apps/<APPLE_APP_ID>/...).
           method_option :apple_id, type: :string, banner: 'APPLE_APP_ID',
                                    desc: 'App Store Connect app id (overrides bundleId lookup in --local-only mode)'
+          method_option :setup, type: :boolean, default: false,
+                                desc: 'Auto-install missing JS dependencies (npm/yarn/pnpm) without prompting'
           def ship(target)
             ios_targets = %w[testflight appstore]
             android_targets = %w[internal alpha beta production]
@@ -921,6 +923,10 @@ module Mysigner
               config = load_config
               client = create_client(config)
 
+              # Expo / React-Native projects need JS deps installed before the
+              # native build — offer to install them (or auto with --setup).
+              maybe_install_node_deps!(Dir.pwd)
+
               overall_start = Time.now
               timings = {}
               aab_path = nil
@@ -1334,13 +1340,18 @@ module Mysigner
                 say ''
                 say "Error: #{e.message}", :red
                 say ''
-                say '💡 No Android Project Found: How to fix', :cyan
-                say ''
-                say "   → Make sure you're in an Android project directory", :yellow
-                say '   → Check for build.gradle or build.gradle.kts file', :yellow
-                say '   → For React Native: cd android && check build.gradle exists', :yellow
-                say '   → For Flutter: check android/app/build.gradle exists', :yellow
-                say ''
+                # The framework-specific detector errors (Expo/Capacitor/RN/Flutter)
+                # already name the exact fix; only show the generic "where's your
+                # android project" checklist for the truly-generic case.
+                if e.message.include?('No Android project found')
+                  say '💡 No Android Project Found: How to fix', :cyan
+                  say ''
+                  say "   → Make sure you're in an Android project directory", :yellow
+                  say '   → Check for build.gradle or build.gradle.kts file', :yellow
+                  say '   → For React Native: cd android && check build.gradle exists', :yellow
+                  say '   → For Flutter: check android/app/build.gradle exists', :yellow
+                  say ''
+                end
                 exit 1
               rescue Upload::PlayStoreUploader::MissingLocalCredentialsError => e
                 # mysigner-43 — local-only requested but no credentials stored.
