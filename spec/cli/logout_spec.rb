@@ -229,6 +229,16 @@ RSpec.describe 'mysigner logout' do
         expect(Mysigner::Client).not_to receive(:new)
         cli.logout
       end
+
+      it 'recovers a corrupt (undecryptable) token: logs out locally and explains, no dead-end' do
+        allow(client).to receive(:delete).and_raise(Mysigner::ConfigError.new('Failed to decrypt token: '))
+        allow(Mysigner::LocalCredentials).to receive(:delete)
+        expect(config).to receive(:clear) # the user IS logged out locally
+        output = capture_stdout { cli.logout }
+        expect(output).to include('unreadable')
+        expect(output).to include('dashboard') # told how to revoke server-side
+        expect(output).not_to match(/once the server is reachable/) # not the misleading retry advice
+      end
     end
 
     context 'when neither flag is passed (interactive mode)' do

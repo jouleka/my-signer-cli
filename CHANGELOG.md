@@ -5,6 +5,11 @@ All notable changes to My Signer CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-06-25
+
+### Fixed
+- `logout` no longer dead-ends when the stored token is unreadable. Previously a corrupt/undecryptable token made the default `logout` (which revokes the server token) fail with misleading "once the server is reachable" advice and refuse to clear the local config — trapping the user, since re-login requires logging out first. Now an unreadable-token purge failure logs you out locally with a clear note to revoke the old token in the dashboard; transient server/network failures still keep the local config and suggest a retry.
+
 ## [0.3.2] - 2026-06-25
 
 ### Fixed

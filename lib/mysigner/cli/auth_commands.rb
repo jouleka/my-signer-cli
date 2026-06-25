@@ -709,10 +709,30 @@ module Mysigner
                 config.load
                 purge_server_credentials(config)
                 purge_local_credentials
-              rescue Mysigner::ClientError, Mysigner::ConfigError => e
-                error "Failed to purge credentials on the server: #{e.message}"
+              rescue Mysigner::ConfigError => e
+                # The stored token is UNREADABLE (can't be decrypted), so it can
+                # never be revoked on the server from here and retrying --purge
+                # would fail identically. Clearing local is the only way out, so
+                # we do that (the token is useless anyway) and fall through to
+                # config.clear below — the user ends up logged out, and we tell
+                # them to revoke the old token in the dashboard if they care.
+                reason = e.message.sub(/\AFailed to decrypt token:\s*/, '').strip
+                detail = reason.empty? ? '' : " (#{reason})"
+                say "⚠️  Your stored token is unreadable#{detail}, " \
+                    'so it could not be revoked on the server.', :yellow
+                say '   Logging you out locally anyway. To revoke the old token, do it in', :yellow
+                say '   the My Signer dashboard (it cannot be read from this machine).', :yellow
                 say ''
-                say 'Local config was NOT cleared so you can retry. Options:', :yellow
+                begin
+                  purge_local_credentials
+                rescue StandardError
+                  # best-effort; a corrupt Keychain entry must not block the clear
+                end
+                # fall through to config.clear
+              rescue Mysigner::ClientError => e
+                error "Couldn't reach the server to revoke your credentials: #{e.message}"
+                say ''
+                say 'Your local config was NOT cleared so you can retry. Options:', :yellow
                 say "  • Re-run 'mysigner logout --purge' once the server is reachable", :yellow
                 say "  • Run 'mysigner logout --no-purge' to log out locally only", :yellow
                 exit 1
