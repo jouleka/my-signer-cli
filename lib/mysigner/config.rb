@@ -251,13 +251,25 @@ module Mysigner
     # Display config (with masked tokens)
     def display
       current_org_name = org_name(@current_organization_id) || '(not set)'
-      current_token = api_token(@current_organization_id)
+      # Never let an undecryptable token turn `mysigner config` into a crash —
+      # render it as an actionable placeholder instead.
+      current_token = begin
+        api_token(@current_organization_id)
+      rescue ConfigError
+        :unreadable
+      end
+
+      token_display = case current_token
+                      when nil then '(not set)'
+                      when :unreadable then '(unreadable — run mysigner login)'
+                      else mask_token(current_token)
+                      end
 
       display_data = {
         api_url: @api_url || '(not set)',
         user_email: @user_email || '(not set)',
         current_organization: "#{current_org_name} (ID: #{@current_organization_id || 'not set'})",
-        current_token: current_token ? mask_token(current_token) : '(not set)'
+        current_token: token_display
       }
 
       # Show all organizations

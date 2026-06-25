@@ -60,4 +60,35 @@ RSpec.describe Mysigner::Build::Detector do
       end
     end
   end
+
+  describe 'read-only detection (allow_prebuild: false)' do
+    before do
+      File.write(File.join(test_dir, 'app.json'), '{"expo": {"name": "Test"}}')
+      File.write(File.join(test_dir, 'package.json'), '{"dependencies": {"expo": "^50.0.0"}}')
+    end
+
+    it 'classifies an Expo managed project without running prebuild or raising' do
+      expect(described_class).not_to receive(:system)
+      result = described_class.detect(test_dir, allow_prebuild: false)
+      expect(result[:framework]).to eq(:expo)
+      expect(result[:needs_prebuild]).to be(true)
+      expect(result[:platform]).to eq(:ios)
+    end
+
+    it 'classifies for android too' do
+      result = described_class.detect(test_dir, platform: :android, allow_prebuild: false)
+      expect(result[:platform]).to eq(:android)
+      expect(result[:needs_prebuild]).to be(true)
+    end
+  end
+
+  describe 'expo detection is dependency-based, not a substring scan' do
+    it 'does not treat an expo-prefixed devDependency as an Expo project' do
+      File.write(File.join(test_dir, 'app.json'), '{"name":"x"}')
+      File.write(File.join(test_dir, 'package.json'),
+                 '{"devDependencies": {"eslint-config-expo": "^1.0.0"}}')
+      expect { described_class.detect(test_dir, allow_prebuild: false) }
+        .to raise_error(Mysigner::Build::Detector::NoProjectError, /No Xcode project found/)
+    end
+  end
 end

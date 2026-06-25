@@ -540,6 +540,19 @@ module Mysigner
                 end
               end
 
+              # Android: offer Google Play setup too. Previously onboard only
+              # ever configured App Store Connect, leaving Android users without
+              # a guided path even though setup_google_play_credentials existed.
+              # Only prompt interactively — in CI/non-tty contexts onboarding is
+              # driven by env vars/flags, not the wizard.
+              gp_configured = false
+              if $stdin.tty? && yes_with_default?('Set up Google Play (Android) credentials now?', :cyan)
+                say ''
+                gp_configured = setup_google_play_credentials(client, config, org_id)
+              elsif $stdin.tty?
+                say '⏭️  Skipped Google Play setup (run `mysigner onboard` again anytime)', :yellow
+              end
+
               say ''
               say '=' * 80, :green
               say '🎉 Setup Complete!', :green
@@ -562,6 +575,13 @@ module Mysigner
               else
                 say '⚠️  App Store Connect: Not configured', :yellow
                 say "  Run 'mysigner doctor' to set it up", :yellow
+              end
+
+              if gp_configured
+                say '✓ Google Play: Configured', :green
+              else
+                say '⚠️  Google Play: Not configured', :yellow
+                say "  Run 'mysigner onboard' to set it up", :yellow
               end
 
               say ''
@@ -1027,9 +1047,12 @@ module Mysigner
           def config(action = nil, *args)
             return config_set(*args) if action == 'set'
 
-            if action && action != 'set'
+            # `show` is the documented alias for the bare display (README +
+            # `config [ACTION]` help). Treat nil/`show` as display; anything
+            # else is a genuine typo.
+            if action && !%w[show].include?(action)
               error "Unknown config action: #{action}"
-              say 'Did you mean: `mysigner config set <key> <value>`?', :yellow
+              say 'Did you mean: `mysigner config show` or `mysigner config set <key> <value>`?', :yellow
               exit 1
             end
 
@@ -1679,23 +1702,35 @@ module Mysigner
                 say ''
                 stored_play = collect_local_google_play_credential
               end
+              say ''
+
+              # Android signing keystore (the actual signing key). Stored locally
+              # in the exact envelope CredentialResolver#resolve_android_keystore
+              # expects, so `ship --platform android --local-only` can sign offline.
+              stored_keystore = []
+              if $stdin.tty? && yes_with_default?('Set up an Android signing keystore now?', :cyan)
+                say ''
+                stored_keystore = collect_local_keystore_credential
+              end
 
               say ''
               say '=' * 80, :green
               say '✓ Local-only setup complete.', :green
               say '=' * 80, :green
               say ''
-              if stored_asc.empty? && stored_play.empty?
+              if stored_asc.empty? && stored_play.empty? && stored_keystore.empty?
                 say 'No credentials were stored.', :yellow
                 say "Re-run 'mysigner --local-only onboard' when you're ready.", :yellow
               else
                 say 'Stored credentials:', :cyan
-                stored_asc.each  { |id| say "  • ASC key:        #{id}" }
-                stored_play.each { |id| say "  • Google Play SA: #{id}" }
+                stored_asc.each      { |id| say "  • ASC key:        #{id}" }
+                stored_play.each     { |id| say "  • Google Play SA: #{id}" }
+                stored_keystore.each { |id| say "  • Android keystore: #{id}" }
                 say ''
                 say 'To ship:', :bold
                 say '  mysigner --local-only ship appstore' unless stored_asc.empty?
                 say '  mysigner --local-only ship play'     unless stored_play.empty?
+                say '  mysigner --local-only ship internal --platform android' unless stored_keystore.empty?
               end
               say ''
             end
@@ -1751,6 +1786,42 @@ module Mysigner
 
               say "✓ Google Play credential stored locally (#{client_email}).", :green
               [client_email]
+            end
+
+            # Returns Array<String> of ids actually stored (empty on skip).
+            # Persists the keystore bytes (base64) + passwords + alias under
+            # LocalCredentials(kind: :android_keystore) in the exact envelope
+            # CredentialResolver#resolve_android_keystore reads back.
+            def collect_local_keystore_credential
+              require 'base64'
+              say '🔑 Android keystore (local-only)', :cyan
+              say ''
+
+              ks_path = ask('Path to your keystore (.jks/.keystore):').to_s.strip.gsub(/^['"]|['"]$/, '')
+              ks_path = File.expand_path(ks_path)
+              raise_local_onboard_error!("Keystore file not found: #{ks_path}") unless File.exist?(ks_path)
+
+              # echo: false — keep secrets out of terminal scrollback, matching
+              # every other secret prompt in this file.
+              store_password = ask('Keystore password:', echo: false).to_s
+              raise_local_onboard_error!('Keystore password cannot be empty') if store_password.empty?
+
+              key_alias = ask('Key alias:').to_s.strip
+              raise_local_onboard_error!('Key alias cannot be empty') if key_alias.empty?
+
+              key_password = ask('Key password (press Enter to reuse the keystore password):', echo: false).to_s
+              key_password = store_password if key_password.empty?
+
+              envelope = JSON.generate(
+                'keystore_b64' => Base64.strict_encode64(File.binread(ks_path)),
+                'keystore_password' => store_password,
+                'key_alias' => key_alias,
+                'key_password' => key_password
+              )
+              Mysigner::LocalCredentials.store(kind: :android_keystore, id: key_alias, secret: envelope)
+
+              say "✓ Android keystore stored locally (alias: #{key_alias}).", :green
+              [key_alias]
             end
 
             # Verifies the file looks like an EC private key in the form

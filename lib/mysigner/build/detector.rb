@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'json'
+
 module Mysigner
   module Build
     class Detector
@@ -9,48 +11,133 @@ module Mysigner
       # Returns: { platform: :ios/:android, type: :workspace/:project/:gradle, path: String, framework: :capacitor/:react_native/:flutter/:native }
       # @param directory [String] Directory to search in
       # @param platform [Symbol, nil] Force detection for specific platform (:ios, :android, or nil for auto-detect iOS)
-      def self.detect(directory = Dir.pwd, platform: nil)
+      # @param allow_prebuild [Boolean] when false (doctor/validate and other
+      #   read-only callers), an Expo managed project with no native folder is
+      #   CLASSIFIED (framework: :expo, needs_prebuild: true) instead of having
+      #   `npx expo prebuild` run against it. Detection must never mutate the
+      #   working tree from a diagnostic path.
+      def self.detect(directory = Dir.pwd, platform: nil, allow_prebuild: true)
         # If platform is explicitly android, detect android
-        return detect_android(directory) if platform == :android
+        return detect_android(directory, allow_prebuild: allow_prebuild) if platform == :android
 
         # Default behavior: detect iOS (backwards compatible)
-        detect_ios(directory)
+        detect_ios(directory, allow_prebuild: allow_prebuild)
+      end
+
+      # ── Expo helpers ─────────────────────────────────────────────────────
+
+      # True when this looks like an Expo project: an app.json/app.config.js
+      # plus `expo` as an ACTUAL dependency in package.json. We parse the JSON
+      # rather than substring-scanning the file so an unrelated package like
+      # `eslint-config-expo`, or the word "expo" in a script, doesn't trip
+      # detection (and the destructive prebuild it gates).
+      def self.expo_managed?(directory)
+        return false unless File.exist?("#{directory}/app.json") || File.exist?("#{directory}/app.config.js")
+        return false unless File.exist?("#{directory}/package.json")
+
+        pkg = begin
+          JSON.parse(File.read("#{directory}/package.json"))
+        rescue StandardError
+          nil
+        end
+        return false unless pkg.is_a?(Hash)
+
+        deps = {}
+        deps.merge!(pkg['dependencies']) if pkg['dependencies'].is_a?(Hash)
+        deps.merge!(pkg['devDependencies']) if pkg['devDependencies'].is_a?(Hash)
+        deps.key?('expo')
+      end
+
+      # Non-mutating classification for an Expo managed project that has no
+      # native folder yet. Callers must check :needs_prebuild before trying to
+      # read gradle/xcode paths off the result.
+      def self.expo_managed_result(directory, platform)
+        {
+          platform: platform,
+          type: :expo_managed,
+          framework: :expo,
+          path: File.absolute_path(directory),
+          directory: directory,
+          needs_prebuild: true
+        }
+      end
+
+      # Materialise the native project with `npx expo prebuild`, after a
+      # precheck so the user gets an actionable message instead of expo's raw
+      # ConfigError. Raises NoProjectError on any failure. The caller's
+      # `!Dir.exist?(native/)` guard guarantees we never clobber an existing
+      # native folder.
+      def self.run_expo_prebuild!(directory, platform)
+        ensure_expo_prereqs!(directory, platform)
+
+        puts "\n📦 Expo managed workflow detected (no #{platform}/ folder)"
+        puts "🔧 Running: npx expo prebuild --platform #{platform}\n\n"
+        result = system("cd #{directory} && npx expo prebuild --platform #{platform}")
+
+        native_dir = platform == :android ? 'android' : 'ios'
+        return if result && Dir.exist?("#{directory}/#{native_dir}")
+
+        raise NoProjectError, expo_prebuild_failed_message(platform)
+      end
+
+      # Fail fast (before shelling out) for the two common prebuild blockers.
+      def self.ensure_expo_prereqs!(directory, platform)
+        unless Dir.exist?("#{directory}/node_modules/expo")
+          raise NoProjectError, expo_prebuild_failed_message(
+            platform, hint: 'The `expo` package is not installed. Run `npm install` ' \
+                            '(or yarn/pnpm install) in the project first.'
+          )
+        end
+
+        major = node_major_version
+        return unless major && major < 20
+
+        raise NoProjectError, expo_prebuild_failed_message(
+          platform, hint: "Node.js #{major}.x is too old for current Expo SDKs — " \
+                          'install Node >= 20.19.4 (e.g. via nvm, mise, or nodejs.org).'
+        )
+      end
+
+      def self.node_major_version
+        out = `node --version 2>/dev/null`.to_s.strip
+        m = out.match(/v?(\d+)\./)
+        m && m[1].to_i
+      rescue StandardError
+        nil
+      end
+
+      def self.expo_prebuild_failed_message(platform, hint: nil)
+        native = platform == :android ? 'Android' : 'iOS'
+        parts = ["Failed to generate #{native} project with expo prebuild."]
+        parts << hint if hint
+        parts << <<~ERROR.strip
+          Try running manually:
+            npx expo prebuild --platform #{platform}
+
+          Alternative: Use EAS Build (Expo's cloud service)
+          Learn more: https://docs.expo.dev/bare/overview/
+        ERROR
+        parts.join("\n\n")
       end
 
       # Detect Android project in directory
       # Returns: { platform: :android, type: :gradle, path: String, framework: :capacitor/:react_native/:flutter/:native }
-      def self.detect_android(directory = Dir.pwd)
+      def self.detect_android(directory = Dir.pwd, allow_prebuild: true)
         # 1. Check for Capacitor (most specific first)
         if File.exist?("#{directory}/capacitor.config.json") ||
            File.exist?("#{directory}/capacitor.config.ts")
           return detect_capacitor_android(directory)
         end
 
-        # 2. Check for Expo (managed workflow - no android folder)
-        if (File.exist?("#{directory}/app.json") || File.exist?("#{directory}/app.config.js")) &&
-           File.exist?("#{directory}/package.json")
-          content = File.read("#{directory}/package.json")
-          if content.include?('expo') && !Dir.exist?("#{directory}/android")
-            # Auto-run expo prebuild
-            puts "\n📦 Expo managed workflow detected (no android/ folder)"
-            puts "🔧 Running: npx expo prebuild --platform android\n\n"
+        # 2. Expo managed workflow (app.json/app.config.js + `expo` dependency,
+        #    no android/ yet). Read-only callers pass allow_prebuild: false and
+        #    get a non-mutating classification instead of a prebuild + possible
+        #    raise.
+        if expo_managed?(directory) && !Dir.exist?("#{directory}/android")
+          return expo_managed_result(directory, :android) unless allow_prebuild
 
-            result = system("cd #{directory} && npx expo prebuild --platform android")
-
-            unless result && Dir.exist?("#{directory}/android")
-              raise NoProjectError, <<~ERROR
-                Failed to generate Android project with expo prebuild.
-
-                Try running manually:
-                  npx expo prebuild --platform android
-
-                Alternative: Use EAS Build (Expo's cloud service)
-                Learn more: https://docs.expo.dev/bare/overview/
-              ERROR
-            end
-
-            puts "\n✓ Android project generated successfully\n\n"
-          end
+          run_expo_prebuild!(directory, :android)
+          puts "\n✓ Android project generated successfully\n\n"
         end
 
         # 3. Check for React Native
@@ -111,38 +198,20 @@ module Mysigner
       end
 
       # Detect iOS project in directory (original detect behavior)
-      def self.detect_ios(directory = Dir.pwd)
+      def self.detect_ios(directory = Dir.pwd, allow_prebuild: true)
         # 1. Check for Capacitor (most specific first)
         if File.exist?("#{directory}/capacitor.config.json") ||
            File.exist?("#{directory}/capacitor.config.ts")
           return detect_capacitor(directory)
         end
 
-        # 2. Check for Expo (managed workflow)
-        if (File.exist?("#{directory}/app.json") || File.exist?("#{directory}/app.config.js")) &&
-           File.exist?("#{directory}/package.json")
-          content = File.read("#{directory}/package.json")
-          if content.include?('expo') && !Dir.exist?("#{directory}/ios")
-            # Auto-run expo prebuild
-            puts "\n📦 Expo managed workflow detected (no ios/ folder)"
-            puts "🔧 Running: npx expo prebuild --platform ios\n\n"
+        # 2. Expo managed workflow (see detect_android for the allow_prebuild
+        #    contract).
+        if expo_managed?(directory) && !Dir.exist?("#{directory}/ios")
+          return expo_managed_result(directory, :ios) unless allow_prebuild
 
-            result = system("cd #{directory} && npx expo prebuild --platform ios")
-
-            unless result && Dir.exist?("#{directory}/ios")
-              raise NoProjectError, <<~ERROR
-                Failed to generate iOS project with expo prebuild.
-
-                Try running manually:
-                  npx expo prebuild --platform ios
-
-                Alternative: Use EAS Build (Expo's cloud service)
-                Learn more: https://docs.expo.dev/bare/overview/
-              ERROR
-            end
-
-            puts "\n✓ iOS project generated successfully\n\n"
-          end
+          run_expo_prebuild!(directory, :ios)
+          puts "\n✓ iOS project generated successfully\n\n"
         end
 
         # 3. Check for React Native

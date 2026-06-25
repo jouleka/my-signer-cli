@@ -73,4 +73,30 @@ def rewrite_help_flag!(argv)
   ['help', first]
 end
 
-Mysigner::CLI.start(rewrite_help_flag!(hoist_leading_class_options!(ARGV)))
+# Top-level safety net for an unreadable stored credential. When
+# ~/.mysigner/config.yml holds a token that can't be decrypted (the per-machine
+# encryption key was rotated/deleted, or the config was copied from another
+# machine), Config#decrypt_token re-raises Mysigner::ConfigError. Without this
+# rescue that error — plus the underlying OpenSSL::Cipher::CipherError cause —
+# escapes as a raw Ruby backtrace on nearly every command. Convert it into one
+# actionable line and exit 1; show the trace only under DEBUG.
+begin
+  Mysigner::CLI.start(rewrite_help_flag!(hoist_leading_class_options!(ARGV)))
+rescue Mysigner::ConfigError => e
+  warn "✗ #{e.message}"
+  # Only the decrypt-failure case maps to "re-login" — other ConfigErrors
+  # (Failed to load/save/clear config) must NOT advise the user to run the very
+  # operation that just failed, so we gate the guidance on the decrypt message.
+  if e.message.include?('decrypt')
+    warn ''
+    warn 'Your saved MySigner login is unreadable (the encryption key changed, or'
+    warn '~/.mysigner was copied from another machine / is corrupt).'
+    warn "Fix: run 'mysigner logout' then 'mysigner login' to re-authenticate,"
+    warn 'or run any command with --local-only to skip MySigner entirely.'
+  end
+  if ENV['DEBUG']
+    warn ''
+    warn e.full_message(highlight: false)
+  end
+  exit 1
+end

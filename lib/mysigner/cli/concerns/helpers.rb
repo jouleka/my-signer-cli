@@ -107,6 +107,20 @@ module Mysigner
           end
 
           config.load
+
+          # Surface an unreadable stored token as a clean re-login prompt here,
+          # at the auth gate, instead of letting the decrypt error explode later
+          # inside create_client / Config#display. (api_token decrypts lazily.)
+          begin
+            config.api_token
+          rescue Mysigner::ConfigError
+            error 'Your saved login is unreadable (encryption key changed or ' \
+                  'config copied between machines).'
+            say "Run 'mysigner logout' then 'mysigner login' to re-authenticate.", :yellow
+            say 'Or run with --local-only to skip MySigner entirely.', :yellow
+            exit 1
+          end
+
           config
         end
 

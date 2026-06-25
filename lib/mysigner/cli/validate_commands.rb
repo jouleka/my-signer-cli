@@ -147,7 +147,22 @@ module Mysigner
               say 'Running local Signing::Validator (server checks skipped in local-only mode).', :yellow
               say ''
 
-              project_info = Mysigner::Build::Detector.detect
+              # Read-only detection: never run an expo prebuild from `validate`,
+              # and turn a genuine "no project here" into a clean error instead
+              # of a raw NoProjectError backtrace.
+              project_info = begin
+                Mysigner::Build::Detector.detect(allow_prebuild: false)
+              rescue Mysigner::Build::Detector::NoProjectError => e
+                error e.message
+                exit 1
+              end
+
+              if project_info[:needs_prebuild]
+                say 'ℹ️  Expo managed project detected — no native iOS project generated yet.', :yellow
+                say '   Run `mysigner ship` (or `npx expo prebuild`) to create it, then re-run validate.', :yellow
+                return
+              end
+
               parser = Mysigner::Build::Parser.new(project_info)
               target_name = parser.main_target.name
 

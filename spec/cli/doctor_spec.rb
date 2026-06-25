@@ -402,6 +402,53 @@ RSpec.describe 'mysigner doctor' do
     end
   end
 
+  describe 'mysigner doctor --platform android with missing toolchain (regression: no false all-clear)' do
+    let(:cli) { Mysigner::CLI.new }
+
+    before do
+      # local_only avoids the login/decrypt path so the only findings are the
+      # genuine toolchain gaps.
+      allow(cli).to receive(:options).and_return({ local_only: true, platform: 'android' })
+      stub_backticks(cli)
+      # Java absent (stubbed false in top-level before); ANDROID_HOME excluded.
+      allow(Mysigner::Build::Detector).to receive(:detect_android)
+        .with(allow_prebuild: false)
+        .and_return({ needs_prebuild: true, framework: :expo, platform: :android })
+    end
+
+    it 'reports missing Java and SDK as issues, not "All checks passed"' do
+      output = capture_stdout { cli.doctor }
+      expect(output).to match(/issue\(s\) found/)
+      expect(output).not_to match(/All checks passed/)
+      expect(output).to match(/Java \(JDK\) not found/)
+      expect(output).to match(/Android SDK not found/)
+    end
+
+    it 'classifies the Expo project read-only (no prebuild side effect)' do
+      output = capture_stdout { cli.doctor }
+      expect(output).to include('Expo managed project detected')
+    end
+  end
+
+  describe 'mysigner doctor --platform ios in an Expo project with no ios/ (read-only, regression)' do
+    let(:cli) { Mysigner::CLI.new }
+
+    before do
+      allow(cli).to receive(:options).and_return({ local_only: true, platform: 'ios' })
+      stub_backticks(cli)
+      allow(cli).to receive(:system).and_return(false)
+      allow(Mysigner::Build::Detector).to receive(:detect)
+        .with(allow_prebuild: false)
+        .and_return({ needs_prebuild: true, framework: :expo, platform: :ios, path: '/tmp/x' })
+    end
+
+    it 'detects read-only (allow_prebuild: false) — never triggers expo prebuild from a diagnostic' do
+      output = capture_stdout { cli.doctor }
+      expect(output).to include('Expo managed project detected')
+      expect(Mysigner::Build::Detector).to have_received(:detect).with(allow_prebuild: false)
+    end
+  end
+
   # Helper method
   def capture_stdout
     old_stdout = $stdout

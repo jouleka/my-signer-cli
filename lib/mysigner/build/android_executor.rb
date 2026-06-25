@@ -31,9 +31,10 @@ module Mysigner
         @key_alias = key_alias
         @key_password = key_password || keystore_password
         @version_code = version_code
+        @build_started_at = Time.now
 
         # Determine task name
-        task = "bundle#{variant.capitalize}"
+        task = "bundle#{variant_suffix(variant)}"
 
         # Build
         success = run_gradle_build(task)
@@ -58,9 +59,10 @@ module Mysigner
         @keystore_password = keystore_password
         @key_alias = key_alias
         @key_password = key_password || keystore_password
+        @build_started_at = Time.now
 
         # Determine task name
-        task = "assemble#{variant.capitalize}"
+        task = "assemble#{variant_suffix(variant)}"
 
         # Build
         success = run_gradle_build(task)
@@ -93,8 +95,11 @@ module Mysigner
 
         # Phase 0: inject signing via Gradle init-script + env vars. Passwords
         # never appear in argv (no -Pandroid.injected.signing.*=PLAINTEXT).
+        # Write the Gradle init script when we need to inject EITHER signing or
+        # a versionCode override (a bare -PversionCode is ignored by stock
+        # build.gradle, so versionCode must also flow through the init script).
         injector = nil
-        if @keystore_path && File.exist?(@keystore_path)
+        if (@keystore_path && File.exist?(@keystore_path)) || @version_code
           require 'mysigner/signing/gradle_signing_injector'
           injector = Mysigner::Signing::GradleSigningInjector.new
           @signing_init_script_path = injector.write_init_script!
@@ -124,8 +129,8 @@ module Mysigner
             ENV['JAVA_HOME'] = detected
           elsif java_home && !java_home.empty?
             raise BuildError, "JAVA_HOME is set to invalid directory: #{java_home}\n" \
-                              "Run 'mysigner doctor' to fix, or set JAVA_HOME manually:\n  " \
-                              'export JAVA_HOME=$(/usr/libexec/java_home -v 17)'
+                              "Run 'mysigner doctor' to fix, or set JAVA_HOME to a valid JDK 17+ home\n  " \
+                              '(macOS: $(/usr/libexec/java_home -v 17), Linux: a dir under /usr/lib/jvm).'
           end
         end
 
@@ -147,19 +152,24 @@ module Mysigner
           ENV['ANDROID_SDK_ROOT'] = detected
         else
           raise BuildError, "Android SDK not found.\n" \
-                            "Run 'mysigner doctor' to diagnose, or set ANDROID_HOME:\n  " \
-                            'export ANDROID_HOME=~/Library/Android/sdk'
+                            "Run 'mysigner doctor' to diagnose, or set ANDROID_HOME to your SDK path\n  " \
+                            '(macOS: ~/Library/Android/sdk, Linux: ~/Android/Sdk).'
         end
       end
 
       def detect_android_home
-        # Common SDK locations
+        # Common SDK locations across macOS, Linux/WSL and Android Studio.
         candidates = [
-          File.expand_path('~/Library/Android/sdk'),
-          File.expand_path('~/Android/Sdk'),
+          ENV.fetch('ANDROID_HOME', nil),
+          ENV.fetch('ANDROID_SDK_ROOT', nil),
+          File.expand_path('~/Library/Android/sdk'),   # macOS (Android Studio)
+          File.expand_path('~/Android/Sdk'),           # Linux (Android Studio)
+          File.expand_path('~/.android/sdk'),
+          '/usr/lib/android-sdk',                      # Debian/Ubuntu package
+          '/opt/android-sdk',
           '/opt/homebrew/share/android-commandlinetools',
           '/usr/local/share/android-commandlinetools'
-        ]
+        ].compact
 
         candidates.each do |path|
           return path if Dir.exist?(path) && Dir.exist?(File.join(path, 'platform-tools'))
@@ -189,10 +199,35 @@ module Mysigner
           /usr/local/opt/openjdk/libexec/openjdk.jdk/Contents/Home
         ].each { |p| return p if Dir.exist?(p) }
 
-        # Try system Java
+        # Try system Java (macOS)
         system_paths = Dir.glob('/Library/Java/JavaVirtualMachines/*/Contents/Home')
         return system_paths.first if system_paths.any?
 
+        # Linux / WSL: resolve from the javac/java symlink, then /usr/lib/jvm.
+        detect_java_home_linux
+      end
+
+      # JAVA_HOME detection for Linux/WSL. Follows the real javac/java binary to
+      # its JDK home, then falls back to the newest /usr/lib/jvm install.
+      def detect_java_home_linux
+        %w[javac java].each do |bin|
+          path = `command -v #{bin} 2>/dev/null`.to_s.strip
+          next if path.empty?
+
+          real = begin
+            File.realpath(path)
+          rescue StandardError
+            path
+          end
+          # .../<jdk>/bin/java -> JAVA_HOME is two levels up
+          home = File.expand_path('../..', real)
+          return home if Dir.exist?(File.join(home, 'bin'))
+        end
+
+        homes = Dir.glob('/usr/lib/jvm/*/bin/java').map { |p| File.expand_path('../..', p) }
+        homes.select! { |h| Dir.exist?(h) }
+        homes.max
+      rescue StandardError
         nil
       end
 
@@ -260,6 +295,13 @@ module Mysigner
           cmd_parts << '&&' if @key_password
         end
 
+        # Export the versionCode override so the init script applies it to
+        # android.defaultConfig (a bare -PversionCode property is inert).
+        if @version_code && @signing_init_script_path
+          cmd_parts << "export MYSIGNER_VERSION_CODE=#{shell_escape(@version_code.to_s)}"
+          cmd_parts << '&&'
+        end
+
         # Change to android directory and run gradle
         cmd_parts << "cd #{shell_escape(android_dir)}"
         cmd_parts << '&&'
@@ -273,12 +315,15 @@ module Mysigner
 
         cmd_parts << task
 
-        # Add version code override if provided (no file modification needed)
+        # Belt-and-suspenders: also pass -PversionCode for any build.gradle that
+        # opts into reading it. The init-script injection above is what makes it
+        # reliable for stock projects.
         cmd_parts << "-PversionCode=#{@version_code}" if @version_code
 
-        # Standard build options
-        cmd_parts << '--no-daemon'  # Avoid daemon issues in CI
-        cmd_parts << '-q'           # Quiet mode (less noise)
+        # Standard build options. NOTE: do NOT add -q — quiet level suppresses the
+        # `> Task …` / `BUILD …` lifecycle lines that execute_with_output parses
+        # for progress, and hides the FAILURE block on errors.
+        cmd_parts << '--no-daemon' # Avoid daemon issues in CI
 
         cmd_parts.join(' ')
       end
@@ -344,12 +389,7 @@ module Mysigner
           File.join(android_dir, "build/app/outputs/bundle/#{variant}/*.aab")
         ]
 
-        patterns.each do |pattern|
-          matches = Dir.glob(pattern)
-          return matches.first if matches.any?
-        end
-
-        nil
+        newest_matching(patterns)
       end
 
       def find_apk_output(variant)
@@ -365,12 +405,34 @@ module Mysigner
           File.join(android_dir, "app/build/outputs/apk/#{variant}/app-#{variant}-unsigned.apk")
         ]
 
-        patterns.each do |pattern|
-          matches = Dir.glob(pattern)
-          return matches.first if matches.any?
-        end
+        newest_matching(patterns)
+      end
 
-        nil
+      # Pick the freshest artifact across all candidate globs. Prefer files
+      # produced by THIS build (mtime at/after build start, minus a small skew)
+      # so a leftover artifact from a previous or wrong-flavor build is never
+      # returned; fall back to the newest overall if none look fresh.
+      def newest_matching(patterns)
+        candidates = patterns.flat_map { |p| Dir.glob(p) }.uniq.select { |f| File.file?(f) }
+        return nil if candidates.empty?
+
+        fresh = if @build_started_at
+                  candidates.select { |f| File.mtime(f) >= @build_started_at - 2 }
+                else
+                  candidates
+                end
+        pool = fresh.empty? ? candidates : fresh
+        pool.max_by { |f| File.mtime(f) }
+      end
+
+      # Build the Gradle task suffix from a variant. Only the first character is
+      # upcased — String#capitalize would downcase the rest and break camelCase
+      # flavored variants (e.g. "demoRelease" -> "Demorelease").
+      def variant_suffix(variant)
+        v = variant.to_s
+        return v if v.empty?
+
+        v[0].upcase + v[1..]
       end
 
       def shell_escape(str)

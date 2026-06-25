@@ -63,9 +63,9 @@ module Mysigner
         # Match buildTypes block
         if @gradle_content =~ /buildTypes\s*\{(.*?)\n\s*\}/m
           block = ::Regexp.last_match(1)
-          # Find all type names (e.g., "release {" or "debug {")
+          # Find all type names (e.g., "release {" or "debug {"). Duplicates
+          # are removed by the trailing .uniq.
           block.scan(/(\w+)\s*\{/) do |match|
-            types << match[0] unless %w[debug release].include?(match[0]) && types.include?(match[0])
             types << match[0]
           end
         end

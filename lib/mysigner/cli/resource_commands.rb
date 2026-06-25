@@ -1731,8 +1731,12 @@ module Mysigner
               if keystore_info
                 say "🔐 Keystore: #{keystore_info[:name]}", :green
               else
-                say '⚠️  No keystore configured - will use debug signing', :yellow
-                say "   Run 'mysigner android init' to set up release signing", :yellow
+                say '⚠️  No release keystore configured — building a DEBUG-SIGNED AAB.', :yellow
+                say '   A debug-signed AAB is fine for local install/testing but Google', :yellow
+                say '   Play will REJECT it on upload. To produce a publishable build:', :yellow
+                say '     • Vault mode:      mysigner android init     (set up release signing)', :yellow
+                say '     • Local-only mode: pass --keystore-path / --keystore-password to', :yellow
+                say '                        `mysigner ship … --platform android`', :yellow
               end
               say ''
               say '⏱️  This may take a few minutes...', :yellow
@@ -1899,12 +1903,19 @@ module Mysigner
             # Write modified app.json
             File.write(app_json_path, JSON.pretty_generate(config))
 
+            # Back up an existing android/ so a failed prebuild can't destroy a
+            # committed or hand-edited native project — restored on any failure.
+            backup_dir = nil
+            if Dir.exist?(android_dir)
+              # pid + timestamp so a crashed prior run (same pid reused) can't
+              # collide and have its backup wiped by the rm_rf below.
+              backup_dir = "#{android_dir}.mysigner-bak-#{Process.pid}-#{Time.now.to_i}"
+              FileUtils.rm_rf(backup_dir)
+              FileUtils.mv(android_dir, backup_dir)
+            end
+
             begin
-              # Delete existing android folder
-
-              FileUtils.rm_rf(android_dir)
-
-              # Run expo prebuild
+              # Regenerate the native android/ from the version-bumped config.
               Dir.chdir(project_dir) do
                 success = system('npx', 'expo', 'prebuild', '--platform', 'android', '--clean')
                 raise 'expo prebuild failed' unless success
@@ -1919,8 +1930,28 @@ module Mysigner
                            File.expand_path('~/Library/Android/sdk')
                 File.write(local_props_path, "sdk.dir=#{sdk_path}\n") if Dir.exist?(sdk_path)
               end
+
+              # Success — drop the backup of the old android/.
+              FileUtils.rm_rf(backup_dir) if backup_dir
+            rescue StandardError
+              # Restore the original android/ so a failed regeneration never
+              # leaves the user worse off than before.
+              if backup_dir && Dir.exist?(backup_dir)
+                begin
+                  FileUtils.rm_rf(android_dir)
+                  FileUtils.mv(backup_dir, android_dir)
+                rescue StandardError => restore_err
+                  # Don't let a restore failure silently strand the user's
+                  # native project inside the backup dir — tell them exactly
+                  # where it is and how to recover it.
+                  say "⚠️  Could not auto-restore your android/ folder: #{restore_err.message}", :red
+                  say "   Your original android/ is preserved at: #{backup_dir}", :yellow
+                  say "   Recover it with: mv '#{backup_dir}' '#{android_dir}'", :yellow
+                end
+              end
+              raise
             ensure
-              # Restore original app.json
+              # Always restore the original app.json
               File.write(app_json_path, original_content)
             end
           end
@@ -2116,17 +2147,23 @@ module Mysigner
             gradle_args = ['./gradlew', 'bundleRelease', '--warning-mode=all']
             gradle_args << "-PversionCode=#{version_code_override}" if version_code_override
 
+            # Write the init script when we need to inject signing OR a
+            # versionCode override (a bare -PversionCode is ignored by stock
+            # build.gradle, so versionCode must flow through the init script).
             injector = nil
             env = {}
-            if keystore_info
+            if keystore_info || version_code_override
               injector = Mysigner::Signing::GradleSigningInjector.new
               init_path = injector.write_init_script!
-              env = keystore_info[:signing_env_vars] || injector.env_vars(
-                keystore_path: keystore_info[:path],
-                store_password: keystore_info[:password],
-                key_password: keystore_info[:key_password],
-                key_alias: keystore_info[:key_alias]
-              )
+              if keystore_info
+                env = keystore_info[:signing_env_vars] || injector.env_vars(
+                  keystore_path: keystore_info[:path],
+                  store_password: keystore_info[:password],
+                  key_password: keystore_info[:key_password],
+                  key_alias: keystore_info[:key_alias]
+                )
+              end
+              env['MYSIGNER_VERSION_CODE'] = version_code_override.to_s if version_code_override
               gradle_args.insert(1, '--init-script', init_path)
             end
 
@@ -2145,9 +2182,10 @@ module Mysigner
             # Find the AAB
             aab_path = File.join(android_dir, 'app/build/outputs/bundle/release/app-release.aab')
             unless File.exist?(aab_path)
-              # Try alternate paths
+              # Fall back to the NEWEST matching AAB so a stale/wrong-flavor
+              # artifact from a previous build is never returned.
               alt_paths = Dir.glob(File.join(android_dir, 'app/build/outputs/bundle/*/*.aab'))
-              aab_path = alt_paths.first if alt_paths.any?
+              aab_path = alt_paths.max_by { |f| File.mtime(f) } if alt_paths.any?
             end
             aab_path
           end

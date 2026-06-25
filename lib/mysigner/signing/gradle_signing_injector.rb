@@ -14,6 +14,20 @@ module Mysigner
         allprojects {
           afterEvaluate { project ->
             if (!project.hasProperty('android')) return
+
+            // versionCode override (MySigner auto-increment). Applied here so it
+            // actually takes effect even when app/build.gradle hard-codes
+            // versionCode in defaultConfig — a plain -PversionCode project
+            // property is silently ignored by stock build.gradle files.
+            // Gate to the APPLICATION module only: com.android.library modules
+            // have no versionCode in the AGP 7/8 library DSL, so assigning it
+            // there raises. allprojects+afterEvaluate fires for every Android
+            // subproject, hence the explicit application-plugin check.
+            def vcRaw = System.getenv('MYSIGNER_VERSION_CODE')
+            if (vcRaw && vcRaw.isInteger() && project.plugins.hasPlugin('com.android.application')) {
+              project.android.defaultConfig.versionCode = vcRaw.toInteger()
+            }
+
             def storePw   = System.getenv('MYSIGNER_STORE_PASSWORD')
             def keyPw     = System.getenv('MYSIGNER_KEY_PASSWORD')
             def aliasName = System.getenv('MYSIGNER_KEY_ALIAS')

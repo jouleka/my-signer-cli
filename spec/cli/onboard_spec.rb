@@ -510,6 +510,38 @@ RSpec.describe 'mysigner onboard' do
       end
     end
 
+    context 'Android keystore collection (collect_local_keystore_credential)' do
+      require 'base64'
+      let(:ks_path) { '/tmp/mysigner_test_release.jks' }
+      let(:ks_bytes) { "\x00KEYSTOREBYTES\xFF".b }
+
+      before do
+        allow(cli).to receive(:ask).with('Path to your keystore (.jks/.keystore):').and_return(ks_path)
+        allow(cli).to receive(:ask).with('Keystore password:', echo: false).and_return('storepw')
+        allow(cli).to receive(:ask).with('Key alias:').and_return('upload')
+        allow(cli).to receive(:ask)
+          .with('Key password (press Enter to reuse the keystore password):', echo: false).and_return('')
+        allow(File).to receive(:exist?).and_call_original
+        allow(File).to receive(:exist?).with(File.expand_path(ks_path)).and_return(true)
+        allow(File).to receive(:binread).with(File.expand_path(ks_path)).and_return(ks_bytes)
+      end
+
+      it 'stores the keystore under :android_keystore in the resolver envelope shape' do
+        cli.send(:collect_local_keystore_credential)
+        expect(Mysigner::LocalCredentials).to have_received(:store).with(
+          kind: :android_keystore,
+          id: 'upload',
+          secret: satisfy { |s|
+            payload = JSON.parse(s)
+            payload['keystore_b64'] == Base64.strict_encode64(ks_bytes) &&
+              payload['keystore_password'] == 'storepw' &&
+              payload['key_alias'] == 'upload' &&
+              payload['key_password'] == 'storepw' # blank key pw reuses keystore pw
+          }
+        )
+      end
+    end
+
     context 'user skips both credentials' do
       before do
         allow(cli).to receive(:yes_with_default?).and_return(false)

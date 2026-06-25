@@ -110,6 +110,12 @@ module Mysigner
                     say '  ✗ Token is invalid or expired', :red
                     issues << "Token authentication failed - run 'mysigner onboard' to re-authenticate"
                     client = nil
+                  rescue Mysigner::ConfigError
+                    # An undecryptable stored token is a LOCAL credential problem,
+                    # not an API/network failure — say so and point at re-login.
+                    say '  ✗ Saved credentials unreadable (encryption key changed or config corrupt)', :red
+                    issues << "Stored login unreadable - run 'mysigner logout' then 'mysigner login'"
+                    client = nil
                   rescue Mysigner::ConnectionError => e
                     say "  ✗ Cannot connect to API: #{e.message}", :red
                     issues << 'API connection failed - check your network or API URL'
@@ -253,18 +259,24 @@ module Mysigner
               end
               say ''
 
-              # Check 8: Project Detection (if in a project directory)
+              # Check 8: Project Detection (read-only — must NEVER trigger an
+              # expo prebuild from a diagnostic, hence allow_prebuild: false).
               say 'Checking current directory...', :yellow
               project_info = nil
               begin
-                project_info = Build::Detector.detect
-                framework = case project_info[:framework]
-                            when :capacitor then 'Capacitor/Ionic'
-                            when :react_native then 'React Native'
-                            when :flutter then 'Flutter'
-                            else 'Native iOS'
-                            end
-                say "  ✓ Found #{framework} project: #{File.basename(project_info[:path])}", :green
+                project_info = Build::Detector.detect(allow_prebuild: false)
+                if project_info[:needs_prebuild]
+                  say '  ℹ️  Expo managed project detected (no native ios/ folder yet)', :cyan
+                  say '     Generate it with: mysigner ship  (or `npx expo prebuild`)', :cyan
+                else
+                  framework = case project_info[:framework]
+                              when :capacitor then 'Capacitor/Ionic'
+                              when :react_native then 'React Native'
+                              when :flutter then 'Flutter'
+                              else 'Native iOS'
+                              end
+                  say "  ✓ Found #{framework} project: #{File.basename(project_info[:path])}", :green
+                end
               rescue StandardError
                 say '  ℹ️  No project detected in current directory', :cyan
               end
@@ -516,6 +528,12 @@ module Mysigner
                     say '  ⚠️  JAVA_HOME not set', :yellow
                   end
                 end
+              elsif platform_filter == 'android'
+                # When the user explicitly asks to check Android, a missing JDK
+                # is a hard blocker, not an FYI — otherwise doctor green-lights an
+                # environment that cannot build.
+                say '  ✗ Java not found (required for Android)', :red
+                issues << 'Java (JDK) not found — required to build Android. Install JDK 17+ and set JAVA_HOME.'
               else
                 say '  ℹ️  Java not found (required for Android)', :cyan
               end
@@ -525,6 +543,9 @@ module Mysigner
               if android_home && Dir.exist?(android_home)
                 say "  ✓ Android SDK: #{android_home}", :green
                 android_available = true
+              elsif platform_filter == 'android'
+                say '  ✗ Android SDK not found (set ANDROID_HOME)', :red
+                issues << 'Android SDK not found — set ANDROID_HOME to your SDK location.'
               else
                 say '  ℹ️  Android SDK not found (set ANDROID_HOME)', :cyan
               end
@@ -581,25 +602,32 @@ module Mysigner
                 say ''
               end
 
-              # Check 15: Android Project Detection
-              nil
+              # Check 15: Android Project Detection (read-only — must NEVER
+              # trigger an expo prebuild from a diagnostic, hence allow_prebuild:
+              # false).
               begin
-                android_project = Build::Detector.detect_android
-                framework = case android_project[:framework]
-                            when :capacitor then 'Capacitor/Ionic'
-                            when :react_native then 'React Native'
-                            when :flutter then 'Flutter'
-                            else 'Native Android'
-                            end
+                android_project = Build::Detector.detect_android(allow_prebuild: false)
                 say 'Checking Android project...', :yellow
-                say "  ✓ Found #{framework} Android project", :green
+                if android_project[:needs_prebuild]
+                  say '  ℹ️  Expo managed project detected (no android/ folder yet)', :cyan
+                  say '     Generate it with: mysigner android build', :cyan
+                  say '     (needs Node >= 20.19.4 and `npm install` first)', :cyan
+                else
+                  framework = case android_project[:framework]
+                              when :capacitor then 'Capacitor/Ionic'
+                              when :react_native then 'React Native'
+                              when :flutter then 'Flutter'
+                              else 'Native Android'
+                              end
+                  say "  ✓ Found #{framework} Android project", :green
 
-                # Parse project details
-                require_relative '../build/android_parser'
-                parser = Build::AndroidParser.new(android_project)
-                say "  Package: #{parser.application_id}", :cyan
-                say "  Version: #{parser.version_name} (#{parser.version_code})", :cyan
-                say "  Gradle wrapper: #{parser.gradle_wrapper_exists? ? '✓' : '✗'}", :cyan
+                  # Parse project details
+                  require_relative '../build/android_parser'
+                  parser = Build::AndroidParser.new(android_project)
+                  say "  Package: #{parser.application_id}", :cyan
+                  say "  Version: #{parser.version_name} (#{parser.version_code})", :cyan
+                  say "  Gradle wrapper: #{parser.gradle_wrapper_exists? ? '✓' : '✗'}", :cyan
+                end
                 say ''
               rescue Build::Detector::NoProjectError
                 # Not an Android project, that's fine
@@ -617,7 +645,7 @@ module Mysigner
             if issues.empty? && warnings.empty?
               say "🎉 All checks passed! You're good to go!", :green
               say ''
-              say 'Try: mysigner ship testflight', :cyan
+              say(platform_filter == 'android' ? 'Try: mysigner ship internal --platform android' : 'Try: mysigner ship testflight', :cyan)
             elsif issues.empty?
               say "⚠️  #{warnings.length} warning(s), but you're mostly good!", :yellow
               say ''
