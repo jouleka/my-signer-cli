@@ -1782,16 +1782,21 @@ module Mysigner
               say '  mysigner ship internal --platform android', :green
               say ''
 
-              # Open the folder containing the AAB
-              aab_dir = File.dirname(aab_path)
-              say '📂 Opening folder...', :yellow
-              case RUBY_PLATFORM
-              when /darwin/
-                system('open', aab_dir)
-              when /linux/
-                system('xdg-open', aab_dir)
-              when /mingw|mswin/
-                system('explorer', aab_dir.gsub('/', '\\'))
+              # Open the folder containing the AAB — only in an interactive
+              # terminal. On headless / CI / SSH there is no file manager, and
+              # xdg-open/explorer would spew errors AFTER a successful build.
+              if $stdout.tty?
+                aab_dir = File.dirname(aab_path)
+                opener = case RUBY_PLATFORM
+                         when /darwin/ then 'open'
+                         when /linux/ then 'xdg-open'
+                         when /mingw|mswin/ then 'explorer'
+                         end
+                if opener
+                  say '📂 Opening folder...', :yellow
+                  target = opener == 'explorer' ? aab_dir.gsub('/', '\\') : aab_dir
+                  system(opener, target, %i[out err] => File::NULL)
+                end
               end
             rescue Build::Detector::NoProjectError => e
               error e.message

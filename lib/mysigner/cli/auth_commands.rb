@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'stringio' # discover_local_*_silently use StringIO as a non-tty stderr proxy
+
 module Mysigner
   class CLI < Thor
     module AuthCommands
