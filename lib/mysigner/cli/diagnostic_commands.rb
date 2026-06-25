@@ -18,13 +18,23 @@ module Mysigner
 
             # Determine which platforms to check
             platform_filter = options[:platform]&.downcase
-            check_ios = platform_filter.nil? || platform_filter == 'all' || platform_filter == 'ios'
-            check_android = platform_filter.nil? || platform_filter == 'all' || platform_filter == 'android'
 
             if platform_filter && !%w[ios android all].include?(platform_filter)
               error "Invalid platform: #{platform_filter}"
               say 'Valid options: ios, android, all', :yellow
               exit 1
+            end
+
+            want_ios = platform_filter.nil? || platform_filter == 'all' || platform_filter == 'ios'
+            # iOS checks only mean something on macOS. On Linux/Windows, skip them
+            # with one info line instead of a wall of red "Xcode not found" issues —
+            # unless the user EXPLICITLY asked for --platform ios.
+            check_ios = want_ios && (macos? || platform_filter == 'ios')
+            check_android = platform_filter.nil? || platform_filter == 'all' || platform_filter == 'android'
+
+            if want_ios && !check_ios
+              say 'ℹ️  iOS checks skipped — iOS building requires macOS + Xcode.', :cyan
+              say ''
             end
 
             # Check 1: Xcode (iOS only)

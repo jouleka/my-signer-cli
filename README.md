@@ -71,6 +71,8 @@ bundle exec rake install
 
 ## Quick Start
 
+> **No My Signer account?** You don't need one. To sign & ship with your own Apple/Google credentials (nothing sent to a server), see the **Local-only mode** section further down and run `mysigner --local-only onboard`. The steps below are for the account-based ("vault") mode.
+
 ### 1. Get Your API Token
 
 1. Log in to your My Signer dashboard

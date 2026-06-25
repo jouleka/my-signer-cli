@@ -28,5 +28,11 @@ RSpec.configure do |config|
   # specs that intentionally exercise the file source.
   config.before do
     allow(Mysigner::Config).to receive(:local_only_from_file?).and_return(false) if defined?(Mysigner::Config)
+
+    # The CI/dev box is Linux, but the iOS-flow and doctor specs assume macOS
+    # (they mock xcodebuild/security). Default macos? to true so those specs are
+    # OS-independent; specs that intentionally exercise the non-macOS guard
+    # override with `allow(cli).to receive(:macos?).and_return(false)`.
+    allow_any_instance_of(Mysigner::CLI).to receive(:macos?).and_return(true) if defined?(Mysigner::CLI)
   end
 end

@@ -99,4 +99,13 @@ rescue Mysigner::ConfigError => e
     warn e.full_message(highlight: false)
   end
   exit 1
+rescue Errno::ENOENT => e
+  # A required external program or file wasn't found (e.g. xcodebuild on a
+  # non-Mac). Convert the raw Errno backtrace into a clear, actionable line.
+  warn "✗ A required program or file was not found: #{e.message}"
+  warn ''
+  warn 'If this was an iOS command, note that iOS builds need macOS + Xcode.'
+  warn 'On Linux or Windows you can still build Android: mysigner ship internal --platform android'
+  warn e.full_message(highlight: false) if ENV['DEBUG']
+  exit 1
 end

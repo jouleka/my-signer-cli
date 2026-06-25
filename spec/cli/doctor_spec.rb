@@ -449,6 +449,25 @@ RSpec.describe 'mysigner doctor' do
     end
   end
 
+  describe 'mysigner doctor on a non-macOS host (regression: iOS checks skipped, not red)' do
+    let(:cli) { Mysigner::CLI.new }
+
+    before do
+      allow(cli).to receive(:macos?).and_return(false)
+      allow(cli).to receive(:options).and_return({ local_only: true })
+      stub_backticks(cli)
+      allow(cli).to receive(:system).and_return(false)
+      allow(Mysigner::Build::Detector).to receive(:detect_android)
+        .and_raise(Mysigner::Build::Detector::NoProjectError)
+    end
+
+    it 'skips iOS checks with an info line instead of red Xcode issues' do
+      output = capture_stdout { cli.doctor }
+      expect(output).to include('iOS checks skipped')
+      expect(output).not_to match(/Xcode is not installed or not in PATH/)
+    end
+  end
+
   # Helper method
   def capture_stdout
     old_stdout = $stdout

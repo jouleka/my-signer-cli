@@ -39,7 +39,12 @@ module Mysigner
         # Build
         success = run_gradle_build(task)
 
-        raise BuildError, 'Android build failed. Check output above for errors.' unless success
+        unless success
+          raise BuildError, 'Android build failed — the details are in the Gradle output above. ' \
+                            'Common causes: signing rejected (check keystore password/alias), a ' \
+                            "missing SDK component (run 'mysigner doctor'), or a compile error in " \
+                            "your app (look for 'error:' lines). Re-run with DEBUG=1 for more."
+        end
 
         # Find output AAB
         aab_path = find_aab_output(variant)
@@ -67,7 +72,12 @@ module Mysigner
         # Build
         success = run_gradle_build(task)
 
-        raise BuildError, 'Android build failed. Check output above for errors.' unless success
+        unless success
+          raise BuildError, 'Android build failed — the details are in the Gradle output above. ' \
+                            'Common causes: signing rejected (check keystore password/alias), a ' \
+                            "missing SDK component (run 'mysigner doctor'), or a compile error in " \
+                            "your app (look for 'error:' lines). Re-run with DEBUG=1 for more."
+        end
 
         # Find output APK
         apk_path = find_apk_output(variant)

@@ -5,6 +5,25 @@ All notable changes to My Signer CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-06-25
+
+### Fixed
+- Robustness: an undecryptable stored token no longer crashes nearly every command with a raw backtrace — it degrades to a clear "re-login" message. `config show` now works.
+- `doctor --platform android` no longer reports "All checks passed" when the JDK/Android SDK are missing (they're now reported as issues).
+- `doctor` and `validate` no longer run a tree-mutating `npx expo prebuild` from a read-only diagnostic; `validate` no longer crashes on a project with no native iOS project.
+- Android versionCode auto-increment now actually takes effect — it's injected via the Gradle init script (a bare `-PversionCode` is ignored by stock `build.gradle`), gated to the application module so library submodules don't break.
+- Expo version bumps back up `android/` and restore it on failure (no data loss).
+- `onboard --local-only` no longer crashes with `uninitialized constant StringIO`.
+- iOS-only commands (`ship testflight/appstore`, `build`, `export`, `upload`) now fail with a clear "requires macOS" message on Linux/Windows instead of a raw backtrace; `doctor` skips iOS checks on non-macOS instead of showing red Xcode issues.
+- Dropped the `-q` flag that hid Gradle output; AAB selected by newest mtime; camelCase build variants fixed; Linux/WSL JDK + Android SDK auto-detection.
+- Security: faraday 2.14.2 → 2.14.3 (CVE-2026-54297).
+
+### Changed
+- Local-only mode (no My Signer account) is now surfaced at the front door: post-install message, `onboard` (interactive mode choice), `login`, and the README Quick Start.
+- `ship` help explains Android tracks in plain words (incl. "production = PUBLIC — goes live to everyone") and what an AAB is; `--local-only` credential flags are documented.
+- `onboard` now also sets up Google Play (vault) and an Android signing keystore (local-only).
+- Connection-error guidance no longer leaks Rails/server internals to CLI users; Android build failures include a short triage block.
+
 ## [0.1.0] - 2026-01-23
 
 ### Added

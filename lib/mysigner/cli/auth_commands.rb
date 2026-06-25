@@ -30,6 +30,10 @@ module Mysigner
 
             New user? Run 'mysigner onboard' for step-by-step guidance.
 
+            No My Signer account? You don't need one to sign and ship — run
+            'mysigner --local-only onboard' to use your own Apple/Google
+            credentials, kept on this machine.
+
             Your credentials will be stored securely in ~/.mysigner/config.yml
 
             Note: API tokens are organization-specific. This token will only
@@ -234,6 +238,26 @@ module Mysigner
 
             # Check if already configured
             config = Config.new
+
+            # Fresh user, interactive: offer the two modes up front so a newcomer
+            # doesn't assume a My Signer website account is mandatory.
+            if $stdin.tty? && !(config.exists? && config.current_organization_id)
+              say 'How do you want to use My Signer?', :cyan
+              say ''
+              say '  1. With a free My Signer account', :white
+              say '     (keys stored on the server; sync across machines & team)'
+              say '  2. Local-only — no account', :white
+              say '     (your Apple/Google keys stay on THIS machine; nothing sent to a server)'
+              say ''
+              say 'Not sure? Choose 2 (local-only).', :yellow
+              say ''
+              if ask('Select (1-2):', limited_to: %w[1 2]) == '2'
+                emit_local_only_banner
+                return onboard_local_only
+              end
+              say ''
+            end
+
             if config.exists? && config.api_token && config.current_organization_id
               say "✓ You're already logged in!", :green
               say ''
@@ -1758,8 +1782,14 @@ module Mysigner
               key_id = ask('Enter your Key ID (e.g., ABC12345):').to_s.strip if key_id.nil? || key_id.empty?
               raise_local_onboard_error!('Key ID cannot be empty') if key_id.empty?
 
+              say 'Find your Issuer ID at https://appstoreconnect.apple.com/access/api', :cyan
+              say '(the UUID shown at the top of the Keys page).', :cyan
               issuer_id = ask('Enter your Issuer ID (UUID):').to_s.strip
-              raise_local_onboard_error!('Issuer ID cannot be empty') if issuer_id.empty?
+              if issuer_id.empty?
+                raise_local_onboard_error!(
+                  "Issuer ID cannot be empty (it's the UUID at appstoreconnect.apple.com/access/api)"
+                )
+              end
 
               # Storage shape matches mysigner-42's Option A: id == key_id,
               # secret is a JSON envelope so AscJwtMinter can reconstruct

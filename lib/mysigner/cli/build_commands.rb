@@ -20,15 +20,18 @@ module Mysigner
           long_desc <<~DESC
             Build your project, sign it, and upload in one go.
 
-            iOS TARGETS
-              testflight : Upload a beta build to TestFlight
-              appstore   : Upload a production build to App Store Connect
+            iOS TARGETS (requires macOS + Xcode)
+              testflight : Beta testing via TestFlight
+              appstore   : Submit for public App Store release
 
-            ANDROID TARGETS
-              internal   : Upload to internal testing track
-              alpha      : Upload to alpha (closed testing) track
-              beta       : Upload to beta (open testing) track
-              production : Upload to production track
+            ANDROID TARGETS (works on macOS, Linux, and Windows)
+              internal   : Fastest — up to 100 testers you list. NOT public.
+              alpha      : Closed testing — an invite-only tester group.
+              beta       : Open testing — anyone with your opt-in link.
+              production : PUBLIC — goes LIVE to everyone on the Google Play Store.
+
+            An AAB (Android App Bundle, .aab) is what Google Play requires — the
+            CLI builds and signs it for you (you don't upload an APK).
 
             PLATFORM OPTIONS
               --platform ios       Force iOS build (auto-detected by default)
@@ -42,6 +45,14 @@ module Mysigner
             ANDROID OPTIONS
               --release-notes TEXT   Release notes for Play Store
               --package-name PKG     Override the detected package name
+
+            LOCAL-ONLY (no My Signer account — use your OWN credentials)
+              Run `mysigner --local-only onboard` once for a guided setup, or pass:
+                iOS:     --asc-key-path (the AuthKey_XXXX.p8 from
+                         appstoreconnect.apple.com/access/api), --asc-key-id (the
+                         XXXX in that filename), --asc-issuer-id (the UUID on that page)
+                Android: --keystore-path / --keystore-password / --key-alias and
+                         --play-credentials (a Google Play service-account .json)
 
             WORKFLOW
               For iOS TestFlight:
@@ -140,7 +151,8 @@ module Mysigner
               return
             end
 
-            # iOS flow continues below...
+            # iOS flow continues below — requires macOS + Xcode.
+            require_macos!("ship #{target}")
 
             is_appstore = (target == 'appstore')
 
@@ -1817,6 +1829,7 @@ module Mysigner
           method_option :skip_extensions, type: :boolean, default: false,
                                           desc: 'Skip extension targets (useful when extensions are not configured)'
           def build
+            require_macos!('build')
             config = load_config
             client = create_client(config)
 
@@ -2031,6 +2044,7 @@ module Mysigner
                                  desc: 'Export method (appstore, adhoc, enterprise, development)'
           method_option :output, type: :string, desc: 'Output directory for .ipa file'
           def export(archive_path)
+            require_macos!('export')
             load_config
 
             begin
@@ -2085,6 +2099,7 @@ module Mysigner
                "Upload existing .ipa to TestFlight (advanced - most users should use 'ship')"
           method_option :wait, type: :boolean, default: false, desc: 'Wait for processing to complete'
           def upload(target, ipa_path)
+            require_macos!('upload testflight')
             unless target == 'testflight'
               error "Only 'testflight' target is supported currently"
               say 'Usage: mysigner upload testflight IPA_PATH', :yellow

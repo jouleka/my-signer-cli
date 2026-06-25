@@ -1393,6 +1393,8 @@ module Mysigner
 
               mysigner android build
               Build an AAB file for upload to Google Play Console.
+              (An AAB — Android App Bundle, .aab — is the format Google Play
+              requires; the CLI builds and signs it for you, not an APK.)
               Use this for your FIRST upload (required before mysigner ship works).
 
               mysigner android list

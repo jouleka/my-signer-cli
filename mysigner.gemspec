@@ -38,14 +38,19 @@ Gem::Specification.new do |spec|
 
     \e[32m✓\e[0m  You're ready to automate iOS & Android code signing.
 
-    \e[35mNext steps:\e[0m
-      • \e[33mRun\e[0m \e[1m`mysigner onboard`\e[0m   – Guided first-time setup (API URL, org, token)
-      • \e[33mRun\e[0m \e[1m`mysigner login`\e[0m     – Skip onboarding if you already have a token
-      • \e[33mRun\e[0m \e[1m`mysigner doctor`\e[0m    – Validate your development environment
-      • \e[33mRun\e[0m \e[1m`mysigner help`\e[0m      – Explore every command in the toolbox
+    \e[35mTwo ways to use it:\e[0m
+      • \e[1mWith a free My Signer account\e[0m (keys stored & synced for you):
+          \e[33mRun\e[0m \e[1m`mysigner onboard`\e[0m
+      • \e[1mNo account — your keys stay on this machine\e[0m (nothing sent to a server):
+          \e[33mRun\e[0m \e[1m`mysigner --local-only onboard`\e[0m
+        \e[33mNot sure? Start with --local-only.\e[0m
 
-    \e[35miOS:\e[0m        mysigner ship testflight
-    \e[35mAndroid:\e[0m    mysigner ship internal --platform android
+    \e[35mAlso handy:\e[0m
+      • \e[33mRun\e[0m \e[1m`mysigner doctor`\e[0m   – Check your dev environment (JDK, SDK, Xcode…)
+      • \e[33mRun\e[0m \e[1m`mysigner help`\e[0m     – Explore every command
+
+    \e[35miOS (needs a Mac):\e[0m  mysigner ship testflight
+    \e[35mAndroid:\e[0m           mysigner ship internal --platform android
 
     \e[36mDocs:\e[0m https://mysigner.dev/docs/commands
   MSG

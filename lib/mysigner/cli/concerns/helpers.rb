@@ -102,6 +102,8 @@ module Mysigner
             say '  (auto-discovers ASC .p8 from ~/.appstoreconnect/private_keys/,', :yellow
             say '   Google Play SA-JSON from GOOGLE_APPLICATION_CREDENTIALS / eas.json,', :yellow
             say '   keystore from key.properties / eas.json — or set them via flags / env.)', :yellow
+            say '  Note: build / ship / sign work fully local; account commands', :yellow
+            say '  (orgs / switch / sync) still need a My Signer login.', :yellow
             say '  See "Local-only mode" section in README.', :yellow
             exit 1
           end
@@ -162,6 +164,27 @@ module Mysigner
 
         def error(message)
           say "✗ Error: #{message}", :red
+        end
+
+        # True on macOS. iOS building/signing (Xcode, xcodebuild, the keychain)
+        # only works there; iOS-only commands call require_macos! to fail with a
+        # clear message instead of a raw "xcodebuild: not found" backtrace.
+        def macos?
+          !(RbConfig::CONFIG['host_os'] =~ /darwin/i).nil?
+        end
+
+        # Guard for iOS-only commands. On non-macOS, explain plainly and point
+        # the user at the Android path that DOES work cross-platform, then exit.
+        def require_macos!(command_label = 'This command')
+          return if macos?
+
+          error "#{command_label} requires macOS with Xcode."
+          say ''
+          say 'iOS building, signing, and uploading only work on a Mac (they use Xcode).', :yellow
+          say 'On Linux or Windows you can still build and ship Android:', :yellow
+          say '  mysigner ship internal --platform android', :cyan
+          say '  mysigner android build', :cyan
+          exit 1
         end
 
         # Local-only mode is active when any of, in precedence order:

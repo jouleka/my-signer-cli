@@ -84,19 +84,16 @@ module Mysigner
           say ''
           say 'To fix this:', :cyan
           say ''
-          if api_url.include?('localhost')
-            say '  For local development:', :bold
-            say '    1. Make sure Rails server is running:'
-            say '       cd path/to/my-signer'
-            say '       bin/rails server'
-            say ''
-            say "    2. Verify it's accessible:"
-            say "       curl #{api_url}/up"
+          if api_url.include?('localhost') && ENV['MYSIGNER_DEV']
+            say '  For My Signer backend development:', :bold
+            say '    1. Start the Rails server: cd path/to/my-signer && bin/rails server'
+            say "    2. Verify it's accessible: curl #{api_url}/up"
           else
-            say '  For production:', :bold
-            say '    1. Check the API URL is correct'
-            say '    2. Verify the service is running'
-            say '    3. Check your internet connection'
+            say '  To fix:', :bold
+            say '    1. Check your internet connection'
+            say '    2. Verify the API URL is correct: mysigner config show'
+            say "    3. Don't need a My Signer account? Run any command with --local-only"
+            say '       to sign with your own Apple/Google credentials.'
           end
           say ''
           say '  Or set a custom API URL:', :bold
