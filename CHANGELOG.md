@@ -5,6 +5,16 @@ All notable changes to My Signer CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.7] - 2026-06-26
+
+Small robustness + dependency-hygiene follow-ups.
+
+### Fixed
+- Pressing Ctrl-C while `ship appstore --wait` is polling now prints a clean "still processing on Apple's side — re-run to resume" hint and exits with the standard SIGINT code, instead of leaving a half-drawn "Waiting…" line.
+
+### Changed
+- Dependency hygiene: removed the redundant `xcodeproj` declaration from the Gemfile (it's already a gemspec dependency), and added `x86_64-linux` to `Gemfile.lock` so Linux/CI installs use the committed, audited dependency graph rather than re-resolving.
+
 ## [0.3.6] - 2026-06-26
 
 Follow-up hardening from the audit's remaining medium/low findings.

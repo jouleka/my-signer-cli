@@ -85,6 +85,29 @@ RSpec.describe Mysigner::Upload::AppStoreAutomation do
       allow(client).to receive(:patch)
     end
 
+    context 'when interrupted (Ctrl-C) during the wait' do
+      before do
+        allow(client).to receive(:get).with(
+          "/api/v1/organizations/#{organization_id}/builds", anything
+        ).and_return({ data: { 'data' => { 'builds' => [{ 'id' => 'b', 'processing_state' => 'PROCESSING' }] } } })
+        allow(automation).to receive(:sleep).and_raise(Interrupt)
+      end
+
+      it 'exits with the SIGINT code (130)' do
+        allow(automation).to receive(:puts) # swallow the hint
+        expect { automation.send(:wait_for_build, app['id'], build_info) }
+          .to raise_error(SystemExit) { |e| expect(e.status).to eq(130) }
+      end
+
+      it 'prints a resume hint instead of leaving a half-drawn line' do
+        expect do
+          automation.send(:wait_for_build, app['id'], build_info)
+        rescue SystemExit
+          nil
+        end.to output(/Stopped waiting.*Re-run/m).to_stdout
+      end
+    end
+
     context 'when wait is enabled and build processes before timeout' do
       before do
         calls = 0

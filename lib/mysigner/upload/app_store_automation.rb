@@ -160,6 +160,18 @@ module Mysigner
           $stdout.flush
           sleep @poll_interval
         end
+      rescue Interrupt
+        # Only the polling loop draws the "Waiting …" line, so only it needs the
+        # resume hint; if we weren't actually waiting, let Ctrl-C propagate.
+        raise unless @wait_enabled
+
+        # Ctrl-C during the wait: don't leave a half-drawn "Waiting …" line with
+        # no newline. The build keeps processing on Apple's side — tell the user
+        # how to resume, then exit with the conventional SIGINT code.
+        puts ''
+        puts '⏹  Stopped waiting — your build is still processing on Apple’s side.'
+        puts '   Re-run `mysigner ship appstore --wait` to resume watching.'
+        exit 130
       end
 
       def latest_build(app_id, build_info)

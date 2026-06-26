@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    mysigner (0.3.6)
+    mysigner (0.3.7)
       base64 (~> 0.2)
       faraday (~> 2.14)
       faraday-retry (~> 2.2)
@@ -149,6 +149,7 @@ GEM
 PLATFORMS
   arm64-darwin-24
   ruby
+  x86_64-linux
 
 DEPENDENCIES
   bundler (~> 2.5)
@@ -157,7 +158,6 @@ DEPENDENCIES
   rspec (~> 3.0)
   rubocop (~> 1.79)
   webmock (~> 3.24)
-  xcodeproj (~> 1.27)
 
 BUNDLED WITH
    2.7.2
