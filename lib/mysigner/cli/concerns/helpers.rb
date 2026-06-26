@@ -4,14 +4,6 @@ module Mysigner
   class CLI < Thor
     module Concerns
       module Helpers
-        # Helper for timing operations
-        def with_timing(_label)
-          start = Time.now
-          result = yield
-          duration = Time.now - start
-          [result, duration]
-        end
-
         def format_duration(seconds)
           if seconds < 60
             "#{seconds.round}s"

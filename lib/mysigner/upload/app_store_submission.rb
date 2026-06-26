@@ -91,18 +91,6 @@ module Mysigner
         nil
       end
 
-      # Fetch release config and extract min_build_number for smart build selection
-      def fetch_release_config
-        metadata = fetch_release_metadata
-        return {} unless metadata
-
-        config = {}
-        config[:min_build_number] = metadata['build_number'].to_i if metadata['build_number']
-        config[:release_type] = metadata['release_type'] if metadata['release_type']
-        config[:earliest_release_date] = metadata['earliest_release_date'] if metadata['earliest_release_date']
-        config
-      end
-
       def merge_metadata(api_metadata)
         api_data = stringify_keys(api_metadata || {})
         overrides = stringify_keys(@metadata_overrides)
