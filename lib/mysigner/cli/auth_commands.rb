@@ -17,8 +17,8 @@ module Mysigner
             say "Install:     #{File.expand_path('../../..', __dir__)}", :white
             say "Config:      #{Config::CONFIG_FILE}", :white
             say ''
-            say 'Repository:  https://github.com/mysigner-dev/mysigner-cli', :white
-            say 'Issues:      https://github.com/mysigner-dev/mysigner-cli/issues', :white
+            say 'Repository:  https://github.com/jouleka/my-signer-cli', :white
+            say 'Issues:      https://github.com/jouleka/my-signer-cli/issues', :white
             say ''
             say 'Docs:        https://mysigner.dev/docs/commands', :white
             say 'Support:     https://mysigner.dev/landing#contact', :white

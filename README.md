@@ -2,7 +2,7 @@
 
 **One command from code to TestFlight or Google Play. No provisioning hell, no manual certificate wrangling.**
 
-Command-line interface for [My Signer](https://github.com/jurgenleka/my-signer) - the modern mobile app signing and deployment automation tool for iOS and Android.
+Command-line interface for [My Signer](https://github.com/jouleka/my-signer) - the modern mobile app signing and deployment automation tool for iOS and Android.
 
 ---
 
@@ -39,7 +39,7 @@ Mobile developers spend hours dealing with:
 - Ruby 3.2+ (recommended: 3.4.5)
 
 **Vault mode** (default — server-orchestrated):
-- [My Signer API](https://github.com/jurgenleka/my-signer) account and API token
+- [My Signer API](https://github.com/jouleka/my-signer) account and API token
 
 **Local-only mode** (`--local-only` — no MySigner account or token required):
 - Your own signing credentials: Apple `.p8` key / Google Play service-account JSON / Android keystore (set up via `mysigner --local-only onboard`, flags, or env vars)
@@ -61,7 +61,7 @@ gem install mysigner
 ### Install from source
 
 ```bash
-git clone https://github.com/jurgenleka/my-signer-cli.git
+git clone https://github.com/jouleka/my-signer-cli.git
 cd my-signer-cli
 bundle install
 bundle exec rake install
@@ -491,7 +491,7 @@ mysigner config set KEY VAL # Update configuration value
 **Current Version**: 0.3.4
 
 ✅ **Complete**:
-- ✅ Gem structure and dependencies (Thor, Faraday, Reline, Google APIs)
+- ✅ Gem structure and dependencies (Thor, Faraday, Google APIs)
 - ✅ Config management (`~/.mysigner/config.yml`)
 - ✅ API client (Faraday with retry & error handling)
 - ✅ Core commands (login, logout, config, status, orgs, switch, onboard)
@@ -506,7 +506,7 @@ mysigner config set KEY VAL # Update configuration value
 - ✅ Server-side signing validation (`mysigner validate`)
 - ✅ Project detection (Native iOS/Android, React Native, Flutter, Capacitor/Ionic)
 - ✅ `mysigner doctor` health check with auto-fix capabilities
-- ✅ 260+ RSpec tests
+- ✅ Comprehensive RSpec suite (1,900+ examples)
 - ✅ Interactive prompts and wizards
 
 📅 **Future**:
@@ -515,7 +515,7 @@ mysigner config set KEY VAL # Update configuration value
 - `--json` flag for scripting
 - CI/CD templates (GitHub Actions, GitLab CI)
 
-See the [main project roadmap](https://github.com/jurgenleka/my-signer/blob/main/ROADMAP.md) for detailed plans.
+See the [main project roadmap](https://github.com/jouleka/my-signer/blob/main/ROADMAP.md) for detailed plans.
 
 ---
 
@@ -524,7 +524,7 @@ See the [main project roadmap](https://github.com/jurgenleka/my-signer/blob/main
 ### Setup
 
 ```bash
-git clone https://github.com/jurgenleka/my-signer-cli.git
+git clone https://github.com/jouleka/my-signer-cli.git
 cd my-signer-cli
 bundle install
 ```
@@ -679,17 +679,17 @@ This is currently a private project. Contributions are not being accepted at thi
 
 ## Related Projects
 
-- **[My Signer API](https://github.com/jurgenleka/my-signer)** - The backend API and web dashboard
-- **[My Signer Docs](https://github.com/jurgenleka/my-signer/tree/main/app/views/docs)** - In-app documentation source
+- **[My Signer API](https://github.com/jouleka/my-signer)** - The backend API and web dashboard
+- **[My Signer Docs](https://github.com/jouleka/my-signer/tree/main/app/views/docs)** - In-app documentation source
 
 ---
 
 ## Support
 
 For questions or issues:
-- Check the [main project README](https://github.com/jurgenleka/my-signer/blob/main/README.md)
-- See [ROADMAP.md](https://github.com/jurgenleka/my-signer/blob/main/ROADMAP.md) for development plans
-- Review [CHANGELOG.md](https://github.com/jurgenleka/my-signer/blob/main/CHANGELOG.md) for recent updates
+- Check the [main project README](https://github.com/jouleka/my-signer/blob/main/README.md)
+- See [ROADMAP.md](https://github.com/jouleka/my-signer/blob/main/ROADMAP.md) for development plans
+- Review [CHANGELOG.md](https://github.com/jouleka/my-signer/blob/main/CHANGELOG.md) for recent updates
 
 ---
 

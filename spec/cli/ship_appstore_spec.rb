@@ -124,10 +124,6 @@ RSpec.describe 'App Store Distribution', type: :cli do
                                                                                         }
                                                                                       })
 
-      uploader = double('Uploader')
-      allow(uploader).to receive(:upload!)
-      allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
-
       # Stub submission flow (always runs for appstore)
       submission = double('Submission', submit_for_review!: {
                             success: true, metadata: {}, automation: { wait: {}, submitted: false }
@@ -201,10 +197,6 @@ RSpec.describe 'App Store Distribution', type: :cli do
                                                                                           'app_store_connect_team_id' => 'TEAM123'
                                                                                         }
                                                                                       })
-
-      uploader = double('Uploader')
-      allow(uploader).to receive(:upload!)
-      allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
 
       allow(File).to receive(:exist?).and_return(true)
       allow(File).to receive(:size).and_return(10_000_000)
@@ -315,9 +307,6 @@ RSpec.describe 'App Store Distribution', type: :cli do
                                                                                         }
                                                                                       })
 
-      uploader = double('Uploader', upload!: true)
-      allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
-
       allow(File).to receive(:exist?).and_return(true)
       allow(File).to receive(:size).and_return(10_000_000)
     end
@@ -424,10 +413,6 @@ RSpec.describe 'App Store Distribution', type: :cli do
                                                                                           'app_store_connect_private_key' => 'PRIVATE_KEY'
                                                                                         }
                                                                                       })
-
-      uploader = double('Uploader')
-      allow(uploader).to receive(:upload!)
-      allow(Mysigner::Upload::Uploader).to receive(:new).and_return(uploader)
 
       # Stub submission flow (always runs for appstore)
       submission = double('Submission', submit_for_review!: {

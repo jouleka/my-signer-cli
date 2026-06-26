@@ -69,7 +69,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'faraday', '~> 2.14'
   spec.add_dependency 'faraday-retry', '~> 2.2'
   spec.add_dependency 'plist', '~> 3.7'
-  spec.add_dependency 'reline', '~> 0.5'
   spec.add_dependency 'thor', '~> 1.4'
   spec.add_dependency 'xcodeproj', '~> 1.27'
 

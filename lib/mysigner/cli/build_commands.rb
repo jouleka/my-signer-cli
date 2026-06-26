@@ -660,11 +660,6 @@ module Mysigner
               say "  Target:      #{target_name}"
               say "  IPA Size:    #{format_bytes(File.size(ipa_path))}"
               say ''
-              if is_appstore && options[:submit_for_review]
-                poll_msg = options[:wait] ? "every #{automation.poll_interval}s" : 'skipped (--no-wait)'
-                say "  ASC Polling: #{poll_msg}"
-                say "  ASC Timeout: #{format_duration(options[:asc_timeout_seconds])}" if options[:asc_timeout_seconds]
-              end
 
               # Timing breakdown
               say '⏱️  Time Breakdown', :bold
