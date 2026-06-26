@@ -44,6 +44,27 @@ RSpec.describe Mysigner::Build::Detector do
       end
     end
 
+    context 'when prebuild actually runs (prereqs satisfied)' do
+      it 'invokes npx expo prebuild via argv (no shell) so a project path with spaces works' do
+        spaced = File.join(test_dir, 'My App')
+        FileUtils.mkdir_p(spaced)
+        allow(described_class).to receive(:ensure_expo_prereqs!)
+
+        captured = nil
+        allow(described_class).to receive(:system) do |*args|
+          captured = args
+          FileUtils.mkdir_p(File.join(spaced, 'android')) # simulate a successful prebuild
+          true
+        end
+
+        described_class.run_expo_prebuild!(spaced, :android)
+
+        # The directory must NOT be interpolated into a `cd <dir> && ...` shell
+        # string (which splits on the space); each token is its own argv element.
+        expect(captured).to eq(['npx', 'expo', 'prebuild', '--platform', 'android'])
+      end
+    end
+
     context 'when Expo bare workflow (has ios/ folder)' do
       before do
         File.write(File.join(test_dir, 'app.json'), '{"expo": {"name": "Test"}}')

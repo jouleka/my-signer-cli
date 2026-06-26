@@ -72,7 +72,9 @@ module Mysigner
 
         puts "\n📦 Expo managed workflow detected (no #{platform}/ folder)"
         puts "🔧 Running: npx expo prebuild --platform #{platform}\n\n"
-        result = system("cd #{directory} && npx expo prebuild --platform #{platform}")
+        # Run via Dir.chdir + argv (no shell) so a project directory containing
+        # a space or shell metacharacter isn't split/interpreted by /bin/sh.
+        result = Dir.chdir(directory) { system('npx', 'expo', 'prebuild', '--platform', platform.to_s) }
 
         native_dir = platform == :android ? 'android' : 'ios'
         return if result && Dir.exist?("#{directory}/#{native_dir}")
