@@ -5,6 +5,30 @@ All notable changes to My Signer CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-06-26
+
+Security & robustness hardening from a full multi-agent audit of the CLI. No breaking changes.
+
+### Security
+- iOS build/export no longer run `xcodebuild` through a shell: arguments are passed as a literal argv array, so a scheme, bundle ID, or project path containing a space or shell metacharacter (`;`, `$(...)`, backticks) can no longer be split or executed by `/bin/sh`.
+- The API token is never sent over an insecure connection: the CLI refuses any non-`https` `api_url` unless the host is loopback (localhost), and a scheme-less host now defaults to `https://`. This prevents the org token from being sent in cleartext or redirected to an attacker-set host via a poisoned config/env.
+- Local-only App Store keys are cleaned up: the materialized `~/.appstoreconnect/private_keys/AuthKey_*.p8` is deleted after upload (only the one the CLI created) instead of lingering as a plaintext signing key.
+- `logout` no longer orphans local credentials: a plain (non-`--purge`) logout keeps your local-only credentials AND keeps them decryptable — it no longer deletes the per-machine encryption key out from under them.
+- Android signing passwords stay off the process table: they are passed to Gradle via the child process environment instead of an `export VAR=… &&` shell string visible in `ps`.
+- Certificate and `doctor` checks no longer build shell strings from untrusted values — a certificate CN containing `$(...)` and the server-supplied `team_id` are handled as literal data.
+
+### Fixed
+- The default API client now sets explicit request/connect timeouts, so a stalled server can no longer hang the CLI indefinitely.
+- Non-interactive (CI/piped) runs fail loudly with an actionable hint when a keystore password, version code, or app target is required, instead of silently reading an empty value and failing later with a confusing "wrong password" error.
+- `mysigner export` runs `xcodebuild` via argv, so archive/output paths with spaces work; Expo prebuild likewise runs via `Dir.chdir` + argv.
+- App Store upload reads the IPA once (single-pass MD5 + SHA-256) instead of three times.
+
+### Changed
+- The `version` command and README point at the correct repository, and the README version/test-count are current.
+
+### Removed
+- Removed the unused `reline` dependency, ~360 lines of dead legacy uploader code, and stale references to the removed `--submit-for-review` / `--asc-timeout-seconds` flags.
+
 ## [0.3.4] - 2026-06-25
 
 ### Added
