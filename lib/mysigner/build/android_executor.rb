@@ -293,27 +293,21 @@ module Mysigner
           cmd_parts << '&&'
         end
 
-        # Phase 0: export signing env vars inline so they're only visible to
-        # the child process, not in argv. The Gradle init script below reads
-        # MYSIGNER_STORE_FILE / MYSIGNER_STORE_PASSWORD / MYSIGNER_KEY_ALIAS /
-        # MYSIGNER_KEY_PASSWORD and configures signingConfigs.release.
+        # M3: pass the signing secrets to the build via an env hash on the
+        # spawn (execute_with_output → IO.popen(env, …)) rather than an
+        # `export VAR=… &&` shell string, which would expose the keystore/key
+        # passwords on the process table (ps, /proc/<pid>/cmdline) for the
+        # build's lifetime. The Gradle init script reads them from ENV either
+        # way; argv-form already kept them off the -P flags.
+        @signing_env = {}
         if @keystore_path && File.exist?(@keystore_path) && @signing_init_script_path
-          cmd_parts << "export MYSIGNER_STORE_FILE=#{shell_escape(File.absolute_path(@keystore_path))}"
-          cmd_parts << '&&'
-          cmd_parts << "export MYSIGNER_STORE_PASSWORD=#{shell_escape(@keystore_password)}" if @keystore_password
-          cmd_parts << '&&' if @keystore_password
-          cmd_parts << "export MYSIGNER_KEY_ALIAS=#{shell_escape(@key_alias)}" if @key_alias
-          cmd_parts << '&&' if @key_alias
-          cmd_parts << "export MYSIGNER_KEY_PASSWORD=#{shell_escape(@key_password)}" if @key_password
-          cmd_parts << '&&' if @key_password
+          @signing_env['MYSIGNER_STORE_FILE'] = File.absolute_path(@keystore_path)
+          @signing_env['MYSIGNER_STORE_PASSWORD'] = @keystore_password if @keystore_password
+          @signing_env['MYSIGNER_KEY_ALIAS'] = @key_alias if @key_alias
+          @signing_env['MYSIGNER_KEY_PASSWORD'] = @key_password if @key_password
         end
-
-        # Export the versionCode override so the init script applies it to
-        # android.defaultConfig (a bare -PversionCode property is inert).
-        if @version_code && @signing_init_script_path
-          cmd_parts << "export MYSIGNER_VERSION_CODE=#{shell_escape(@version_code.to_s)}"
-          cmd_parts << '&&'
-        end
+        # The versionCode override also flows to the init script via ENV.
+        @signing_env['MYSIGNER_VERSION_CODE'] = @version_code.to_s if @version_code && @signing_init_script_path
 
         # Change to android directory and run gradle
         cmd_parts << "cd #{shell_escape(android_dir)}"
@@ -364,8 +358,9 @@ module Mysigner
         puts "🏗️  Running: gradle #{@variant}..."
         puts ''
 
-        # Run command and capture output in real-time
-        IO.popen("#{cmd} 2>&1", 'r') do |io|
+        # Run command and capture output in real-time. The signing secrets ride
+        # in the env hash (M3), never the command string / process table.
+        IO.popen(@signing_env || {}, "#{cmd} 2>&1", 'r') do |io|
           io.each_line do |line|
             next if line.strip.empty?
 

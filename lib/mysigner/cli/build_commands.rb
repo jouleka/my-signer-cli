@@ -1114,7 +1114,11 @@ module Mysigner
                   unless keystore_password
                     say '⚠️  Keystore password not found in My Signer', :yellow
                     say '    Upload your keystore with password: mysigner keystore upload FILE', :yellow
-                    keystore_password = ask('Keystore password:', echo: false)
+                    keystore_password = ask_required(
+                      'Keystore password:',
+                      'Pass --keystore-password or set MYSIGNER_KEYSTORE_PASSWORD to build non-interactively.',
+                      echo: false
+                    )
                     say ''
                     key_password ||= keystore_password
                   end
@@ -1616,7 +1620,8 @@ module Mysigner
                 unless version_code
                   say ''
                   say "Enter the version code to promote to #{track}:", :yellow
-                  version_code = ask('Version code:')
+                  version_code = ask_required('Version code:',
+                                              'Pass --version-code to promote non-interactively.')
                 end
 
                 say ''
@@ -1879,8 +1884,11 @@ module Mysigner
                 end
                 say ''
 
-                choice = ask("Select app to build (1-#{app_targets.count}):",
-                             limited_to: (1..app_targets.count).map(&:to_s))
+                choice = ask_required(
+                  "Select app to build (1-#{app_targets.count}):",
+                  'Pass --target <app> to select the app non-interactively.',
+                  limited_to: (1..app_targets.count).map(&:to_s)
+                )
                 target_name = app_targets[choice.to_i - 1].name
               else
                 target_name = options[:target] || parser.main_target.name

@@ -22,6 +22,20 @@ module Mysigner
           Mysigner::Formatting.format_bytes(bytes)
         end
 
+        # ask() that fails loud in non-interactive mode (no TTY) instead of
+        # silently consuming EOF — Thor's ask returns '' on EOF, which surfaces
+        # later as a confusing downstream error (e.g. "wrong keystore password"
+        # for an empty password). `hint` tells the user which flag/env var to
+        # pass instead. Behaves exactly like ask() when a terminal is attached.
+        def ask_required(prompt, hint, **)
+          unless $stdin.tty?
+            error "#{prompt.to_s.sub(/:\s*\z/, '')} is required, but no terminal is attached for input."
+            say hint, :yellow
+            exit 1
+          end
+          ask(prompt, **)
+        end
+
         # Client-side UDID validity check for iOS devices. Matches the two
         # formats Apple uses: 25-character alphanumeric (older devices pre-
         # iPhone X) and 40-character hex, optionally with a single dash after

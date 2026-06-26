@@ -37,6 +37,7 @@ module Mysigner
       POLL_INTERVAL = 10
       POLL_TIMEOUT  = 600
       CHUNK_RETRIES = 2
+      DIGEST_READ_BYTES = 1024 * 1024 # 1 MiB streaming buffer for the digest pass
 
       APPLE_ASC_BASE = 'https://api.appstoreconnect.apple.com'
 
@@ -80,8 +81,7 @@ module Mysigner
           ops.each { |op| put_chunk_with_retry(f, op) }
         end
 
-        md5 = Digest::MD5.file(@ipa_path).hexdigest
-        sha = Digest::SHA256.file(@ipa_path).hexdigest
+        md5, sha = compute_file_digests(@ipa_path)
 
         mark_uploaded_via_server(build_upload_id, md5: md5, sha: sha)
 
@@ -90,6 +90,21 @@ module Mysigner
       end
 
       private
+
+      # Compute MD5 + SHA-256 in a SINGLE streamed pass over the IPA. The old
+      # code called Digest::MD5.file then Digest::SHA256.file, reading the whole
+      # (often hundreds-of-MB) file end-to-end twice; this reads it once.
+      def compute_file_digests(path)
+        md5 = Digest::MD5.new
+        sha = Digest::SHA256.new
+        File.open(path, 'rb') do |f|
+          while (chunk = f.read(DIGEST_READ_BYTES))
+            md5.update(chunk)
+            sha.update(chunk)
+          end
+        end
+        [md5.hexdigest, sha.hexdigest]
+      end
 
       # Local-only: shell out to `xcrun altool --upload-app`. altool is
       # Apple's canonical CLI for App Store uploads — it handles the multi-

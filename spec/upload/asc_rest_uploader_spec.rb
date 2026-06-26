@@ -31,6 +31,27 @@ RSpec.describe Mysigner::Upload::AscRestUploader do
     end
   end
 
+  describe '#compute_file_digests (private)' do
+    it 'computes MD5 + SHA-256 in one pass, matching Digest::*.file' do
+      file = Tempfile.new(['digest', '.bin'])
+      file.binmode
+      file.write('a' * ((3 * 1024 * 1024) + 7)) # spans multiple read chunks
+      file.close
+
+      uploader = described_class.new(
+        client: instance_double('Mysigner::Client'), organization_id: 1, ipa_path: file.path,
+        apple_app_id: 1, cf_bundle_version: '1', cf_bundle_short_version_string: '1.0'
+      )
+
+      md5, sha = uploader.send(:compute_file_digests, file.path)
+
+      expect(md5).to eq(Digest::MD5.file(file.path).hexdigest)
+      expect(sha).to eq(Digest::SHA256.file(file.path).hexdigest)
+    ensure
+      file.unlink
+    end
+  end
+
   it 'drives the full vault-mode upload flow and reports COMPLETE' do
     stub_request(:put, 'https://s3.example/chunk1').to_return(status: 200)
     uploader = described_class.new(
