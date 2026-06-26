@@ -235,7 +235,6 @@ module Mysigner
           say ''
           say '   → Apple typically takes 5-15 minutes to process builds', :yellow
           say '   → Use --wait flag: mysigner ship appstore --wait', :yellow
-          say '   → Increase timeout: --asc-timeout-seconds 1800', :yellow
           say '   → Check App Store Connect for processing status', :yellow
           say ''
         end

@@ -150,7 +150,7 @@ module Mysigner
 
           if elapsed >= @timeout
             status[:timed_out] = true
-            puts "\r✗ Timed out after #{format_duration(elapsed)} (use --asc-timeout-seconds to extend)".ljust(90)
+            puts "\r✗ Timed out after #{format_duration(elapsed)} — the build is still processing on Apple's side".ljust(90)
             puts ''
             return [build, status]
           end

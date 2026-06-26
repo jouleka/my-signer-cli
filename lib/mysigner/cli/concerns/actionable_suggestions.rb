@@ -36,8 +36,7 @@ module Mysigner
             suggestions: [
               'Apple typically takes 5-15 minutes to process builds',
               'Use --wait flag to automatically wait: mysigner ship appstore --wait',
-              'Check App Store Connect for processing status',
-              'Increase timeout: mysigner ship appstore --wait --asc-timeout-seconds 1800'
+              'Check App Store Connect for processing status'
             ]
           },
 
