@@ -110,6 +110,11 @@ module Mysigner
         f.options.timeout = 120
         f.options.open_timeout = 10
 
+        # Assert TLS verification as an in-code invariant rather than relying
+        # on the adapter default — an adapter swap or stray env OpenSSL config
+        # could otherwise silently weaken it. (No effect on http://localhost.)
+        f.ssl.verify = true
+
         # Request middleware
         f.request :authorization, 'Bearer', @api_token
         f.request :json

@@ -305,7 +305,10 @@ module Mysigner
                 # Get device name if ideviceinfo is available
                 name = 'iOS Device'
                 if system('which ideviceinfo > /dev/null 2>&1')
-                  device_name = `ideviceinfo -u #{udid} -k DeviceName 2>/dev/null`.strip
+                  # argv form (no shell): a USB device reporting a UDID with
+                  # shell metacharacters can't inject. err → NULL mirrors 2>/dev/null.
+                  device_name = IO.popen(['ideviceinfo', '-u', udid, '-k', 'DeviceName'],
+                                         err: File::NULL, &:read).to_s.strip
                   name = device_name unless device_name.empty?
                 end
 

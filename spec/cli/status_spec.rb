@@ -80,6 +80,15 @@ RSpec.describe 'mysigner status', type: :cli do
       expect(output).to include('Status: ✓ Connected')
     end
 
+    it 'describes the at-rest key backend honestly (not vault-grade) on non-macOS' do
+      skip 'macOS stores the key in the Keychain' if RbConfig::CONFIG['host_os'] =~ /darwin/i
+
+      output = capture_stdout { cli.status }
+
+      expect(output).to include('Encryption:      ✓ Enabled (local key file')
+      expect(output).to include('obfuscation')
+    end
+
     it 'does not show organization details' do
       output = capture_stdout { cli.status }
 

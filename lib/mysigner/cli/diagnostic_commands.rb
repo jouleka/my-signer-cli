@@ -742,8 +742,13 @@ module Mysigner
                 # Import private key directly to keychain (so certificate can pair)
                 File.write(key_path, key.to_pem)
 
-                `security import #{key_path} -k ~/Library/Keychains/login.keychain-db -T /usr/bin/codesign -T /usr/bin/security 2>&1`
-                import_success = $CHILD_STATUS.success?
+                # argv form (no shell); expand the keychain path in Ruby so a
+                # $HOME containing a space doesn't break the import.
+                login_keychain = File.expand_path('~/Library/Keychains/login.keychain-db')
+                import_success = system('security', 'import', key_path,
+                                        '-k', login_keychain,
+                                        '-T', '/usr/bin/codesign', '-T', '/usr/bin/security',
+                                        out: File::NULL, err: File::NULL)
 
                 say '  ✓ CSR saved to Downloads', :green
                 if import_success

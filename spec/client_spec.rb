@@ -74,6 +74,13 @@ RSpec.describe Mysigner::Client do
     end
   end
 
+  describe '#connection TLS' do
+    it 'explicitly enforces TLS certificate verification' do
+      secure = described_class.new(api_url: 'https://mysigner.dev', api_token: 'token')
+      expect(secure.connection.ssl.verify).to be true
+    end
+  end
+
   describe '#get' do
     it 'makes a GET request with authorization header' do
       stub_request(:get, "#{api_url}/api/v1/organizations")

@@ -764,7 +764,7 @@ module Mysigner
             say 'Configuration:', :bold
             say "  API URL:         #{config.api_url}"
             say "  User:            #{config.user_email || '(unknown)'}"
-            say "  Encryption:      #{config.encrypted_config? ? '✓ Enabled' : '✗ Disabled'}"
+            say "  Encryption:      #{encryption_status_line(config)}"
             say ''
 
             # Show current organization
@@ -1174,6 +1174,17 @@ module Mysigner
             rescue StandardError => e
               warn "[mysigner] Unexpected error probing credentials: #{e.class}: #{e.message}"
               '?'
+            end
+
+            # Honest at-rest description for `status`. On macOS the AES key is
+            # in the system Keychain (OS-protected); elsewhere it's a 0600 file
+            # right next to the encrypted token, so it's obfuscation — anyone
+            # who can read config.yml can read the key. Don't imply more.
+            def encryption_status_line(config)
+              return '✗ Disabled' unless config.encrypted_config?
+              return '✓ Enabled (macOS Keychain)' if RbConfig::CONFIG['host_os'] =~ /darwin/i
+
+              '✓ Enabled (local key file — obfuscation, not vault-grade; prefer MYSIGNER_API_TOKEN in CI)'
             end
 
             def config_set(key = nil, value = nil)

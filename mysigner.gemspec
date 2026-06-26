@@ -58,7 +58,12 @@ Gem::Specification.new do |spec|
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
   spec.files = Dir.chdir(File.expand_path(__dir__)) do
-    `git ls-files -z`.split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }
+    # Ship only what the installed gem needs. Exclude tests, the dev-only
+    # bin/ helpers (console/setup — the real CLI is exe/mysigner), and the
+    # internal MANUAL_TEST.md process notes.
+    `git ls-files -z`.split("\x0").reject do |f|
+      f.match(%r{\A(?:test|spec|features|bin)/}) || f == 'MANUAL_TEST.md'
+    end
   end
   spec.bindir        = 'exe'
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }

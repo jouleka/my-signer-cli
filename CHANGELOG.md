@@ -5,6 +5,19 @@ All notable changes to My Signer CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] - 2026-06-26
+
+Follow-up hardening from the audit's remaining medium/low findings.
+
+### Security
+- `status` no longer overstates at-rest protection: on Linux/Windows it now reports the encryption key as a local file (obfuscation, not vault-grade) rather than a bare "Encryption: ✓ Enabled", since the key sits next to the encrypted token; macOS reports the Keychain.
+- TLS certificate verification is now asserted explicitly on the API client instead of relying on the adapter default.
+- Release-metadata YAML parsing disables alias expansion (`aliases: false`), closing a YAML alias-bomb / billion-laughs DoS on a hostile project metadata file.
+- `devices` USB detection (`ideviceinfo`) and the `doctor` keychain key-import (`security import`) now run via argv (no shell), so a device-reported UDID or a `$HOME` containing a space can't break or inject.
+
+### Changed
+- The published gem no longer ships the dev-only `bin/` helpers or the internal `MANUAL_TEST.md`.
+
 ## [0.3.5] - 2026-06-26
 
 Security & robustness hardening from a full multi-agent audit of the CLI. No breaking changes.

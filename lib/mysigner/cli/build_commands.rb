@@ -1740,12 +1740,12 @@ module Mysigner
               stripped = content.lstrip
 
               begin
-                return YAML.safe_load(content, aliases: true) || {} if stripped.start_with?('---') || stripped.start_with?('- ')
+                return YAML.safe_load(content, aliases: false) || {} if stripped.start_with?('---') || stripped.start_with?('- ')
 
                 JSON.parse(content)
               rescue JSON::ParserError
                 begin
-                  YAML.safe_load(content, aliases: true) || {}
+                  YAML.safe_load(content, aliases: false) || {}
                 rescue Psych::Exception => e
                   raise MetadataFileError, "Failed to parse metadata file #{path}: #{e.message}"
                 end
