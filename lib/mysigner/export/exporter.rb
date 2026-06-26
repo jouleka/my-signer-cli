@@ -99,6 +99,11 @@ module Mysigner
         FileUtils.mkdir_p(@output_dir)
         puts ''
 
+        # Keep this an argv ARRAY (no .join(' ')). IO.popen(array) execs
+        # xcodebuild directly with no shell, so an archive/output path
+        # containing a space (e.g. ~/My Projects/App.xcarchive) or a shell
+        # metacharacter survives as one literal argument instead of being
+        # split by /bin/sh or interpreted.
         cmd = [
           'xcodebuild',
           '-exportArchive',
@@ -106,7 +111,7 @@ module Mysigner
           '-exportPath', @output_dir,
           '-exportOptionsPlist', options_plist,
           '-allowProvisioningUpdates' # Allow Xcode to update profiles if needed
-        ].join(' ')
+        ]
 
         # Run command and capture output. xcodebuild output can contain
         # non-ASCII bytes (smart quotes in Apple error messages, emoji in

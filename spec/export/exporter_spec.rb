@@ -112,13 +112,39 @@ RSpec.describe Mysigner::Export::Exporter do
       exporter.export!(method: :appstore, team_id: 'ABC123', signing_style: 'manual')
     end
 
+    it 'invokes xcodebuild as an argv array so paths with spaces are not split by a shell' do
+      spaced_archive = File.join(temp_dir, 'My App.xcarchive')
+      FileUtils.mkdir_p(spaced_archive)
+      spaced_out = File.join(temp_dir, 'My Output')
+      FileUtils.mkdir_p(spaced_out)
+      File.write(File.join(spaced_out, 'App.ipa'), 'fake')
+
+      spaced_exporter = described_class.new(spaced_archive, output_dir: spaced_out)
+
+      captured = nil
+      allow(IO).to receive(:popen) do |cmd, _opts, &block|
+        captured = cmd
+        block.call(StringIO.new("Exporting...\n"))
+        `true`
+      end
+
+      spaced_exporter.export!(method: :appstore, team_id: 'ABC123')
+
+      expect(captured).to be_an(Array)
+      # The space-containing paths must each be a single argv element, intact —
+      # never run through /bin/sh where the space would split the argument.
+      expect(captured).to include(spaced_archive)
+      expect(captured).to include(spaced_out)
+    end
+
     it 'creates export options plist' do
       # Capture the plist path that gets created
       plist_paths = []
 
       allow(IO).to receive(:popen) do |cmd, _opts, &block|
-        # Extract plist path from command
-        plist_paths << Regexp.last_match(1) if cmd =~ /-exportOptionsPlist\s+(\S+)/
+        # Extract plist path from the argv array
+        idx = cmd.index('-exportOptionsPlist')
+        plist_paths << cmd[idx + 1] if idx
         block.call(StringIO.new("Exporting...\n"))
       end
 
@@ -163,7 +189,8 @@ RSpec.describe Mysigner::Export::Exporter do
       plist_path = nil
 
       allow(IO).to receive(:popen) do |cmd, _opts, &block|
-        plist_path = Regexp.last_match(1) if cmd =~ /-exportOptionsPlist\s+(\S+)/
+        idx = cmd.index('-exportOptionsPlist')
+        plist_path = cmd[idx + 1] if idx
         block.call(StringIO.new("Exporting...\n"))
       end
 

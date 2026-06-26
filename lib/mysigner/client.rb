@@ -66,6 +66,15 @@ module Mysigner
     # Expose connection for direct access (e.g., binary downloads)
     def connection
       @connection ||= Faraday.new(url: @api_url) do |f|
+        # Fail fast on a stalled connection instead of hanging the CLI
+        # forever. Without these the default adapter applies no timeout, so a
+        # server that accepts the socket but never responds blocks every
+        # command indefinitely and the Faraday::TimeoutError branch below is
+        # effectively unreachable. The read timeout is generous because the
+        # same client streams binary downloads.
+        f.options.timeout = 120
+        f.options.open_timeout = 10
+
         # Request middleware
         f.request :authorization, 'Bearer', @api_token
         f.request :json

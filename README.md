@@ -136,7 +136,7 @@ mysigner status
 # iOS
 mysigner ship testflight                   # Build + upload to TestFlight
 mysigner ship appstore                     # Build + submit to App Store
-mysigner ship appstore --submit-for-review # Auto-submit for review
+mysigner ship appstore --no-auto-submit    # Build + upload only (submit for review later)
 
 # Android
 mysigner ship internal --platform android  # Build + upload to internal testing
@@ -389,7 +389,7 @@ mysigner config set local-only false    # permanent disable
 | `doctor`, `status`, `validate` | ✅ (limited — no MySigner-side checks) |
 | `certificate check`, `device detect` | ✅ |
 | `android build` | ✅ |
-| `config`, `config set`, `version`, `help`, `tree`, `logout` | ✅ |
+| `config`, `config set`, `version`, `help`, `logout` | ✅ |
 | `login`, `switch`, `orgs`, `sync` | ❌ MySigner-only |
 | `android init`, `android add`, `android list` | ❌ MySigner-only (register or list MySigner-side records) |
 | `apps`, `devices`, `certificates`, `profiles`, `bundleid`, `app-group(s)`, `merchant-id(s)`, `keystore`, `gp-credential`, `release`, `tracks`, `track`, `submit`, `device add/update`, `certificate download`, `profile download/delete` | ❌ MySigner-only |
@@ -446,7 +446,7 @@ Storage:
 ```bash
 # iOS — local-mint ASC JWT, upload direct to Apple
 mysigner --local-only ship testflight
-mysigner --local-only ship appstore --submit-for-review
+mysigner --local-only ship appstore
 
 # Android — local-mint Google OAuth token, call Play Publishing API direct
 mysigner --local-only ship internal   --platform android
@@ -488,7 +488,7 @@ mysigner config set KEY VAL # Update configuration value
 
 ## Development Status
 
-**Current Version**: 0.1.0
+**Current Version**: 0.3.4
 
 ✅ **Complete**:
 - ✅ Gem structure and dependencies (Thor, Faraday, Reline, Google APIs)

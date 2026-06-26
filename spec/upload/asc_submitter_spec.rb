@@ -49,6 +49,19 @@ RSpec.describe Mysigner::Upload::AscSubmitter do
     )
   end
 
+  describe '#http_conn timeouts' do
+    # The submitter drives a 30-minute poll loop against Apple. A stalled
+    # connection that accepts but never responds must not hang the CLI
+    # indefinitely — the Faraday connection needs explicit timeouts.
+    it 'sets an explicit request timeout on the Apple connection' do
+      expect(submitter.send(:http_conn).options.timeout).to be > 0
+    end
+
+    it 'sets an explicit open (connect) timeout on the Apple connection' do
+      expect(submitter.send(:http_conn).options.open_timeout).to be > 0
+    end
+  end
+
   describe '#submit!' do
     # Happy path: build is already VALID, an editable appStoreVersion exists,
     # attach + submit both succeed. This is the most common shape because the

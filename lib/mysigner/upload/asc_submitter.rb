@@ -379,6 +379,11 @@ module Mysigner
 
       def http_conn
         @http_conn ||= Faraday.new(url: APPLE_ASC_BASE) do |f|
+          # Explicit timeouts so a stalled Apple connection can't hang the
+          # 30-minute poll loop forever (the per-request rescue only fires on
+          # an actual error, not a silent stall).
+          f.options.timeout = 60
+          f.options.open_timeout = 10
           f.adapter Faraday.default_adapter
         end
       end

@@ -36,9 +36,13 @@ RSpec.describe Mysigner::Build::Executor do
 
     context 'with workspace' do
       it 'builds archive using -workspace flag' do
-        expect(executor).to receive(:execute_with_output).with(
-          /xcodebuild archive -workspace.*App\.xcworkspace -scheme #{scheme} -configuration #{configuration}/
-        )
+        expect(executor).to receive(:execute_with_output) do |cmd|
+          expect(cmd).to be_an(Array)
+          expect(cmd.first(2)).to eq(%w[xcodebuild archive])
+          expect(cmd).to include('-workspace', project_info[:path], '-scheme', scheme,
+                                 '-configuration', configuration)
+          true
+        end
 
         executor.build!(target_name, configuration, scheme: scheme)
       end
@@ -59,9 +63,12 @@ RSpec.describe Mysigner::Build::Executor do
         allow(executor).to receive(:execute_with_output).and_return(true)
         allow(File).to receive(:exist?).and_return(true)
 
-        expect(executor).to receive(:execute_with_output).with(
-          /xcodebuild archive -project.*App\.xcodeproj -scheme #{scheme} -configuration #{configuration}/
-        )
+        expect(executor).to receive(:execute_with_output) do |cmd|
+          expect(cmd).to be_an(Array)
+          expect(cmd).to include('-project', project_info[:path], '-scheme', scheme,
+                                 '-configuration', configuration)
+          true
+        end
 
         executor.build!(target_name, configuration, scheme: scheme)
       end
@@ -69,9 +76,10 @@ RSpec.describe Mysigner::Build::Executor do
 
     context 'with automatic signing' do
       it 'includes -allowProvisioningUpdates flag' do
-        expect(executor).to receive(:execute_with_output).with(
-          /-allowProvisioningUpdates/
-        )
+        expect(executor).to receive(:execute_with_output) do |cmd|
+          expect(cmd).to include('-allowProvisioningUpdates')
+          true
+        end
 
         executor.build!(target_name, configuration, scheme: scheme, signing_style: 'Automatic')
       end
@@ -79,9 +87,9 @@ RSpec.describe Mysigner::Build::Executor do
 
     context 'with manual signing' do
       it 'does not include -allowProvisioningUpdates flag' do
-        expect(executor).to receive(:execute_with_output).with(
-          /xcodebuild archive.*-scheme #{scheme}/
-        ) do |cmd|
+        expect(executor).to receive(:execute_with_output) do |cmd|
+          expect(cmd).to be_an(Array)
+          expect(cmd).to include('-scheme', scheme)
           expect(cmd).not_to include('-allowProvisioningUpdates')
           true
         end
@@ -124,12 +132,32 @@ RSpec.describe Mysigner::Build::Executor do
 
     context 'when scheme is not provided' do
       it 'uses target name as scheme' do
-        expect(executor).to receive(:execute_with_output).with(
-          /-scheme #{target_name}/
-        )
+        expect(executor).to receive(:execute_with_output) do |cmd|
+          expect(cmd).to include('-scheme', target_name)
+          true
+        end
 
         executor.build!(target_name, configuration)
       end
+    end
+  end
+
+  # Shell-safety: build_command must return an argv ARRAY, not a single
+  # shell string. When it returned `cmd.join(' ')`, execute_with_output ran
+  # it via IO.popen(String) → /bin/sh -c, so a scheme/bundle_id/path with a
+  # space or shell metacharacter ($(), ;, backticks) was split or executed.
+  describe '#build_command (private) — argv safety' do
+    it 'returns an array with the scheme as a single intact element' do
+      allow(parser).to receive(:target_platform).and_return(:ios)
+
+      cmd = executor.send(:build_command, 'My Scheme; touch pwned', 'Release',
+                          '/tmp/My App.xcarchive')
+
+      expect(cmd).to be_an(Array)
+      # The metachar-laden scheme and the space-containing archive path each
+      # survive as ONE element — never concatenated into a shell string.
+      expect(cmd).to include('My Scheme; touch pwned')
+      expect(cmd).to include('/tmp/My App.xcarchive')
     end
   end
 

@@ -15,6 +15,19 @@ RSpec.describe Mysigner::Client do
     end
   end
 
+  describe '#connection timeouts' do
+    # A stalled server that accepts the TCP connection but never responds
+    # must not hang the CLI forever. The connection has to carry an explicit
+    # request + open timeout so Faraday::TimeoutError can actually fire.
+    it 'sets an explicit request timeout' do
+      expect(client.connection.options.timeout).to be > 0
+    end
+
+    it 'sets an explicit open (connect) timeout' do
+      expect(client.connection.options.open_timeout).to be > 0
+    end
+  end
+
   describe '#get' do
     it 'makes a GET request with authorization header' do
       stub_request(:get, "#{api_url}/api/v1/organizations")

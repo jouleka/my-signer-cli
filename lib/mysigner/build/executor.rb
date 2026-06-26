@@ -125,7 +125,12 @@ module Mysigner
           '-quiet'
         ]
 
-        cmd.join(' ')
+        # Return the argv ARRAY (not cmd.join(' ')). execute_with_output runs
+        # it via IO.popen(array) which execs xcodebuild directly with no
+        # shell, so a scheme / bundle_id / archive path containing a space or
+        # shell metacharacter ($(), ;, backticks) is passed as one literal
+        # argument instead of being split or executed by /bin/sh.
+        cmd
       end
 
       def execute_with_output(cmd)
