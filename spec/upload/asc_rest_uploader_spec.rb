@@ -83,6 +83,63 @@ RSpec.describe Mysigner::Upload::AscRestUploader do
       # exist? returns false by default → uploader takes the write branch.
       # The "skips the write when …" spec overrides this to true.
       allow(File).to receive(:exist?).with(@canonical_p8).and_return(false)
+      # The uploader now deletes the .p8 it materialized after altool runs;
+      # keep that off the real FS during tests.
+      allow(FileUtils).to receive(:rm_f).with(@canonical_p8)
+    end
+
+    it 'deletes the .p8 it materialized once altool finishes (no plaintext key left on disk)' do
+      # The fresh-write branch (exist? == false) means WE created the key,
+      # so it must be removed afterwards rather than left lying around at
+      # Apple's well-known discovery path.
+      expect(FileUtils).to receive(:rm_f).with(@canonical_p8)
+
+      allow(Open3).to receive(:capture2e)
+        .and_return(['', instance_double('Process::Status', success?: true)])
+
+      uploader = described_class.new(
+        client: local_client, organization_id: 1, ipa_path: ipa.path,
+        apple_app_id: 42, cf_bundle_version: '1', cf_bundle_short_version_string: '1.0',
+        platform: 'IOS', local_only: true
+      )
+
+      uploader.call
+    end
+
+    it 'still deletes the materialized .p8 when altool fails (ensure cleanup)' do
+      expect(FileUtils).to receive(:rm_f).with(@canonical_p8)
+
+      allow(Open3).to receive(:capture2e)
+        .and_return(['{"product-errors":[{"message":"boom"}]}',
+                     instance_double('Process::Status', success?: false)])
+
+      uploader = described_class.new(
+        client: local_client, organization_id: 1, ipa_path: ipa.path,
+        apple_app_id: 42, cf_bundle_version: '1', cf_bundle_short_version_string: '1.0',
+        platform: 'IOS', local_only: true
+      )
+
+      expect { uploader.call }.to raise_error(described_class::AltoolUploadError)
+    end
+
+    it 'does NOT delete a pre-existing user .p8 it did not create' do
+      # A key the user placed at the canonical path themselves (same PEM)
+      # must be left intact — we only clean up what we wrote this run.
+      allow(File).to receive(:exist?).with(@canonical_p8).and_return(true)
+      allow(File).to receive(:read).with(@canonical_p8).and_return(p8_pem)
+
+      expect(FileUtils).not_to receive(:rm_f).with(@canonical_p8)
+
+      allow(Open3).to receive(:capture2e)
+        .and_return(['', instance_double('Process::Status', success?: true)])
+
+      uploader = described_class.new(
+        client: local_client, organization_id: 1, ipa_path: ipa.path,
+        apple_app_id: 42, cf_bundle_version: '1', cf_bundle_short_version_string: '1.0',
+        platform: 'IOS', local_only: true
+      )
+
+      uploader.call
     end
 
     it 'shells out to xcrun altool --upload-app with the resolved credentials' do

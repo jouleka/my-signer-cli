@@ -110,6 +110,12 @@ module Mysigner
         return { build_upload_id: nil, final_state: 'COMPLETE' } if status.success?
 
         raise_altool_failure!(stdout_stderr)
+      ensure
+        # Never leave the plaintext ASC private key sitting at Apple's
+        # well-known discovery path after the upload — delete the one WE
+        # materialized this run (cleanup_materialized_p8! is a no-op when the
+        # user already had their own key there).
+        cleanup_materialized_p8!
       end
 
       # `xcrun altool --upload-app --file ... --type ios --apiKey KEY_ID
@@ -148,15 +154,31 @@ module Mysigner
       def ensure_p8_in_apple_dir!(creds)
         FileUtils.mkdir_p(APPLE_PRIVATE_KEYS_DIR, mode: 0o700)
         target = File.join(APPLE_PRIVATE_KEYS_DIR, "AuthKey_#{creds.key_id}.p8")
+        pre_existing = File.exist?(target)
 
-        if File.exist?(target) && File.read(target) == creds.p8_pem
+        if pre_existing && File.read(target) == creds.p8_pem
           File.chmod(0o600, target)
+          # The user already had this exact key here — leave it untouched.
+          @materialized_p8_path = nil
           return target
         end
 
         File.write(target, creds.p8_pem)
         File.chmod(0o600, target)
+        # Remember to delete it after the upload ONLY when we created it fresh.
+        # If a (different) file pre-existed we overwrote it but must not delete
+        # it, to avoid destroying a key the user manages themselves.
+        @materialized_p8_path = pre_existing ? nil : target
         target
+      end
+
+      # Remove the .p8 we materialized for altool this run, if any. Idempotent
+      # and best-effort (a failure to delete must not mask the upload result).
+      def cleanup_materialized_p8!
+        return unless @materialized_p8_path
+
+        FileUtils.rm_f(@materialized_p8_path)
+        @materialized_p8_path = nil
       end
 
       # Parse altool's --output-format json blob. The error path is:

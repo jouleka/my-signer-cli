@@ -212,10 +212,15 @@ module Mysigner
 
       File.delete(CONFIG_FILE) if exists?
 
-      # On non-macOS the encryption key lives in a file fallback. Wipe it on
-      # logout so a fresh login can mint a new key — otherwise the old key
-      # would silently encrypt a new token that nobody else can decrypt.
-      FileUtils.rm_f(KEY_FILE)
+      # Deliberately KEEP the per-machine encryption key (KEY_FILE). On
+      # non-macOS it also wraps any local-only credentials in the file
+      # fallback (~/.mysigner/credentials), which a plain logout KEEPS — only
+      # `mysigner logout --purge` deletes them. Wiping the key here would
+      # leave those kept credentials permanently undecryptable. The key on its
+      # own is a non-secret per-machine value, and the encrypted token it
+      # protected is already gone with CONFIG_FILE above; re-login simply
+      # re-uses it. (--purge removes the credentials themselves, so no orphan
+      # remains in that flow either.)
 
       # Phase 0: logout also purges the keystore cache so a shared machine
       # doesn't leave prior-user keystore blobs on disk.

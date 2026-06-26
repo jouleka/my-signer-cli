@@ -182,6 +182,25 @@ RSpec.describe Mysigner::Config do
       config.clear
       expect(File.exist?(test_config_file)).to be false
     end
+
+    it 'preserves the per-machine encryption key so kept local credentials stay decryptable' do
+      # On non-macOS the AES key lives in a 0600 file that ALSO wraps any
+      # local-only credentials in the file fallback. A plain logout keeps
+      # those credentials (only --purge deletes them), so clear must NOT
+      # delete the key — otherwise they become permanently undecryptable.
+      skip 'key lives in the Keychain on macOS, not a file' if macos?
+
+      config = Mysigner::Config.new
+      config.api_url = 'http://localhost:3000'
+      config.save_token_for_org(1, 'Org', 'tok') # forces the key file to be minted
+      config.save
+      expect(File.exist?(test_key_file)).to be true
+
+      config.clear
+
+      expect(File.exist?(test_config_file)).to be false
+      expect(File.exist?(test_key_file)).to be true
+    end
   end
 
   describe '#exists?' do
