@@ -19,13 +19,7 @@ module Mysigner
         end
 
         def format_bytes(bytes)
-          if bytes < 1024
-            "#{bytes} B"
-          elsif bytes < 1024 * 1024
-            "#{(bytes / 1024.0).round(1)} KB"
-          else
-            "#{(bytes / (1024.0 * 1024)).round(1)} MB"
-          end
+          Mysigner::Formatting.format_bytes(bytes)
         end
 
         # Client-side UDID validity check for iOS devices. Matches the two

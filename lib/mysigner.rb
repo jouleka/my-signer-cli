@@ -5,6 +5,7 @@ module Mysigner
 end
 
 require 'mysigner/version'
+require 'mysigner/formatting'
 require 'mysigner/config'
 require 'mysigner/local_credentials'
 require 'mysigner/client'
