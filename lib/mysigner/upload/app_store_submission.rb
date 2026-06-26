@@ -121,8 +121,8 @@ module Mysigner
         puts '💡 Auto-submit enabled' if metadata && metadata['auto_submit']
 
         puts ''
-        puts 'Tip: rerun with --submit-for-review when ready'
-        puts '     Use --wait/--asc-timeout-seconds to control polling'
+        puts 'Tip: `mysigner ship appstore` uploads AND submits for review automatically.'
+        puts '     Pass --no-auto-submit to upload only, or --wait to watch processing.'
         puts ''
       end
 

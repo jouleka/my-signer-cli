@@ -7,6 +7,26 @@ require 'tempfile'
 RSpec.describe Mysigner::Signing::CertificateChecker do
   let(:checker) { described_class.new }
 
+  # M5 — the certificate CN is interpolated into the `security find-certificate`
+  # call. argv form (not a shell string) means a CN carrying $(...) / backticks
+  # — which a crafted imported keychain item can have — is passed literally.
+  describe '#get_certificate_details argv safety' do
+    it 'passes a $()-laden CN as a single literal argv element (no shell)' do
+      malicious = 'Evil $(touch pwned) (TEAM123)'
+      captured = nil
+      allow(Open3).to receive(:capture3) do |*args|
+        captured = args if args[1] == 'find-certificate'
+        ["-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----\n", '', double(success?: true)]
+      end
+      allow(Tempfile).to receive(:new)
+        .and_return(double('t', write: nil, close: nil, path: '/tmp/x.pem', unlink: nil))
+
+      checker.send(:get_certificate_details, malicious)
+
+      expect(captured).to eq(['security', 'find-certificate', '-c', malicious, '-p'])
+    end
+  end
+
   describe '#check!' do
     context 'with valid certificates' do
       let(:security_output) do
@@ -36,15 +56,15 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
                                           .and_return([security_output, '', double(success?: true)])
 
         # Stub security find-certificate for cert 1
-        allow(Open3).to receive(:capture3).with('security find-certificate -c "Apple Development: John Doe (ABCD123456)" -p')
+        allow(Open3).to receive(:capture3).with('security', 'find-certificate', '-c', 'Apple Development: John Doe (ABCD123456)', '-p')
                                           .and_return([cert1_pem, '', double(success?: true)])
 
         # Stub security find-certificate for cert 2
-        allow(Open3).to receive(:capture3).with('security find-certificate -c "Apple Distribution: John Doe (ABCD123456)" -p')
+        allow(Open3).to receive(:capture3).with('security', 'find-certificate', '-c', 'Apple Distribution: John Doe (ABCD123456)', '-p')
                                           .and_return([cert1_pem, '', double(success?: true)])
 
         # Stub openssl for both certs
-        allow(Open3).to receive(:capture3).with(/openssl x509/)
+        allow(Open3).to receive(:capture3).with('openssl', 'x509', '-in', anything, '-noout', '-enddate')
                                           .and_return([openssl_output1, '',
                                                        double(success?: true)], [openssl_output2, '', double(success?: true)])
 
@@ -98,13 +118,13 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
         allow(Open3).to receive(:capture3).with('security find-identity -v -p codesigning')
                                           .and_return([security_output, '', double(success?: true)])
 
-        allow(Open3).to receive(:capture3).with('security find-certificate -c "Apple Development: Test (TEAM123)" -p')
+        allow(Open3).to receive(:capture3).with('security', 'find-certificate', '-c', 'Apple Development: Test (TEAM123)', '-p')
                                           .and_return(["-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----", '',
                                                        double(success?: true)])
 
         # Certificate expiring in 15 days
         future_date = (Time.now + (15 * 86_400)).strftime('%b %d %H:%M:%S %Y GMT')
-        allow(Open3).to receive(:capture3).with(/openssl x509/)
+        allow(Open3).to receive(:capture3).with('openssl', 'x509', '-in', anything, '-noout', '-enddate')
                                           .and_return(["notAfter=#{future_date}", '', double(success?: true)])
 
         tempfile = double('tempfile', write: nil, close: nil, path: '/tmp/cert.pem', unlink: nil)
@@ -131,13 +151,13 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
         allow(Open3).to receive(:capture3).with('security find-identity -v -p codesigning')
                                           .and_return([security_output, '', double(success?: true)])
 
-        allow(Open3).to receive(:capture3).with('security find-certificate -c "Apple Development: Expired (TEAM123)" -p')
+        allow(Open3).to receive(:capture3).with('security', 'find-certificate', '-c', 'Apple Development: Expired (TEAM123)', '-p')
                                           .and_return(["-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----", '',
                                                        double(success?: true)])
 
         # Certificate expired 30 days ago
         past_date = (Time.now - (30 * 86_400)).strftime('%b %d %H:%M:%S %Y GMT')
-        allow(Open3).to receive(:capture3).with(/openssl x509/)
+        allow(Open3).to receive(:capture3).with('openssl', 'x509', '-in', anything, '-noout', '-enddate')
                                           .and_return(["notAfter=#{past_date}", '', double(success?: true)])
 
         tempfile = double('tempfile', write: nil, close: nil, path: '/tmp/cert.pem', unlink: nil)
@@ -190,7 +210,7 @@ RSpec.describe Mysigner::Signing::CertificateChecker do
                                           .and_return([security_output, '', double(success?: true)])
 
         # Certificate not found
-        allow(Open3).to receive(:capture3).with('security find-certificate -c "Apple Development: Test (TEAM123)" -p')
+        allow(Open3).to receive(:capture3).with('security', 'find-certificate', '-c', 'Apple Development: Test (TEAM123)', '-p')
                                           .and_return(['', 'Not found', double(success?: false)])
       end
 

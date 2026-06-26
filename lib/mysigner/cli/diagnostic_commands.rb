@@ -148,9 +148,13 @@ module Mysigner
                 say 'Checking signing identity for team...', :yellow
                 team_id = org_data['app_store_connect_team_id']
 
-                # Check if signing identities exist in keychain for this team
-                identities = `security find-identity -v -p codesigning 2>/dev/null | grep -i "#{team_id}"`
-                has_identity = $CHILD_STATUS.success? && !identities.strip.empty?
+                # Capture identities with a CONSTANT command (no interpolation)
+                # and filter in Ruby, so a server-supplied team_id can never be
+                # a shell / grep-regex injection sink. Matches `grep -i`
+                # (case-insensitive substring) semantics.
+                all_identities = `security find-identity -v -p codesigning 2>/dev/null`
+                has_identity = $CHILD_STATUS.success? &&
+                               all_identities.downcase.include?(team_id.to_s.downcase)
 
                 if has_identity
                   say "  ✓ Signing identity found for team #{team_id}", :green

@@ -74,9 +74,10 @@ module Mysigner
       end
 
       def get_certificate_details(name)
-        # Get certificate in PEM format by name
-        cmd = "security find-certificate -c \"#{name}\" -p"
-        stdout, _, status = Open3.capture3(cmd)
+        # Get certificate in PEM format by name. argv form (no shell) so a
+        # certificate CN containing $(...) / backticks — which a crafted
+        # imported keychain item can carry — is passed literally, not executed.
+        stdout, _, status = Open3.capture3('security', 'find-certificate', '-c', name, '-p')
 
         # If not found, return nil
         return nil if !status.success? || stdout.empty?
@@ -88,9 +89,8 @@ module Mysigner
           temp.write(stdout)
           temp.close
 
-          # Get expiry date using openssl
-          cmd = "openssl x509 -in #{temp.path} -noout -enddate"
-          out, _, stat = Open3.capture3(cmd)
+          # Get expiry date using openssl (argv form, no shell)
+          out, _, stat = Open3.capture3('openssl', 'x509', '-in', temp.path, '-noout', '-enddate')
 
           if stat.success? && out =~ /notAfter=(.+)/
             expiry_str = ::Regexp.last_match(1).strip
