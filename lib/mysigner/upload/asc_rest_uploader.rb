@@ -66,6 +66,9 @@ module Mysigner
         # args (which preserves the Keychain-only behavior the existing specs
         # pin).
         @asc_creds = asc_creds
+        # Path of a .p8 WE materialized this run (set by ensure_p8_in_apple_dir!),
+        # deleted by cleanup_materialized_p8! after altool. nil = nothing to clean.
+        @materialized_p8_path = nil
       end
 
       def call
@@ -163,12 +166,13 @@ module Mysigner
           return target
         end
 
+        # Mark for cleanup BEFORE writing, so a failure between the write and
+        # the chmod still lets the ensure block remove the freshly-written
+        # plaintext key. Only when we created it fresh — if a (different) file
+        # pre-existed we must not delete the key the user manages themselves.
+        @materialized_p8_path = pre_existing ? nil : target
         File.write(target, creds.p8_pem)
         File.chmod(0o600, target)
-        # Remember to delete it after the upload ONLY when we created it fresh.
-        # If a (different) file pre-existed we overwrote it but must not delete
-        # it, to avoid destroying a key the user manages themselves.
-        @materialized_p8_path = pre_existing ? nil : target
         target
       end
 

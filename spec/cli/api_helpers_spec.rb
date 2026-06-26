@@ -39,5 +39,9 @@ RSpec.describe Mysigner::CLI do
     it 'accepts http to a loopback IP' do
       expect(cli.send(:valid_api_url?, 'http://127.0.0.1:8080')).to be true
     end
+
+    it 'accepts http to the IPv6 loopback [::1]' do
+      expect(cli.send(:valid_api_url?, 'http://[::1]:3000')).to be true
+    end
   end
 end

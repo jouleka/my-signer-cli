@@ -122,6 +122,24 @@ RSpec.describe Mysigner::Upload::AscRestUploader do
       expect { uploader.call }.to raise_error(described_class::AltoolUploadError)
     end
 
+    it 'still deletes the freshly-written .p8 when chmod fails after the write (no leak on partial write)' do
+      # The key bytes hit disk at File.write; if the subsequent chmod raises,
+      # the ensure cleanup must STILL remove the plaintext key.
+      allow(File).to receive(:chmod).with(0o600, @canonical_p8).and_raise(Errno::EPERM)
+      expect(FileUtils).to receive(:rm_f).with(@canonical_p8)
+
+      allow(Open3).to receive(:capture2e)
+        .and_return(['', instance_double('Process::Status', success?: true)])
+
+      uploader = described_class.new(
+        client: local_client, organization_id: 1, ipa_path: ipa.path,
+        apple_app_id: 42, cf_bundle_version: '1', cf_bundle_short_version_string: '1.0',
+        platform: 'IOS', local_only: true
+      )
+
+      expect { uploader.call }.to raise_error(Errno::EPERM)
+    end
+
     it 'does NOT delete a pre-existing user .p8 it did not create' do
       # A key the user placed at the canonical path themselves (same PEM)
       # must be left intact — we only clean up what we wrote this run.

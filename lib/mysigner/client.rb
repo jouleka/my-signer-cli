@@ -31,7 +31,9 @@ module Mysigner
 
       return if uri && uri.scheme == 'https'
 
-      host = uri&.host.to_s.downcase.sub(/\A\[|\]\z/, '') # strip IPv6 brackets
+      # uri.hostname (unlike uri.host) already strips IPv6 brackets, so
+      # http://[::1]:3000 resolves to the loopback host "::1".
+      host = uri&.hostname.to_s.downcase
       return if uri && uri.scheme == 'http' && LOOPBACK_HOSTS.include?(host)
 
       raise InsecureUrlError,

@@ -89,9 +89,9 @@ module Mysigner
 
           # Plain http may only target a loopback host (local dev). The API
           # token is sent as a Bearer header, so http to a remote host would
-          # leak it in cleartext.
+          # leak it in cleartext. uri.hostname strips IPv6 brackets ([::1]).
           return false if uri.scheme == 'http' &&
-                          !Mysigner::Client::LOOPBACK_HOSTS.include?(uri.host.downcase)
+                          !Mysigner::Client::LOOPBACK_HOSTS.include?(uri.hostname.downcase)
 
           # Valid formats:
           # - http://localhost:3000

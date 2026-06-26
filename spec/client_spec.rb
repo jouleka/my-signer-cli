@@ -38,6 +38,10 @@ RSpec.describe Mysigner::Client do
         expect { described_class.assert_secure_api_url!('http://127.0.0.1:3000') }.not_to raise_error
       end
 
+      it 'allows http to the IPv6 loopback [::1]' do
+        expect { described_class.assert_secure_api_url!('http://[::1]:3000') }.not_to raise_error
+      end
+
       it 'does not raise for a blank/nil URL (missing config is handled elsewhere)' do
         expect { described_class.assert_secure_api_url!('') }.not_to raise_error
         expect { described_class.assert_secure_api_url!(nil) }.not_to raise_error
