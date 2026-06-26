@@ -15,6 +15,48 @@ RSpec.describe Mysigner::Client do
     end
   end
 
+  describe 'API URL transport security' do
+    # The org API token is attached as a Bearer header to whatever api_url
+    # the config/env supplies. Sending it over plain http (or to an
+    # attacker-set http:// host) leaks the token in cleartext, so the client
+    # must refuse any non-https URL except an obvious loopback dev host.
+    describe '.assert_secure_api_url!' do
+      it 'raises for plain http to a non-loopback host' do
+        expect { described_class.assert_secure_api_url!('http://api.evil.example') }
+          .to raise_error(Mysigner::InsecureUrlError, /insecure|https/i)
+      end
+
+      it 'allows https to any host' do
+        expect { described_class.assert_secure_api_url!('https://mysigner.dev') }.not_to raise_error
+      end
+
+      it 'allows http to localhost (local dev)' do
+        expect { described_class.assert_secure_api_url!('http://localhost:3000') }.not_to raise_error
+      end
+
+      it 'allows http to a loopback IP' do
+        expect { described_class.assert_secure_api_url!('http://127.0.0.1:3000') }.not_to raise_error
+      end
+
+      it 'does not raise for a blank/nil URL (missing config is handled elsewhere)' do
+        expect { described_class.assert_secure_api_url!('') }.not_to raise_error
+        expect { described_class.assert_secure_api_url!(nil) }.not_to raise_error
+      end
+    end
+
+    describe '#connection' do
+      it 'refuses to build the connection (and attach the token) for an insecure URL' do
+        insecure = described_class.new(api_url: 'http://api.evil.example', api_token: 'secret')
+        expect { insecure.connection }.to raise_error(Mysigner::InsecureUrlError)
+      end
+
+      it 'builds normally for an https URL' do
+        secure = described_class.new(api_url: 'https://mysigner.dev', api_token: 'secret')
+        expect { secure.connection }.not_to raise_error
+      end
+    end
+  end
+
   describe '#connection timeouts' do
     # A stalled server that accepts the TCP connection but never responds
     # must not hang the CLI forever. The connection has to carry an explicit

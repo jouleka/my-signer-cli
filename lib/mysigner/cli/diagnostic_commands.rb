@@ -830,6 +830,8 @@ module Mysigner
                   say '  Downloading profile...', :cyan
                   download_url = "/api/v1/organizations/#{config.current_organization_id}/profiles/#{profile['id']}/download"
 
+                  # Never attach the API token to a non-https (non-loopback) endpoint.
+                  Mysigner::Client.assert_secure_api_url!(config.api_url)
                   conn = Faraday.new(url: config.api_url) do |f|
                     f.request :authorization, 'Bearer', config.api_token
                     f.adapter Faraday.default_adapter

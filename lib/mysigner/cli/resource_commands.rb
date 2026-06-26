@@ -638,6 +638,8 @@ module Mysigner
                 say 'Fetching profile content...', :yellow
 
                 # Use Faraday directly with proper auth for binary download
+                # (never attach the API token to a non-https/non-loopback host).
+                Mysigner::Client.assert_secure_api_url!(config.api_url)
                 conn = Faraday.new(url: config.api_url) do |f|
                   f.request :authorization, 'Bearer', config.api_token
                   f.headers['X-User-Email'] = config.user_email if config.user_email
@@ -978,6 +980,8 @@ module Mysigner
                 say 'Fetching certificate content...', :yellow
 
                 # Use Faraday directly with proper auth for binary download
+                # (never attach the API token to a non-https/non-loopback host).
+                Mysigner::Client.assert_secure_api_url!(config.api_url)
                 conn = Faraday.new(url: config.api_url) do |f|
                   f.request :authorization, 'Bearer', config.api_token
                   f.headers['X-User-Email'] = config.user_email if config.user_email

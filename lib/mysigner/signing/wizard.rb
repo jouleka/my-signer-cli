@@ -414,6 +414,8 @@ module Mysigner
           # (the client's get method uses JSON middleware which corrupts binary data)
           download_url = "/api/v1/organizations/#{@organization_id}/profiles/#{profile['id']}/download"
 
+          # Never attach the API token to a non-https (non-loopback) endpoint.
+          Mysigner::Client.assert_secure_api_url!(@client.api_url)
           conn = Faraday.new(url: @client.api_url) do |f|
             f.request :authorization, 'Bearer', @client.api_token
             f.adapter Faraday.default_adapter

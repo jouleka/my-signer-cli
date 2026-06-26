@@ -3,10 +3,42 @@
 require 'faraday'
 require 'faraday/retry'
 require 'json'
+require 'uri'
 
 module Mysigner
   class Client
     attr_reader :api_url, :api_token, :user_email
+
+    # Hosts for which plain http is acceptable (local development). The org
+    # API token must NEVER be sent in cleartext to anything else.
+    LOOPBACK_HOSTS = %w[localhost 127.0.0.1 0.0.0.0 ::1].freeze
+
+    # Refuse to attach the API token to an insecure endpoint. api_url comes
+    # from ~/.mysigner/config.yml or MYSIGNER_API_URL, so without this a
+    # poisoned config/env (or a bare-host URL the normalizer once downgraded
+    # to http://) would ship the Bearer token to an attacker-chosen host in
+    # cleartext. https is always allowed; http only for a loopback dev host.
+    def self.assert_secure_api_url!(url)
+      # A blank/nil URL means "not configured" — let the existing not-logged-in
+      # paths handle that rather than reporting a confusing "insecure" error.
+      return if url.to_s.strip.empty?
+
+      uri = begin
+        URI.parse(url.to_s)
+      rescue URI::InvalidURIError
+        nil
+      end
+
+      return if uri && uri.scheme == 'https'
+
+      host = uri&.host.to_s.downcase.sub(/\A\[|\]\z/, '') # strip IPv6 brackets
+      return if uri && uri.scheme == 'http' && LOOPBACK_HOSTS.include?(host)
+
+      raise InsecureUrlError,
+            "Refusing to send your API token over an insecure connection (#{url}). " \
+            'Use an https:// URL — plain http is allowed only for localhost. ' \
+            'Fix your api_url with `mysigner login` or the MYSIGNER_API_URL env var.'
+    end
 
     def initialize(api_url:, api_token:, user_email: nil)
       @api_url = api_url
@@ -65,6 +97,7 @@ module Mysigner
 
     # Expose connection for direct access (e.g., binary downloads)
     def connection
+      Client.assert_secure_api_url!(@api_url)
       @connection ||= Faraday.new(url: @api_url) do |f|
         # Fail fast on a stalled connection instead of hanging the CLI
         # forever. Without these the default adapter applies no timeout, so a
@@ -201,6 +234,9 @@ module Mysigner
   class ForbiddenError < ClientError; end
   class NotFoundError < ClientError; end
   class ServerError < ClientError; end
+  # Raised when the API token would be sent over an insecure (non-https,
+  # non-loopback) connection. See Client.assert_secure_api_url!.
+  class InsecureUrlError < ClientError; end
 
   class ValidationError < ClientError
     def initialize(message, details = nil, suggestion: nil, error_code: nil, timestamp: nil)

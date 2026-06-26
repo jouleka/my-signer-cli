@@ -62,8 +62,16 @@ module Mysigner
 
         # Normalize API URL (add protocol, remove trailing slash)
         def normalize_api_url(url)
-          # Add http:// if no protocol specified
-          url = "http://#{url}" unless url.match?(%r{^https?://})
+          url = url.to_s.strip
+
+          # Add a scheme if none was given. Default to https; fall back to
+          # http ONLY for an obvious loopback host, so a scheme-less remote
+          # host never silently downgrades the API token to cleartext.
+          unless url.match?(%r{^https?://})
+            bare_host = url[%r{\A[^/:]+}].to_s.downcase
+            scheme = Mysigner::Client::LOOPBACK_HOSTS.include?(bare_host) ? 'http' : 'https'
+            url = "#{scheme}://#{url}"
+          end
 
           # Remove trailing slash
           url.chomp('/')
@@ -79,10 +87,15 @@ module Mysigner
           # Must have a host
           return false if uri.host.nil? || uri.host.empty?
 
+          # Plain http may only target a loopback host (local dev). The API
+          # token is sent as a Bearer header, so http to a remote host would
+          # leak it in cleartext.
+          return false if uri.scheme == 'http' &&
+                          !Mysigner::Client::LOOPBACK_HOSTS.include?(uri.host.downcase)
+
           # Valid formats:
           # - http://localhost:3000
           # - https://api.example.com
-          # - http://192.168.1.1:8080
           true
         rescue URI::InvalidURIError
           false

@@ -244,6 +244,8 @@ module Mysigner
         config = Mysigner::Config.new
         config.load if config.exists?
 
+        # Never attach the API token to a non-https (non-loopback) endpoint.
+        Mysigner::Client.assert_secure_api_url!(config.api_url)
         Faraday.new(url: config.api_url) do |f|
           f.request :authorization, 'Bearer', config.api_token
           f.options.timeout = 60
