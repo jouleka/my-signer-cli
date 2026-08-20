@@ -28,7 +28,7 @@ RSpec.describe Mysigner::CredentialResolver do
   end
 
   # Apple-style filename so derive_key_id_from_filename picks it up.
-  def write_p8(dir, key_id: 'ABCDE12345', content: "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n")
+  def write_p8(dir, key_id: 'ABCDE12345', content: SpecCredentialFixtures.pem)
     path = File.join(dir, "AuthKey_#{key_id}.p8")
     File.write(path, content)
     path
@@ -38,7 +38,7 @@ RSpec.describe Mysigner::CredentialResolver do
     payload = {
       'type' => 'service_account',
       'client_email' => client_email,
-      'private_key' => "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n",
+      'private_key' => SpecCredentialFixtures.pem,
       'project_id' => 'my-project'
     }
     File.write(path, JSON.generate(payload))
@@ -330,7 +330,7 @@ RSpec.describe Mysigner::CredentialResolver do
         # Three gets() responses: path, key_id (no AuthKey_ filename → ask), issuer.
         Dir.mktmpdir do |dir|
           path = File.join(dir, 'mykey.p8')
-          File.write(path, "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n")
+          File.write(path, SpecCredentialFixtures.pem)
           tty = instance_double(IO, tty?: true)
           allow(tty).to receive(:gets).and_return("#{path}\n", "ANSWERED_KEY\n", "answered-issuer\n")
 
@@ -384,7 +384,7 @@ RSpec.describe Mysigner::CredentialResolver do
       it 'reports source :prompt when both path and issuer are prompted' do
         Dir.mktmpdir do |dir|
           path = File.join(dir, 'plain-key.p8')
-          File.write(path, "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n")
+          File.write(path, SpecCredentialFixtures.pem)
           tty = instance_double(IO, tty?: true)
           # Three responses: path, key_id (no AuthKey_ filename → ask), issuer.
           allow(tty).to receive(:gets).and_return("#{path}\n", "P-KEY\n", "p-issuer\n")

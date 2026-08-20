@@ -339,7 +339,7 @@ RSpec.describe 'mysigner ship android', type: :cli do
         sa_json = JSON.generate(
           'type' => 'service_account',
           'client_email' => sa_email,
-          'private_key' => "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n",
+          'private_key' => SpecCredentialFixtures.pem,
           'project_id' => 'p'
         )
         allow(Mysigner::LocalCredentials).to receive(:list).with(kind: :google_play).and_return([sa_email])
@@ -420,7 +420,7 @@ RSpec.describe 'mysigner ship android', type: :cli do
         sa_json = JSON.generate(
           'type' => 'service_account',
           'client_email' => sa_email,
-          'private_key' => "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n",
+          'private_key' => SpecCredentialFixtures.pem,
           'project_id' => 'p'
         )
         allow(Mysigner::LocalCredentials).to receive(:list).with(kind: :google_play).and_return([sa_email])
@@ -479,7 +479,7 @@ RSpec.describe 'mysigner ship android', type: :cli do
         JSON.generate(
           'type' => 'service_account',
           'client_email' => sa_email,
-          'private_key' => "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n",
+          'private_key' => SpecCredentialFixtures.pem,
           'project_id' => 'p'
         )
       end
@@ -559,7 +559,7 @@ RSpec.describe 'mysigner ship android', type: :cli do
         sa_email = 'flag@my-project.iam.gserviceaccount.com'
         sa_json = JSON.generate(
           'type' => 'service_account', 'client_email' => sa_email,
-          'private_key' => "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n",
+          'private_key' => SpecCredentialFixtures.pem,
           'project_id' => 'p'
         )
         # Pretend the flag-pointed file exists with valid SA JSON; the real

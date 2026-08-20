@@ -8,7 +8,7 @@ Gem::Specification.new do |spec|
   spec.name          = 'mysigner'
   spec.version       = Mysigner::VERSION
   spec.authors       = ['Jurgen Leka']
-  spec.email         = ['lekacoding@gmail.com']
+  spec.email         = ['58989038+jouleka@users.noreply.github.com']
 
   spec.summary       = 'CLI tool for iOS and Android code signing automation via My Signer API'
   spec.description   = "Command-line interface for managing iOS certificates, devices, provisioning profiles, and Android keystores. Build, sign, and upload to App Store Connect and Google Play with simple commands like 'mysigner ship testflight' and 'mysigner ship internal --platform android'."
@@ -83,6 +83,7 @@ Gem::Specification.new do |spec|
 
   # Development dependencies
   spec.add_development_dependency 'bundler', '~> 2.5'
+  spec.add_development_dependency 'bundler-audit', '~> 0.9'
   spec.add_development_dependency 'rake', '~> 13.0'
   spec.add_development_dependency 'rspec', '~> 3.0'
   spec.add_development_dependency 'rubocop', '~> 1.79'

@@ -3,6 +3,14 @@
 require 'bundler/setup'
 require 'mysigner'
 
+module SpecCredentialFixtures
+  module_function
+
+  def pem(label: 'PRIVATE KEY', body: 'FAKE')
+    ["-----BEGIN #{label}-----", body, "-----END #{label}-----", ''].join("\n")
+  end
+end
+
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
   config.example_status_persistence_file_path = '.rspec_status'
