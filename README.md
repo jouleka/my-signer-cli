@@ -579,8 +579,8 @@ My Signer CLI is a **standalone Ruby gem** that communicates with the My Signer 
 **Why Separate Repositories?**
 - ✅ Clean separation of concerns
 - ✅ Independent versioning
-- ✅ CLI can be open-sourced while API stays private
-- ✅ Standard approach (Stripe, Heroku, GitHub use this model)
+- ✅ The CLI and API can evolve on independent release schedules
+- ✅ Independent release and contribution workflow
 
 ---
 
@@ -673,7 +673,7 @@ DEBUG=1 mysigner ship testflight
 
 ## Contributing
 
-This is currently a private project. Contributions are not being accepted at this time.
+Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a change.
 
 ---
 
@@ -689,7 +689,8 @@ This is currently a private project. Contributions are not being accepted at thi
 For questions or issues:
 - Check the [main project README](https://github.com/jouleka/my-signer/blob/main/README.md)
 - See [ROADMAP.md](https://github.com/jouleka/my-signer/blob/main/ROADMAP.md) for development plans
-- Review [CHANGELOG.md](https://github.com/jouleka/my-signer/blob/main/CHANGELOG.md) for recent updates
+- Review this repository's [CHANGELOG.md](CHANGELOG.md) for recent updates
+- Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md)
 
 ---
 
