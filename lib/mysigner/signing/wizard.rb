@@ -445,7 +445,9 @@ module Mysigner
           FileUtils.mkdir_p(profiles_dir)
 
           # Generate filename (use UUID if available, otherwise sanitized name)
-          uuid = profile['uuid'] || profile['id']
+          uuid = (profile['uuid'] || profile['id']).to_s
+          raise 'Profile returned an invalid UUID' unless uuid.match?(/\A[0-9A-Za-z-]+\z/)
+
           filename = "#{uuid}.mobileprovision"
           output_path = File.join(profiles_dir, filename)
 

@@ -28,6 +28,8 @@ RSpec.describe Mysigner::Build::AndroidExecutor do
     it 'keeps the keystore/key passwords OUT of the gradle command string' do
       cmd = executor.send(:build_gradle_command, 'bundleRelease')
 
+      expect(cmd).to be_an(Array)
+      expect(cmd.first).to eq('./gradlew')
       expect(cmd).not_to include('super-secret-store')
       expect(cmd).not_to include('super-secret-key')
       expect(cmd).not_to include('export MYSIGNER_STORE_PASSWORD')
@@ -58,6 +60,11 @@ RSpec.describe Mysigner::Build::AndroidExecutor do
       executor.send(:execute_with_output, cmd)
 
       expect(captured_env).to include('MYSIGNER_STORE_PASSWORD' => 'super-secret-store')
+    end
+
+    it 'rejects a task that could be interpreted as command input' do
+      expect { executor.send(:build_gradle_command, 'bundleRelease; touch /tmp/pwned') }
+        .to raise_error(described_class::BuildError, 'Invalid Gradle task')
     end
   end
 end

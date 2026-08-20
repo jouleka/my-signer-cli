@@ -125,10 +125,15 @@ module Mysigner
 
         # Basic email validation
         def valid_email?(email)
-          # Simple regex for basic email validation
-          # Format: local@domain.tld
-          email_regex = /\A[^@\s]+@[^@\s]+\.[^@\s]+\z/
-          email.match?(email_regex)
+          value = email.to_s
+          return false if value.empty? || value.bytesize > 254 || value.match?(/\s/)
+
+          local, domain, extra = value.split('@', 3)
+          return false if extra || local.to_s.empty? || domain.to_s.empty?
+          return false if local.bytesize > 64 || domain.start_with?('.') || domain.end_with?('.')
+
+          labels = domain.split('.', -1)
+          labels.length >= 2 && labels.none?(&:empty?)
         end
       end
     end

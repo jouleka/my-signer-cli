@@ -272,26 +272,11 @@ module Mysigner
       end
 
       def build_gradle_command(task)
-        android_dir = @parser.android_directory
-        gradle_cmd = @parser.gradle_command
+        @gradle_chdir = File.expand_path(@parser.android_directory)
+        gradle_cmd = validated_gradle_command
+        validate_gradle_task!(task)
 
-        cmd_parts = []
-
-        # Export JAVA_HOME if we detected/fixed it
-        java_home = ENV.fetch('JAVA_HOME', nil)
-        if java_home && Dir.exist?(java_home)
-          cmd_parts << "export JAVA_HOME=#{shell_escape(java_home)}"
-          cmd_parts << '&&'
-        end
-
-        # Export ANDROID_HOME if we detected/fixed it
-        android_home = ENV.fetch('ANDROID_HOME', nil)
-        if android_home && Dir.exist?(android_home)
-          cmd_parts << "export ANDROID_HOME=#{shell_escape(android_home)}"
-          cmd_parts << '&&'
-          cmd_parts << "export ANDROID_SDK_ROOT=#{shell_escape(android_home)}"
-          cmd_parts << '&&'
-        end
+        cmd_parts = [gradle_cmd]
 
         # M3: pass the signing secrets to the build via an env hash on the
         # spawn (execute_with_output → IO.popen(env, …)) rather than an
@@ -309,15 +294,10 @@ module Mysigner
         # The versionCode override also flows to the init script via ENV.
         @signing_env['MYSIGNER_VERSION_CODE'] = @version_code.to_s if @version_code && @signing_init_script_path
 
-        # Change to android directory and run gradle
-        cmd_parts << "cd #{shell_escape(android_dir)}"
-        cmd_parts << '&&'
-        cmd_parts << gradle_cmd
-
         # Reference the init script (contains the signing-config override)
         if @signing_init_script_path
           cmd_parts << '--init-script'
-          cmd_parts << shell_escape(@signing_init_script_path)
+          cmd_parts << File.expand_path(@signing_init_script_path)
         end
 
         cmd_parts << task
@@ -332,26 +312,13 @@ module Mysigner
         # for progress, and hides the FAILURE block on errors.
         cmd_parts << '--no-daemon' # Avoid daemon issues in CI
 
-        cmd_parts.join(' ')
+        cmd_parts
       end
 
       def run_gradle_command(task)
-        android_dir = @parser.android_directory
-        gradle_cmd = @parser.gradle_command
-
-        exports = []
-        java_home = ENV.fetch('JAVA_HOME', nil)
-        exports << "export JAVA_HOME=#{shell_escape(java_home)}" if java_home && Dir.exist?(java_home)
-
-        android_home = ENV.fetch('ANDROID_HOME', nil)
-        if android_home && Dir.exist?(android_home)
-          exports << "export ANDROID_HOME=#{shell_escape(android_home)}"
-          exports << "export ANDROID_SDK_ROOT=#{shell_escape(android_home)}"
-        end
-
-        export_str = exports.any? ? "#{exports.join(' && ')} && " : ''
-        cmd = "#{export_str}cd #{shell_escape(android_dir)} && #{gradle_cmd} #{task} --no-daemon -q"
-        system(cmd)
+        validate_gradle_task!(task)
+        android_dir = File.expand_path(@parser.android_directory)
+        system(gradle_environment, validated_gradle_command, task, '--no-daemon', '-q', chdir: android_dir)
       end
 
       def execute_with_output(cmd)
@@ -360,7 +327,7 @@ module Mysigner
 
         # Run command and capture output in real-time. The signing secrets ride
         # in the env hash (M3), never the command string / process table.
-        IO.popen(@signing_env || {}, "#{cmd} 2>&1", 'r') do |io|
+        IO.popen(gradle_environment, cmd, chdir: @gradle_chdir, err: %i[child out]) do |io|
           io.each_line do |line|
             next if line.strip.empty?
 
@@ -443,14 +410,30 @@ module Mysigner
         v[0].upcase + v[1..]
       end
 
-      def shell_escape(str)
-        return "''" if str.nil? || str.empty?
+      def gradle_environment
+        env = (@signing_env || {}).dup
+        java_home = ENV.fetch('JAVA_HOME', nil)
+        env['JAVA_HOME'] = java_home if java_home && Dir.exist?(java_home)
 
-        # If string contains no special characters, return as-is
-        return str if str =~ %r{\A[a-zA-Z0-9_.\-/]+\z}
+        android_home = ENV.fetch('ANDROID_HOME', nil)
+        if android_home && Dir.exist?(android_home)
+          env['ANDROID_HOME'] = android_home
+          env['ANDROID_SDK_ROOT'] = android_home
+        end
+        env
+      end
 
-        # Otherwise, quote it
-        "'#{str.gsub("'", "'\\''")}'"
+      def validated_gradle_command
+        command = @parser.gradle_command.to_s
+        return command if ['./gradlew', 'gradle'].include?(command)
+
+        raise BuildError, 'Unsupported Gradle command'
+      end
+
+      def validate_gradle_task!(task)
+        return if task.to_s.match?(/\A(?:clean|assemble|bundle)[0-9A-Za-z]*\z/)
+
+        raise BuildError, 'Invalid Gradle task'
       end
     end
   end

@@ -64,6 +64,22 @@ RSpec.describe Mysigner::Upload::AscRestUploader do
     expect(a_request(:put, 'https://s3.example/chunk1').with(body: 'hello')).to have_been_made.once
   end
 
+  it 'rejects an upload operation that requests an arbitrary HTTP method' do
+    uploader = described_class.new(
+      client: client, organization_id: 1, ipa_path: ipa.path,
+      apple_app_id: 42, cf_bundle_version: '1', cf_bundle_short_version_string: '1.0'
+    )
+    operation = {
+      'method' => 'DELETE', 'url' => 'https://s3.example/chunk1',
+      'offset' => 0, 'length' => 5, 'requestHeaders' => []
+    }
+
+    File.open(ipa.path, 'rb') do |file|
+      expect { uploader.send(:put_chunk_with_retry, file, operation) }
+        .to raise_error(RuntimeError, /unsupported upload method/)
+    end
+  end
+
   # mysigner-46 — local-only path delegates to `xcrun altool --upload-app`.
   # altool is Apple's canonical CLI for App Store uploads; trying to
   # reimplement Apple's multi-step REST flow via Faraday (the previous

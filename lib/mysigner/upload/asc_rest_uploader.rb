@@ -343,12 +343,15 @@ module Mysigner
         scheme = URI.parse(operation['url'].to_s).scheme
         raise "refusing non-https upload URL (scheme=#{scheme.inspect})" unless scheme == 'https'
 
+        method = operation['method'].to_s.upcase
+        raise "refusing unsupported upload method #{method.inspect}" unless method == 'PUT'
+
         file.seek(operation['offset'])
         bytes = file.read(operation['length'])
         attempts = 0
         begin
           conn = Faraday.new { |f| f.adapter Faraday.default_adapter }
-          resp = conn.public_send(operation['method'].downcase) do |req|
+          resp = conn.put do |req|
             req.url operation['url']
             (operation['requestHeaders'] || []).each { |h| req.headers[h['name']] = h['value'] }
             req.body = bytes

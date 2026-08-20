@@ -52,6 +52,18 @@ RSpec.describe Mysigner::Signing::Wizard do
     allow($stdin).to receive(:gets).and_return(*inputs.map { |i| "#{i}\n" })
   end
 
+  describe '#download_and_install_profile' do
+    it 'does not write a server-supplied UUID containing path traversal' do
+      expect(File).not_to receive(:binwrite)
+
+      output = capture_output do
+        wizard.send(:download_and_install_profile, 'uuid' => '../../outside')
+      end
+
+      expect(output).to include('invalid UUID')
+    end
+  end
+
   describe '#run!' do
     context 'with single target' do
       before do
