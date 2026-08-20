@@ -15,6 +15,7 @@ permissions:
 jobs:
   analyze:
     name: Analyze Ruby
+    if: github.event.repository.visibility == 'public'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
