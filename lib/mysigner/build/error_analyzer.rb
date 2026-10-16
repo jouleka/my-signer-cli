@@ -119,44 +119,54 @@ module Mysigner
       end
 
       def analyze_error(error)
-        # Normalize curly quotes to straight quotes
-        error = error.gsub('"', '"').gsub('\'', "'")
+        # Build logs are untrusted input. Keep parsing linear and bounded so a
+        # malicious project cannot feed the CLI a pathological regular
+        # expression input.
+        error = error.to_s.byteslice(0, 65_536).to_s
+                     .tr("\u201c\u201d", '""').tr("\u2018\u2019", "''")
+        profile_name, details = provisioning_profile_details(error)
 
         # Pattern: Provisioning profile "X" doesn't include the Y capability
-        if (match = error.match(/Provisioning profile "([^"]+)".*(?:doesn't|does not) include the (.+?) capability/i))
+        if profile_name && (capability = extract_detail(details, ["doesn't include the ", 'does not include the '],
+                                                        ' capability'))
           @issues << {
             type: :profile_capability,
-            profile_name: match[1],
-            capability: match[2].strip
+            profile_name: profile_name,
+            capability: capability
           }
         end
 
         # Pattern: Provisioning profile "X" doesn't support the Y App Group
-        if (match = error.match(/Provisioning profile "([^"]+)".*(?:doesn't|does not) support the (.+?) App Group/i))
+        if profile_name && (identifier = extract_detail(details, ["doesn't support the ", 'does not support the '],
+                                                        ' App Group'))
           @issues << {
             type: :missing_identifier,
-            profile_name: match[1],
+            profile_name: profile_name,
             identifier_type: 'App Group',
-            identifier: match[2].strip
+            identifier: identifier
           }
         end
 
         # Pattern: Provisioning profile "X" doesn't support the Y Merchant ID
-        if (match = error.match(/Provisioning profile "([^"]+)".*(?:doesn't|does not) support the (.+?) Merchant ID/i))
+        if profile_name && (identifier = extract_detail(details, ["doesn't support the ", 'does not support the '],
+                                                        ' Merchant ID'))
           @issues << {
             type: :missing_identifier,
-            profile_name: match[1],
+            profile_name: profile_name,
             identifier_type: 'Merchant ID',
-            identifier: match[2].strip
+            identifier: identifier
           }
         end
 
         # Pattern: Provisioning profile "X" doesn't match the entitlements file's value
-        if (match = error.match(/Provisioning profile "([^"]+)".*(?:doesn't|does not) match.*entitlements.*?for the (.+?) entitlement/i))
-          capability = entitlement_to_capability(match[2])
+        mismatch = details.to_s.downcase.include?("doesn't match") || details.to_s.downcase.include?('does not match')
+        entitlement = extract_detail(details, ['for the '], ' entitlement') if mismatch &&
+                                                                               details.to_s.downcase.include?('entitlements')
+        if profile_name && entitlement
+          capability = entitlement_to_capability(entitlement)
           @issues << {
             type: :profile_capability,
-            profile_name: match[1],
+            profile_name: profile_name,
             capability: capability
           }
         end
@@ -176,6 +186,35 @@ module Mysigner
           type: :code_sign_error,
           message: error
         }
+      end
+
+      def provisioning_profile_details(error)
+        marker = 'Provisioning profile "'
+        marker_index = error.downcase.index(marker.downcase)
+        return [nil, nil] unless marker_index
+
+        name_start = marker_index + marker.length
+        name_end = error.index('"', name_start)
+        return [nil, nil] unless name_end
+
+        [error[name_start...name_end], error[(name_end + 1)..]]
+      end
+
+      def extract_detail(text, markers, terminator)
+        source = text.to_s
+        folded = source.downcase
+        marker, marker_index = markers.filter_map do |candidate|
+          index = folded.index(candidate.downcase)
+          [candidate, index] if index
+        end.min_by { |_candidate, index| index }
+        return nil unless marker
+
+        value_start = marker_index + marker.length
+        value_end = folded.index(terminator.downcase, value_start)
+        return nil unless value_end
+
+        value = source[value_start...value_end].strip
+        value.empty? ? nil : value
       end
 
       def entitlement_to_capability(entitlement)
