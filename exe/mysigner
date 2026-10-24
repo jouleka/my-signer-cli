@@ -64,7 +64,7 @@ end
 # instead of the usage docs. Rewriting at the entry point keeps every
 # subcommand's `--help` behaviour predictable.
 def rewrite_help_flag!(argv)
-  return argv unless argv.any? { |a| ['--help', '-h'].include?(a) }
+  return argv unless argv.intersect?(['--help', '-h'])
 
   # Don't touch `help` itself or `--version` / bare `-v` invocations.
   first = argv.find { |a| !a.start_with?('-') }

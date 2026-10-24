@@ -198,7 +198,7 @@ module Mysigner
 
         if @parser.signing_configured?(target_name)
           profile_name = @parser.project.targets.find { |t| t.name == target_name }
-                                                &.build_configurations&.first
+                                &.build_configurations&.first
                                 &.build_settings&.[]('PROVISIONING_PROFILE_SPECIFIER')
           puts "  Profile: #{profile_name || 'Auto'}"
         end

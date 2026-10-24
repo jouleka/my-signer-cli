@@ -1214,8 +1214,8 @@ module Mysigner
 
             def parse_bool_or_exit(value, key)
               case value.to_s.downcase
-              when 'true', '1', 'yes'  then true
-              when 'false', '0', 'no'  then false
+              when 'true', '1', 'yes' then true
+              when 'false', '0', 'no' then false
               else
                 error "Invalid boolean for #{key}: #{value}"
                 say 'Use: true / false (also accepts 1/0, yes/no)', :yellow
